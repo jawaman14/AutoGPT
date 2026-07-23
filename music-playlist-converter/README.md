@@ -39,6 +39,27 @@ In short:
    playlist, generate a `ytmusicapi` auth file (`ytmusicapi oauth`) and set
    `YTMUSIC_AUTH_FILE`, or pass `--yt-auth-file`.
 
+### If your network blocks music.youtube.com
+
+`ytmusicapi` talks to `music.youtube.com`'s unofficial internal API. Some
+networks (corporate proxies, some sandboxes) block that consumer-facing
+domain specifically while still allowing the officially documented
+`googleapis.com` surface. For that case, pass `--source youtube-api` with a
+free API key from
+[console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials)
+(enable "YouTube Data API v3"), either via `--youtube-api-key` or the
+`YOUTUBE_API_KEY` env var:
+
+```bash
+python -m playlist_converter convert "<playlist URL or ID>" \
+  --source youtube-api --youtube-api-key "$YOUTUBE_API_KEY" --dry-run
+```
+
+Trade-off: regular YouTube playlist metadata doesn't carry YT Music's
+structured artist/album fields, so the artist is guessed heuristically from
+the video title (`"Artist - Title"`) or channel name -- matching is usually
+a bit less accurate than the default `ytmusic` source.
+
 ## Usage
 
 Preview a conversion without touching Spotify:

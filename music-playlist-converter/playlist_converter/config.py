@@ -28,6 +28,7 @@ class SpotifyConfig:
 class AppConfig:
     spotify: SpotifyConfig
     ytmusic_auth_file: str | None
+    youtube_api_key: str | None
     cache_path: Path
     state_dir: Path
 
@@ -74,6 +75,7 @@ def load_config(env_file: str | Path | None = None) -> AppConfig:
         )
 
     ytmusic_auth_file = os.environ.get("YTMUSIC_AUTH_FILE", "").strip() or None
+    youtube_api_key = os.environ.get("YOUTUBE_API_KEY", "").strip() or None
 
     app_dir = Path(
         os.environ.get(
@@ -89,6 +91,7 @@ def load_config(env_file: str | Path | None = None) -> AppConfig:
             redirect_uri=redirect_uri,
         ),
         ytmusic_auth_file=ytmusic_auth_file,
+        youtube_api_key=youtube_api_key,
         cache_path=app_dir / "search_cache.sqlite3",
         state_dir=app_dir / "state",
     )

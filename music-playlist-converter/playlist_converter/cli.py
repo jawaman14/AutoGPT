@@ -20,6 +20,7 @@ from .models import SourceTrack
 from .report import match_rate, needs_review, summarize, write_csv_report, write_json_report
 from .spotify_target import SpotifyTarget
 from .state import RunState
+from .youtube_data_api_source import YouTubeDataApiSource
 from .youtube_source import PlaylistNotFoundError, YouTubeMusicSource
 
 SETUP_INSTRUCTIONS = """
@@ -44,6 +45,15 @@ Setup checklist
 
    Tip: pass "LM" as the playlist instead of a URL to convert your YouTube
    Music "Liked Music" library (requires an auth file).
+
+   If your network blocks music.youtube.com (some corporate/sandboxed
+   networks do, while still allowing the official googleapis.com API):
+   pass --source youtube-api with a free API key from
+   https://console.cloud.google.com/apis/credentials (enable "YouTube
+   Data API v3"), either via --youtube-api-key or the YOUTUBE_API_KEY
+   env var. Matching accuracy is a bit lower with this source since
+   regular YouTube playlists don't carry YT Music's structured artist
+   metadata.
 
 4. Run a conversion:
      python -m playlist_converter convert "<playlist URL or ID>" \\
@@ -122,6 +132,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Allow adding tracks already present in the destination playlist",
     )
     convert_p.add_argument("--yt-auth-file", help="ytmusicapi auth file for private playlists")
+    convert_p.add_argument(
+        "--source",
+        choices=["ytmusic", "youtube-api"],
+        default="ytmusic",
+        help="Which backend to read the source playlist from. 'ytmusic' "
+        "(default) needs no credentials for public playlists but requires "
+        "network access to music.youtube.com. 'youtube-api' uses the "
+        "official, key-based YouTube Data API v3 instead -- a fallback for "
+        "networks that block music.youtube.com specifically.",
+    )
+    convert_p.add_argument(
+        "--youtube-api-key",
+        help="API key for --source youtube-api (or set YOUTUBE_API_KEY)",
+    )
     convert_p.add_argument(
         "--report-dir",
         default="./playlist-converter-reports",
@@ -204,6 +228,9 @@ def cmd_convert(args: argparse.Namespace) -> int:
     except PlaylistNotFoundError as exc:
         console.print(f"[bold red]Error:[/bold red] {exc}")
         return 1
+    except ConfigError as exc:
+        console.print(f"[bold red]Configuration error:[/bold red] {exc}")
+        return 1
     except Exception as exc:  # noqa: BLE001 - top-level safety net for a CLI tool
         logger.exception("Unhandled error during conversion")
         console.print(f"[bold red]Unexpected error:[/bold red] {exc}")
@@ -215,11 +242,24 @@ def cmd_convert(args: argparse.Namespace) -> int:
         return 1
 
 
-def _run_convert(args: argparse.Namespace, config, console) -> int:
-    yt_auth = args.yt_auth_file or config.ytmusic_auth_file
-    source = YouTubeMusicSource(auth_file=yt_auth)
+def _build_source(args: argparse.Namespace, config):
+    if args.source == "youtube-api":
+        api_key = args.youtube_api_key or config.youtube_api_key
+        if not api_key:
+            raise ConfigError(
+                "--source youtube-api requires an API key: pass "
+                "--youtube-api-key or set YOUTUBE_API_KEY."
+            )
+        return YouTubeDataApiSource(api_key=api_key)
 
-    console.print("[bold]Fetching YouTube Music playlist...[/bold]")
+    yt_auth = args.yt_auth_file or config.ytmusic_auth_file
+    return YouTubeMusicSource(auth_file=yt_auth)
+
+
+def _run_convert(args: argparse.Namespace, config, console) -> int:
+    source = _build_source(args, config)
+
+    console.print(f"[bold]Fetching YouTube playlist (source: {args.source})...[/bold]")
     fetched = source.fetch_playlist(args.playlist)
     tracks = fetched.tracks
     if args.limit is not None:
