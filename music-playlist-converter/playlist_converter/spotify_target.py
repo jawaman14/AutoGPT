@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from .cache import SearchCache
 from .config import SpotifyConfig
@@ -25,11 +26,36 @@ def _candidate_from_item(item: dict) -> SpotifyCandidate:
     )
 
 
+def _is_retryable(exc: Exception) -> bool:
+    """Retry rate limits/server errors/network blips; fail fast on everything else.
+
+    A bad client ID, an expired/rejected token, or a malformed request will
+    never succeed no matter how many times it's retried -- retrying those
+    just delays the (identical) failure by up to ~30s of backoff.
+    """
+    status = getattr(exc, "http_status", None)
+    if status is None:
+        return True  # no HTTP status means a connection-level error: worth retrying
+    return status == 429 or status >= 500
+
+
+_spotify_retry = with_retry(max_attempts=5, base_delay=2.0, should_retry=_is_retryable)
+
+
 class SpotifyTarget:
-    def __init__(self, config: SpotifyConfig, cache: SearchCache | None = None):
+    def __init__(
+        self,
+        config: SpotifyConfig,
+        cache: SearchCache | None = None,
+        token_cache_path: Path | None = None,
+    ):
         import spotipy
+        from spotipy.cache_handler import CacheFileHandler
         from spotipy.oauth2 import SpotifyOAuth
 
+        cache_handler = (
+            CacheFileHandler(cache_path=str(token_cache_path)) if token_cache_path else None
+        )
         self._sp = spotipy.Spotify(
             auth_manager=SpotifyOAuth(
                 client_id=config.client_id,
@@ -37,6 +63,7 @@ class SpotifyTarget:
                 redirect_uri=config.redirect_uri,
                 scope="playlist-modify-public playlist-modify-private",
                 open_browser=True,
+                cache_handler=cache_handler,
             )
         )
         self._cache = cache
@@ -59,7 +86,7 @@ class SpotifyTarget:
             return f"{clean_title} {source.artist_display}"
         return clean_title
 
-    @with_retry(max_attempts=5, base_delay=2.0)
+    @_spotify_retry
     def _raw_search(self, query: str, limit: int) -> list[dict]:
         results = self._sp.search(q=query, type="track", limit=limit)
         return results.get("tracks", {}).get("items", [])
@@ -86,7 +113,12 @@ class SpotifyTarget:
 
         return [_candidate_from_item(item) for item in items]
 
-    @with_retry(max_attempts=5, base_delay=2.0)
+    def search_raw_query(self, query: str, limit: int = 8) -> list[SpotifyCandidate]:
+        """Search with an arbitrary, user-supplied query string (uncached)."""
+        items = self._raw_search(query, limit)
+        return [_candidate_from_item(item) for item in items]
+
+    @_spotify_retry
     def find_playlist_by_name(self, name: str) -> dict | None:
         offset = 0
         while True:
@@ -101,13 +133,13 @@ class SpotifyTarget:
                 return None
             offset += 50
 
-    @with_retry(max_attempts=5, base_delay=2.0)
+    @_spotify_retry
     def create_playlist(self, name: str, description: str, public: bool) -> dict:
         return self._sp.user_playlist_create(
             self.user_id, name, public=public, description=description[:300]
         )
 
-    @with_retry(max_attempts=5, base_delay=2.0)
+    @_spotify_retry
     def get_playlist_track_uris(self, playlist_id: str) -> set[str]:
         uris: set[str] = set()
         offset = 0
@@ -130,7 +162,7 @@ class SpotifyTarget:
             offset += 100
         return uris
 
-    @with_retry(max_attempts=5, base_delay=2.0)
+    @_spotify_retry
     def _add_batch(self, playlist_id: str, uris: list[str]) -> None:
         self._sp.playlist_add_items(playlist_id, uris)
 

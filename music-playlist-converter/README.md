@@ -66,20 +66,34 @@ python -m playlist_converter convert \
 Useful flags:
 
 - `--interactive` — for any track below the confidence threshold, shows the
-  ranked candidates and lets you pick one (or skip) instead of guessing.
+  ranked candidates and lets you pick one, skip it, or type `s` to search
+  Spotify with different text (e.g. if the YouTube title/artist is too
+  mangled for a good automatic match) instead of guessing.
 - `--resume` — continue a previous run using its saved state instead of
-  starting over (useful after a crash, rate limit, or Ctrl-C).
+  starting over. Tracks that were already matched (or already added) aren't
+  redone; anything that came back `not_found`/`low_confidence` is retried in
+  case the catalog or your `--threshold`/`--interactive` choice changed.
+  Progress is checkpointed after every track, so this is safe to use after a
+  crash, rate limit, or Ctrl-C at any point in the run.
 - `--threshold 80` — raise/lower the auto-accept confidence score (0-100,
   default 72). Higher means fewer wrong matches but more tracks flagged for
   review.
+- `--limit 10` — only process the first N tracks; handy for a quick sanity
+  check before converting a huge playlist.
+- `--strict` — exit with status 2 if anything ended up unmatched (needing
+  review), so a wrapping script/CI job can detect an incomplete conversion.
 - `--public` — make the created Spotify playlist public (default: private).
 - `--no-skip-duplicates` — allow adding a track even if it's already in the
   destination playlist.
 - `--no-cache` — bypass the on-disk search cache for this run.
 - `-v` / `--verbose` — verbose logging (also written to
-  `~/.playlist-converter/playlist_converter.log`).
+  `~/.playlist-converter/playlist_converter.log`, or `--log-file <path>`).
 
 Run `python -m playlist_converter convert --help` for the full list.
+
+If something goes wrong mid-run (network blip, expired token, Ctrl-C), the
+error is reported cleanly instead of a raw traceback, and any progress made
+so far is already saved -- just re-run the same command with `--resume`.
 
 ## How matching works
 
@@ -101,6 +115,9 @@ adding a possibly-wrong track.
 
 - **Search cache**: `~/.playlist-converter/search_cache.sqlite3`
 - **Run state** (for `--resume`): `~/.playlist-converter/state/`
+- **Spotify auth token**: `~/.playlist-converter/state/spotify_token_cache.json`
+  (so you only have to log in through the browser once, regardless of which
+  directory you run the tool from)
 - **Logs**: `~/.playlist-converter/playlist_converter.log`
 - Override the base directory with the `PLAYLIST_CONVERTER_HOME` env var.
 

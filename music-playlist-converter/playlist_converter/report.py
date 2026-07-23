@@ -24,6 +24,16 @@ def summarize(results: list[MatchResult]) -> dict[str, int]:
     return counts
 
 
+def match_rate(results: list[MatchResult]) -> float:
+    """Percentage of tracks that ended up matched (including de-duped ones)."""
+    if not results:
+        return 0.0
+    matched = sum(
+        1 for r in results if r.status in (MatchStatus.MATCHED, MatchStatus.SKIPPED_DUPLICATE)
+    )
+    return round(100 * matched / len(results), 1)
+
+
 def needs_review(results: list[MatchResult]) -> list[MatchResult]:
     return [
         r

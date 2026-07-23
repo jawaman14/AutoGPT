@@ -17,12 +17,19 @@ def with_retry(
     base_delay: float = 1.0,
     max_delay: float = 30.0,
     retry_on: tuple[type[Exception], ...] = (Exception,),
+    should_retry: Callable[[Exception], bool] | None = None,
 ) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """Decorator that retries a function with exponential backoff + jitter.
 
     Honors a `retry_after` attribute/seconds hint on the raised exception
     when present (e.g. Spotify's 429 responses), otherwise backs off
     base_delay * 2**attempt, capped at max_delay.
+
+    `should_retry`, if given, is consulted before backing off: it lets
+    callers distinguish transient failures (rate limits, network blips)
+    from permanent ones (bad credentials, malformed request) so the latter
+    fail immediately instead of burning ~30s retrying something that will
+    never succeed.
     """
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
@@ -33,6 +40,8 @@ def with_retry(
                 try:
                     return func(*args, **kwargs)
                 except retry_on as exc:  # noqa: BLE001 - intentional broad catch
+                    if should_retry is not None and not should_retry(exc):
+                        raise
                     attempt += 1
                     if attempt >= max_attempts:
                         raise

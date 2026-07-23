@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Callable
 
 from .matching import DEFAULT_CONFIDENCE_THRESHOLD, ScoredCandidate, best_match
 from .models import MatchResult, MatchStatus, SourceTrack
 from .spotify_target import SpotifyTarget
-from .state import RunState, load_state, save_state, state_file_path
+from .state import RESUMABLE_TERMINAL_STATUSES, RunState, load_state, save_state, state_file_path
 
 logger = logging.getLogger("playlist_converter")
 
@@ -40,16 +40,28 @@ class ConversionRun:
         run_state: RunState,
         interactive_resolver: InteractiveResolver | None = None,
         progress_cb: ProgressCallback | None = None,
+        state_path: Path | None = None,
     ) -> list[MatchResult]:
+        """Match every source track against Spotify.
+
+        If `state_path` is given, run_state is checkpointed to disk after
+        every track (not just at the end) so a crash or Ctrl-C mid-run loses
+        at most one track's worth of progress instead of the whole run.
+        """
         results: list[MatchResult] = []
         total = len(source_tracks)
 
         for i, source in enumerate(source_tracks, start=1):
             cached_state = run_state.tracks.get(source.video_id)
-            if cached_state and cached_state.status == MatchStatus.MATCHED.value:
+            if cached_state and cached_state.status in RESUMABLE_TERMINAL_STATUSES:
+                # Reuse the settled decision from a previous run without
+                # re-searching or re-prompting; the stored candidate (if
+                # any) is reconstructed so downstream steps (e.g. adding to
+                # the Spotify playlist) still have a URI to work with.
                 result = MatchResult(
                     source=source,
-                    status=MatchStatus.MATCHED,
+                    status=MatchStatus(cached_state.status),
+                    candidate=cached_state.to_candidate(),
                     score=cached_state.score,
                 )
                 results.append(result)
@@ -96,12 +108,9 @@ class ConversionRun:
                     alternatives=[c.candidate for c in ranked[1:5]],
                 )
 
-            run_state.mark(
-                source.video_id,
-                result.status,
-                result.candidate.uri if result.candidate else None,
-                result.score,
-            )
+            run_state.mark(source.video_id, result.status, result.candidate, result.score)
+            if state_path is not None:
+                save_state(state_path, run_state)
             results.append(result)
             if progress_cb:
                 progress_cb(i, total, result)
@@ -151,7 +160,9 @@ class ConversionRun:
             uri = result.candidate.uri
             if skip_duplicates and uri in existing_uris:
                 result.status = MatchStatus.SKIPPED_DUPLICATE
-                run_state.mark(result.source.video_id, result.status, uri, result.score)
+                run_state.mark(
+                    result.source.video_id, result.status, result.candidate, result.score
+                )
                 continue
             uris_to_add.append(uri)
             existing_uris.add(uri)
@@ -163,7 +174,7 @@ class ConversionRun:
                     run_state.mark(
                         result.source.video_id,
                         MatchStatus.MATCHED,
-                        result.candidate.uri,
+                        result.candidate,
                         result.score,
                     )
             save_state(state_path, run_state)

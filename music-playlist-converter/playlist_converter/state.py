@@ -13,7 +13,16 @@ import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from .models import MatchStatus
+from .models import MatchStatus, SpotifyCandidate
+
+# Statuses that represent a settled decision: safe to skip re-matching (and,
+# for MATCHED/SKIPPED_DUPLICATE, re-adding is idempotent via the duplicate
+# check anyway) on --resume without re-searching or re-prompting the user.
+RESUMABLE_TERMINAL_STATUSES = (
+    MatchStatus.MATCHED.value,
+    MatchStatus.SKIPPED_DUPLICATE.value,
+    MatchStatus.USER_REJECTED.value,
+)
 
 
 @dataclass
@@ -22,6 +31,19 @@ class TrackState:
     status: str
     spotify_uri: str | None = None
     score: float = 0.0
+    candidate_title: str | None = None
+    candidate_artists: list[str] = field(default_factory=list)
+
+    def to_candidate(self) -> SpotifyCandidate | None:
+        if not self.spotify_uri:
+            return None
+        return SpotifyCandidate(
+            uri=self.spotify_uri,
+            title=self.candidate_title or "",
+            artists=self.candidate_artists,
+            album=None,
+            duration_seconds=None,
+        )
 
 
 @dataclass
@@ -30,17 +52,25 @@ class RunState:
     spotify_playlist_id: str | None = None
     tracks: dict[str, TrackState] = field(default_factory=dict)
 
-    def mark(self, video_id: str, status: MatchStatus, uri: str | None, score: float) -> None:
+    def mark(
+        self,
+        video_id: str,
+        status: MatchStatus,
+        candidate: SpotifyCandidate | None,
+        score: float,
+    ) -> None:
         self.tracks[video_id] = TrackState(
-            video_id=video_id, status=status.value, spotify_uri=uri, score=score
+            video_id=video_id,
+            status=status.value,
+            spotify_uri=candidate.uri if candidate else None,
+            score=score,
+            candidate_title=candidate.title if candidate else None,
+            candidate_artists=candidate.artists if candidate else [],
         )
 
     def is_done(self, video_id: str) -> bool:
         state = self.tracks.get(video_id)
-        return state is not None and state.status in (
-            MatchStatus.MATCHED.value,
-            MatchStatus.SKIPPED_DUPLICATE.value,
-        )
+        return state is not None and state.status in RESUMABLE_TERMINAL_STATUSES
 
 
 def state_file_path(state_dir: Path, playlist_id: str, spotify_playlist_name: str) -> Path:

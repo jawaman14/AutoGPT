@@ -7,14 +7,19 @@ import logging
 import sys
 from pathlib import Path
 
+from rich.console import Console
+from rich.progress import BarColumn, Progress, TextColumn, TimeRemainingColumn
+from rich.prompt import Prompt
+from rich.table import Table
+
 from .cache import SearchCache
 from .config import ConfigError, load_config
 from .converter import ConversionRun, get_state
-from .matching import DEFAULT_CONFIDENCE_THRESHOLD, ScoredCandidate
-from .models import MatchStatus, SourceTrack
-from .report import needs_review, summarize, write_csv_report, write_json_report
+from .matching import DEFAULT_CONFIDENCE_THRESHOLD, ScoredCandidate, rank_candidates
+from .models import SourceTrack
+from .report import match_rate, needs_review, summarize, write_csv_report, write_json_report
 from .spotify_target import SpotifyTarget
-from .state import save_state
+from .state import RunState
 from .youtube_source import PlaylistNotFoundError, YouTubeMusicSource
 
 SETUP_INSTRUCTIONS = """
@@ -36,6 +41,9 @@ Setup checklist
      pip install ytmusicapi
      ytmusicapi oauth
    and point YTMUSIC_AUTH_FILE (or --yt-auth-file) at the resulting file.
+
+   Tip: pass "LM" as the playlist instead of a URL to convert your YouTube
+   Music "Liked Music" library (requires an auth file).
 
 4. Run a conversion:
      python -m playlist_converter convert "<playlist URL or ID>" \\
@@ -71,6 +79,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--env-file", help="Path to a .env file with credentials")
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose logging")
+    parser.add_argument("--log-file", help="Override the default log file location")
 
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -118,6 +127,18 @@ def build_parser() -> argparse.ArgumentParser:
         default="./playlist-converter-reports",
         help="Directory to write CSV/JSON match reports to",
     )
+    convert_p.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Only process the first N tracks (useful for a quick test run)",
+    )
+    convert_p.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit with a non-zero status if any track was not matched "
+        "(useful when scripting/automating conversions)",
+    )
     convert_p.set_defaults(func=cmd_convert)
 
     return parser
@@ -128,32 +149,38 @@ def cmd_setup(args: argparse.Namespace) -> int:
     return 0
 
 
-def _make_interactive_resolver(console):
-    from rich.prompt import IntPrompt
-
+def _make_interactive_resolver(console, target: SpotifyTarget):
     def resolver(source: SourceTrack, ranked: list[ScoredCandidate]):
-        console.print(f"\n[bold yellow]Low-confidence match[/bold yellow] for: {source.display}")
-        for idx, sc in enumerate(ranked[:5], start=1):
+        while True:
             console.print(
-                f"  [{idx}] {sc.candidate.artist_display} - {sc.candidate.title} "
-                f"(score {sc.score:.0f})"
+                f"\n[bold yellow]Low-confidence match[/bold yellow] for: {source.display}"
             )
-        console.print("  [0] Skip this track")
-        choice = IntPrompt.ask(
-            "Choose a match", choices=[str(i) for i in range(0, len(ranked[:5]) + 1)], default=0
-        )
-        if choice == 0:
-            return None
-        return ranked[choice - 1]
+            for idx, sc in enumerate(ranked[:5], start=1):
+                console.print(
+                    f"  [{idx}] {sc.candidate.artist_display} - {sc.candidate.title} "
+                    f"(score {sc.score:.0f})"
+                )
+            console.print("  [0] Skip this track")
+            console.print("  [s] Search Spotify with different text")
+            choices = [str(i) for i in range(0, len(ranked[:5]) + 1)] + ["s"]
+            choice = Prompt.ask("Choose a match", choices=choices, default="0")
+
+            if choice == "0":
+                return None
+            if choice == "s":
+                query = Prompt.ask("Search query")
+                custom_candidates = target.search_raw_query(query)
+                ranked = rank_candidates(source, custom_candidates)
+                if not ranked:
+                    console.print("[red]No results for that search.[/red]")
+                    return None
+                continue
+            return ranked[int(choice) - 1]
 
     return resolver
 
 
 def cmd_convert(args: argparse.Namespace) -> int:
-    from rich.console import Console
-    from rich.progress import BarColumn, Progress, TextColumn, TimeRemainingColumn
-    from rich.table import Table
-
     console = Console()
 
     try:
@@ -162,39 +189,73 @@ def cmd_convert(args: argparse.Namespace) -> int:
         console.print(f"[bold red]Configuration error:[/bold red] {exc}")
         return 1
 
-    log_file = config.state_dir / "playlist_converter.log"
+    log_file = Path(args.log_file) if args.log_file else config.state_dir / "playlist_converter.log"
     _configure_logging(args.verbose, log_file)
+    logger = logging.getLogger("playlist_converter")
 
-    yt_auth = args.yt_auth_file or config.ytmusic_auth_file
-    source = YouTubeMusicSource(auth_file=yt_auth)
-
-    console.print(f"[bold]Fetching YouTube Music playlist...[/bold]")
     try:
-        playlist_title, tracks = source.fetch_playlist(args.playlist)
+        return _run_convert(args, config, console)
+    except KeyboardInterrupt:
+        console.print(
+            "\n[yellow]Interrupted.[/yellow] Progress has been saved -- "
+            "re-run with [bold]--resume[/bold] to continue where you left off."
+        )
+        return 130
     except PlaylistNotFoundError as exc:
         console.print(f"[bold red]Error:[/bold red] {exc}")
         return 1
+    except Exception as exc:  # noqa: BLE001 - top-level safety net for a CLI tool
+        logger.exception("Unhandled error during conversion")
+        console.print(f"[bold red]Unexpected error:[/bold red] {exc}")
+        console.print(
+            f"See [bold]{log_file}[/bold] for details. "
+            "If a Spotify playlist or partial matches were already created, "
+            "re-run with [bold]--resume[/bold] to continue."
+        )
+        return 1
+
+
+def _run_convert(args: argparse.Namespace, config, console) -> int:
+    yt_auth = args.yt_auth_file or config.ytmusic_auth_file
+    source = YouTubeMusicSource(auth_file=yt_auth)
+
+    console.print("[bold]Fetching YouTube Music playlist...[/bold]")
+    fetched = source.fetch_playlist(args.playlist)
+    tracks = fetched.tracks
+    if args.limit is not None:
+        tracks = tracks[: args.limit]
 
     if not tracks:
         console.print("[yellow]Playlist has no available tracks -- nothing to do.[/yellow]")
         return 0
 
-    console.print(f"Found [bold]{len(tracks)}[/bold] tracks in '{playlist_title}'.")
+    console.print(f"Found [bold]{len(tracks)}[/bold] tracks in '{fetched.title}'.")
+    if fetched.unavailable_count:
+        console.print(
+            f"[yellow]{fetched.unavailable_count} track(s) in the source playlist are "
+            "unavailable (removed/region-locked) and were skipped.[/yellow]"
+        )
 
-    dest_name = args.name or playlist_title
+    dest_name = args.name or fetched.title
     cache = None if args.no_cache else SearchCache(config.cache_path)
 
     console.print("[bold]Authenticating with Spotify...[/bold]")
-    target = SpotifyTarget(config.spotify, cache=cache)
+    target = SpotifyTarget(
+        config.spotify,
+        cache=cache,
+        token_cache_path=config.state_dir / "spotify_token_cache.json",
+    )
 
     run = ConversionRun(target=target, state_dir=config.state_dir, threshold=args.threshold)
-    run_state, state_path = get_state(config.state_dir, args.playlist, dest_name)
-    if not args.resume:
-        from .state import RunState
-
+    if args.resume:
+        run_state, state_path = get_state(config.state_dir, args.playlist, dest_name)
+    else:
+        _, state_path = get_state(config.state_dir, args.playlist, dest_name)
         run_state = RunState(playlist_id=args.playlist)
 
-    interactive_resolver = _make_interactive_resolver(console) if args.interactive else None
+    interactive_resolver = (
+        _make_interactive_resolver(console, target) if args.interactive else None
+    )
 
     progress = Progress(
         TextColumn("[progress.description]{task.description}"),
@@ -214,8 +275,8 @@ def cmd_convert(args: argparse.Namespace) -> int:
             run_state,
             interactive_resolver=interactive_resolver,
             progress_cb=on_progress,
+            state_path=state_path,
         )
-        save_state(state_path, run_state)
 
     counts = summarize(results)
     table = Table(title="Match summary")
@@ -225,6 +286,7 @@ def cmd_convert(args: argparse.Namespace) -> int:
         if count:
             table.add_row(status, str(count))
     console.print(table)
+    console.print(f"Match rate: [bold]{match_rate(results)}%[/bold]")
 
     report_dir = Path(args.report_dir)
     csv_path = report_dir / "match_report.csv"
@@ -242,13 +304,13 @@ def cmd_convert(args: argparse.Namespace) -> int:
 
     if args.dry_run:
         console.print("[cyan]Dry run: no changes were made to Spotify.[/cyan]")
-        return 0
+        return 2 if (args.strict and review) else 0
 
     console.print(f"[bold]Adding matched tracks to '{dest_name}' on Spotify...[/bold]")
     playlist_id, added = run.apply_to_spotify(
         results,
         playlist_name=dest_name,
-        description=f"Converted from YouTube Music playlist '{playlist_title}' "
+        description=f"Converted from YouTube Music playlist '{fetched.title}' "
         "via playlist-converter.",
         public=args.public,
         run_state=run_state,
@@ -259,7 +321,7 @@ def cmd_convert(args: argparse.Namespace) -> int:
         f"[bold green]Done![/bold green] Added {added} track(s) to Spotify playlist "
         f"'{dest_name}' (id: {playlist_id})."
     )
-    return 0
+    return 2 if (args.strict and review) else 0
 
 
 def main(argv: list[str] | None = None) -> int:
