@@ -18,6 +18,7 @@ from .converter import ConversionRun, get_state
 from .matching import DEFAULT_CONFIDENCE_THRESHOLD, ScoredCandidate, rank_candidates
 from .models import SourceTrack
 from .report import match_rate, needs_review, summarize, write_csv_report, write_json_report
+from .retry import RetryAfterTooLong, format_duration
 from .spotify_target import SpotifyTarget
 from .state import RunState
 from .youtube_data_api_source import YouTubeDataApiSource
@@ -230,6 +231,16 @@ def cmd_convert(args: argparse.Namespace) -> int:
         return 1
     except ConfigError as exc:
         console.print(f"[bold red]Configuration error:[/bold red] {exc}")
+        return 1
+    except RetryAfterTooLong as exc:
+        console.print(
+            f"[bold red]Spotify has rate-limited this app[/bold red] and asked to "
+            f"wait {format_duration(exc.seconds)} before trying again.\n"
+            "This is Spotify's app-wide quota, not a bug -- there's no point waiting "
+            "it out in this terminal. Progress made so far has already been saved: "
+            "once the wait is over, re-run the same command with "
+            "[bold]--resume[/bold] to pick up where this left off."
+        )
         return 1
     except Exception as exc:  # noqa: BLE001 - top-level safety net for a CLI tool
         logger.exception("Unhandled error during conversion")
