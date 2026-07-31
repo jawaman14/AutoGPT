@@ -1,0 +1,115 @@
+# RFHound 🐕‍🦺📡
+
+**A friendly, powerful HackRF reconnaissance & pentesting toolkit.**
+
+RFHound turns a wall of raw spectrum into *"oh, that's a tire-pressure sensor"*.
+It is an **orchestration layer** — it does not re-implement DSP. Instead it
+drives the best existing tools (`hackrf_sweep`, `hackrf_transfer`, `rtl_433`,
+`dump1090`, `multimon-ng`, `AIS-catcher`, and more) behind one guided,
+approachable interface, and it ships a **frequency knowledge base** so you
+always know what you're looking at.
+
+> ⚠️ **Read [`docs/LEGAL.md`](docs/LEGAL.md) before you transmit anything.**
+> RFHound is **receive-first**. Transmit is disabled by default and gated behind
+> explicit authorization and a frequency allow-list. RFHound deliberately
+> contains **no jamming, denial-of-service, deauth, or brute-force** capability.
+
+---
+
+## Why RFHound instead of the raw tools?
+
+The RF security ecosystem already has excellent, focused tools. What's missing
+is glue: something that surveys the spectrum, tells you *what* it found and *why
+you'd care*, points you at the right decoder, and keeps you on the right side of
+the law. That's RFHound.
+
+| You want to… | RFHound gives you |
+|---|---|
+| See what's transmitting around you | `rfhound recon` — auto-sweeps high-value bands and reports hits |
+| Look at a specific slice of spectrum | `rfhound sweep 433 435` — terminal spectrogram + peak detection |
+| Know what a frequency *is* | `rfhound bands --search tpms` — curated knowledge base |
+| Decode a protocol | `rfhound decode run rtl433` — drives rtl_433 / dump1090 / … |
+| Save a signal for deep analysis | `rfhound capture 433.92 10` — IQ + SigMF metadata for URH |
+| Replay your *own* signal (authorized) | `rfhound replay file.sigmf-data --authorized` (gated) |
+
+## Highlights
+
+- **Runs with no hardware.** Every scan supports `--simulate`, so you can learn
+  the workflow, demo it, and run the tests without a HackRF.
+- **Friendly *and* scriptable.** Run `rfhound` bare for a guided menu, or use
+  subcommands + JSON-friendly output for automation.
+- **Graceful everywhere.** `rich` gives you colour/tables when installed; without
+  it, RFHound falls back to clean plain text.
+- **Safety by design.** Transmit is off by default, requires recorded consent and
+  a per-frequency allow-list, and needs an explicit `--authorized` flag each time.
+- **Knows the spectrum.** A curated 1 MHz–6 GHz band plan mapping frequencies →
+  protocols → decoders → why a security researcher cares.
+
+## Install
+
+```bash
+cd rfhound
+pip install -e .          # installs the `rfhound` command (+ rich)
+# or, minimal:  pip install rich   &&   python -m rfhound
+```
+
+Then install the external SDR tools you want RFHound to drive (all optional —
+`rfhound doctor` tells you what's present and how to get the rest):
+
+```bash
+# Debian/Ubuntu
+sudo apt install hackrf rtl-433 multimon-ng
+# dump1090-fa, AIS-catcher, acarsdec, dumpvdl2: see docs/USAGE.md
+```
+
+## 60-second tour
+
+```bash
+rfhound doctor                     # what's installed? is a HackRF attached?
+rfhound bands --category ism       # browse the ISM bands (fobs, TPMS, IoT)
+rfhound recon --simulate           # survey the spectrum (no hardware needed)
+rfhound sweep 433 435              # spectrogram of the 433 MHz ISM band
+rfhound decode run rtl433          # decode 433 MHz devices via rtl_433
+rfhound capture 433.92 10          # record 10s of IQ for analysis in URH
+rfhound                            # ...or just run the guided menu
+```
+
+Example recon output (simulated):
+
+```
+                      Recon survey [SIMULATED]
+ Band          Category  Status  Peaks  Strongest              Decoder
+ ISM 433 MHz   ism       active  1      433.850 MHz @ -62 dB   rtl433
+ ISM 868 MHz   ism       active  1      868.300 MHz @ -58 dB   rtl433
+ ADS-B (1090)  aviation  active  1      1090.00 MHz @ -55 dB   adsb
+  Suggested next steps
+  rfhound decode run rtl433 --freq 433.920   # ISM 433 MHz
+  rfhound decode run adsb   --freq 1090.000  # ADS-B (1090ES)
+```
+
+## What can you actually do across 1 MHz – 6 GHz?
+
+See [`docs/FREQUENCIES.md`](docs/FREQUENCIES.md) for the full map. In short:
+ISM 315/433/868/915 MHz (key fobs, TPMS, weather stations, IoT, smart meters),
+ADS-B aircraft (1090 MHz), AIS ships (162 MHz), unencrypted pagers (POCSAG/FLEX),
+ACARS/APRS, NOAA weather-satellite imagery, GPS L1 (receive-only), and the busy
+2.4/5 GHz ISM bands.
+
+## Documentation
+
+- [`docs/LEGAL.md`](docs/LEGAL.md) — **read this first**; law, ethics, and what's excluded
+- [`docs/USAGE.md`](docs/USAGE.md) — install the decoders, recipes, workflows
+- [`docs/FREQUENCIES.md`](docs/FREQUENCIES.md) — the frequency knowledge base
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how it's built and how to extend it
+
+## Relationship to other tools
+
+RFHound is complementary, not a replacement. For deep protocol reverse
+engineering and fuzzing, [Universal Radio Hacker](https://github.com/jopohl/urh)
+is best-in-class — RFHound produces URH/SigMF-compatible captures so you can hand
+off seamlessly. `rtl_433`, `dump1090`, `multimon-ng`, `AIS-catcher` do the
+decoding; RFHound orchestrates them and adds the knowledge base + safety layer.
+
+## License
+
+MIT — see the repository `LICENSE`.
