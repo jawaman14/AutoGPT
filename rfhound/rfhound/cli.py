@@ -17,6 +17,8 @@ from .exceptions import RFHoundError
 from .modules import capture as capture_mod
 from .modules import decode as decode_mod
 from .modules import defense as defense_mod
+from .modules import intel as intel_mod
+from . import plugins
 from .modules import recon as recon_mod
 from .modules import replay as replay_mod
 from .modules import report as report_mod
@@ -277,6 +279,38 @@ def cmd_tx(args: argparse.Namespace, cfg: Config) -> int:
     return 0
 
 
+def _load_json_list(path: str | None) -> list:
+    if not path:
+        raise RFHoundError("Provide --file <messages.json> (a JSON array) or use --simulate.")
+    import json
+    data = json.loads(Path(path).read_text())
+    if not isinstance(data, list):
+        raise RFHoundError(f"{path} must contain a JSON array of message objects.")
+    return data
+
+
+def cmd_mods(args: argparse.Namespace, cfg: Config) -> int:
+    if args.mods_cmd == "sample":
+        path = plugins.write_sample_mod()
+        console.success(f"Wrote a sample mod to {path}")
+        console.print_("Edit it, then run 'rfhound mods list' to load it.")
+        return 0
+    # list (also the default): load and report
+    directory = Path(args.dir) if args.dir else plugins.mods_dir()
+    loaded = plugins.load_mods(directory)
+    console.print_(f"Mods directory: {directory}")
+    if not loaded:
+        console.warn("No mods found. Create one with 'rfhound mods sample'.")
+        return 0
+    rows = []
+    for m in loaded:
+        status = "ok" if not m.error else f"ERROR: {m.error}"
+        rows.append([m.name, m.version,
+                     f"{len(m.bands)}b/{len(m.recipes)}r/{len(m.detectors)}d", status])
+    console.table("Loaded mods", ["Name", "Version", "Adds", "Status"], rows)
+    return 0
+
+
 def cmd_defense(args: argparse.Namespace, cfg: Config) -> int:
     if args.defense_cmd == "monitor":
         report = defense_mod.monitor_interference(
@@ -328,6 +362,55 @@ def cmd_defense(args: argparse.Namespace, cfg: Config) -> int:
         for f in findings:
             console.print_(f"  • payload {f.payload}: seen {f.count}x, "
                            f"min gap {f.min_gap_s}s — {f.reason}")
+        return 1
+
+    if args.defense_cmd == "baseline":
+        if args.baseline_cmd == "save":
+            path = intel_mod.save_baseline(
+                cfg, args.start, args.stop, Path(args.out), simulate=args.simulate
+            )
+            console.success(f"Baseline saved to {path}")
+            return 0
+        # diff
+        findings = intel_mod.diff_baseline(
+            cfg, Path(args.file), new_threshold_db=args.threshold, simulate=args.simulate
+        )
+        if not findings:
+            console.success("No new or elevated emitters vs baseline — area clean.")
+            return 0
+        console.error(f"TSCM: {len(findings)} new/elevated emitter(s) vs baseline:")
+        rows = [
+            [f"{f.freq_mhz:.4f}", f"{f.power_db}", f.kind,
+             f"+{f.delta_db}" if f.baseline_db is not None else "new",
+             f.band or "unknown"]
+            for f in findings
+        ]
+        console.table("Rogue emitters", ["Freq (MHz)", "Power dB", "Kind", "Δ dB", "Band"], rows)
+        return 1
+
+    if args.defense_cmd == "spoof-check":
+        if args.protocol == "adsb":
+            msgs = intel_mod.simulate_adsb_messages() if args.simulate else _load_json_list(args.file)
+            findings = intel_mod.detect_adsb_spoofing(msgs)
+        else:
+            msgs = intel_mod.simulate_ais_messages() if args.simulate else _load_json_list(args.file)
+            findings = intel_mod.detect_ais_spoofing(msgs)
+        if not findings:
+            console.success(f"No {args.protocol.upper()} spoofing indicators found.")
+            return 0
+        console.error(f"{args.protocol.upper()} spoofing indicators: {len(findings)}")
+        for f in findings:
+            console.print_(f"  • [{f.severity}] {f.entity_id} — {f.kind}: {f.detail}")
+        return 1
+
+    if args.defense_cmd == "drone-scan":
+        hits = intel_mod.drone_scan(cfg, simulate=args.simulate)
+        if not hits:
+            console.success("No drone-band activity detected.")
+            return 0
+        console.error(f"Counter-UAS: activity in {len(hits)} drone-band bin(s):")
+        rows = [[h.band, f"{h.freq_mhz:.3f}", f"{h.power_db}", h.confidence] for h in hits]
+        console.table("Drone-band detections", ["Band", "Freq (MHz)", "Power dB", "Confidence"], rows)
         return 1
 
     if args.defense_cmd == "resilience":
@@ -470,6 +553,27 @@ def build_parser() -> argparse.ArgumentParser:
                      help="Device uses a fixed code (only flag implausibly fast repeats)")
     frc.add_argument("--simulate", action="store_true", help="Use a synthetic replay trace")
 
+    fbl = fsub.add_parser("baseline", help="TSCM: save a known-good spectrum and diff for rogue emitters")
+    blsub = fbl.add_subparsers(dest="baseline_cmd", required=True)
+    bsave = blsub.add_parser("save", help="Save a baseline sweep")
+    bsave.add_argument("start", type=float, help="Start MHz")
+    bsave.add_argument("stop", type=float, help="Stop MHz")
+    bsave.add_argument("--out", required=True, help="Baseline output path (.json)")
+    bsave.add_argument("--simulate", action="store_true")
+    bdiff = blsub.add_parser("diff", help="Diff current spectrum against a saved baseline")
+    bdiff.add_argument("file", help="Saved baseline .json")
+    bdiff.add_argument("--threshold", type=float, default=10.0,
+                       help="dB increase over baseline that flags an emitter")
+    bdiff.add_argument("--simulate", action="store_true")
+
+    fsc = fsub.add_parser("spoof-check", help="Detect ADS-B / AIS spoofing in decoded messages")
+    fsc.add_argument("protocol", choices=["adsb", "ais"])
+    fsc.add_argument("--file", help="JSON array of decoded messages")
+    fsc.add_argument("--simulate", action="store_true", help="Use a synthetic spoofed stream")
+
+    fds = fsub.add_parser("drone-scan", help="Counter-UAS: scan drone control/video bands")
+    fds.add_argument("--simulate", action="store_true")
+
     fres = fsub.add_parser("resilience", help="Resilience-test YOUR OWN device and report")
     fres.add_argument("--device", help="Name/label of the device under test")
     fres.add_argument("--payloads", help="Text file of captured payloads (one per line)")
@@ -479,6 +583,13 @@ def build_parser() -> argparse.ArgumentParser:
                       default=None, help="Did the device actuate on replay? true/false")
     fres.add_argument("--simulate", action="store_true", help="Run a synthetic resilience test")
     pdf.set_defaults(func=cmd_defense)
+
+    pm = sub.add_parser("mods", help="Manage extension mods/plugins")
+    msub = pm.add_subparsers(dest="mods_cmd")
+    ml = msub.add_parser("list", help="Load and list mods")
+    ml.add_argument("--dir", help="Mods directory (default ~/.config/rfhound/mods)")
+    msub.add_parser("sample", help="Write a sample mod to the mods directory")
+    pm.set_defaults(func=cmd_mods, mods_cmd="list", dir=None)
 
     pcfg = sub.add_parser("config", help="Show / init configuration")
     csub = pcfg.add_subparsers(dest="config_cmd")

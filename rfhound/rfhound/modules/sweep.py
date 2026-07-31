@@ -208,9 +208,6 @@ def render_spectrum(result: SweepResult, width: int = 60, rows: int = 12) -> Non
         f"floor {result.noise_floor_db} dB  peak {pmax:.0f} dB"
         + ("  [SIMULATED]" if result.simulated else "")
     )
-    for c in cols:
-        if c <= -999.0:
-            pass
     line = "".join(
         blocks[min(len(blocks) - 1, int((c - pmin) / prange * (len(blocks) - 1)))]
         if c > -999.0 else " "

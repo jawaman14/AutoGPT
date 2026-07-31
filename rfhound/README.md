@@ -95,10 +95,20 @@ They are receive-and-analyse (plus the existing *gated* replay-of-your-own-signa
 for the resilience harness). See [`docs/DEFENSE.md`](docs/DEFENSE.md).
 
 ```bash
-rfhound defense monitor 433 435            # detect jamming / interference on a band
+rfhound defense monitor 433 435              # detect jamming / interference on a band
 rfhound defense replay-check --file obs.txt  # detect replay attacks in observed traffic
 rfhound defense rolling-assess --file caps.txt  # is this fob fixed- or rolling-code?
 rfhound defense resilience --device myfob --replayed --actuated true  # hardening report
+
+# RF intelligence / situational awareness (all receive-only)
+rfhound defense baseline save 88 960 --out site.json   # TSCM known-good baseline
+rfhound defense baseline diff site.json                # rogue / new emitters (bug sweep)
+rfhound defense spoof-check adsb --file adsb.json       # ghost-aircraft / spoof detection
+rfhound defense spoof-check ais  --file ais.json        # vessel-spoofing detection
+rfhound defense drone-scan                              # counter-UAS band activity
+
+# Extend it (bring-your-own bands / decoders / detectors)
+rfhound mods sample && rfhound mods list
 ```
 
 **What this module deliberately is not:** it contains no jammer/DoS transmitter,
@@ -119,7 +129,9 @@ ACARS/APRS, NOAA weather-satellite imagery, GPS L1 (receive-only), and the busy
 
 - [`docs/LEGAL.md`](docs/LEGAL.md) — **read this first**; law, ethics, and what's excluded
 - [`docs/USAGE.md`](docs/USAGE.md) — install the decoders, recipes, workflows
+- [`docs/DEFENSE.md`](docs/DEFENSE.md) — detection & hardening: jamming, replay, spoofing, TSCM, C-UAS
 - [`docs/FREQUENCIES.md`](docs/FREQUENCIES.md) — the frequency knowledge base
+- [`docs/MODDING.md`](docs/MODDING.md) — extend RFHound with your own bands/decoders/detectors
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how it's built and how to extend it
 
 ## Relationship to other tools

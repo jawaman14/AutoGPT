@@ -135,6 +135,18 @@ BANDS: list[Band] = [
     Band("DECT cordless", 1_880_000_000, 1_900_000_000, "voice",
          "EU DECT cordless phones (US: 1920-1930).",
          center_hz=1_890_000_000, region="EU", tags=("voice", "dect")),
+    Band("Drone control 900 MHz", 902_000_000, 928_000_000, "cuas",
+         "Long-range drone control/telemetry links (e.g. some ELRS/915 sets).",
+         center_hz=915_000_000, region="US", tags=("drone", "cuas", "control")),
+    Band("Drone video 1.2/1.3 GHz", 1_150_000_000, 1_300_000_000, "cuas",
+         "Analog FPV video downlink band used by some drones.",
+         center_hz=1_280_000_000, region="global", tags=("drone", "cuas", "video")),
+    Band("Drone control/video 2.4 GHz", 2_400_000_000, 2_483_500_000, "cuas",
+         "Most common consumer drone control + video (DJI OcuSync, etc.).",
+         center_hz=2_442_000_000, region="global", tags=("drone", "cuas", "control", "video")),
+    Band("Drone FPV video 5.8 GHz", 5_645_000_000, 5_945_000_000, "cuas",
+         "Analog/HD FPV video downlink — the classic racing/FPV band.",
+         center_hz=5_800_000_000, region="global", tags=("drone", "cuas", "video")),
     Band("2.4 GHz ISM (Wi-Fi/BLE/ZigBee)", 2_400_000_000, 2_483_500_000, "ism",
          "Wi-Fi, Bluetooth/BLE, ZigBee, RC, microwave leakage. Wideband. Note: "
          "Wi-Fi/BLE are better attacked with dedicated NICs; use SDR for the "
@@ -160,6 +172,7 @@ CATEGORIES: dict[str, str] = {
     "voice": "Land-mobile / voice services",
     "utility": "HF utility and data",
     "iot": "IoT / long-range radio (LoRa, LoRaWAN)",
+    "cuas": "Counter-UAS — drone control & video bands (detection only)",
 }
 
 

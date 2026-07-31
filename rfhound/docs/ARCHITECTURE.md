@@ -17,6 +17,7 @@ rfhound/
 │   ├── proc.py        # subprocess runner + external-tool detection catalogue
 │   ├── device.py      # HackRF detection via hackrf_info
 │   ├── bandplan.py    # the frequency knowledge base
+│   ├── plugins.py     # mod/plugin loader (custom bands/recipes/detectors)
 │   ├── exceptions.py  # typed error hierarchy
 │   └── modules/
 │       ├── sweep.py   # hackrf_sweep driver + peak detection + simulate
@@ -25,6 +26,7 @@ rfhound/
 │       ├── decode.py  # registry of decoder "recipes" (rtl_433/dump1090/…)
 │       ├── recon.py   # multi-band auto-survey
 │       ├── defense.py # detection & hardening (jamming/replay/rolling-code)
+│       ├── intel.py   # TSCM baseline diff, ADS-B/AIS spoof detection, C-UAS
 │       └── report.py  # Markdown / HTML reporting
 └── tests/             # pytest suite (runs with no hardware)
 ```

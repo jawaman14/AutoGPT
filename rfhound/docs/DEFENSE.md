@@ -92,6 +92,49 @@ challenge-response and runtime replay + RollJam detection.
 rfhound defense resilience --device demo --simulate    # end-to-end demo
 ```
 
+## 5. TSCM baseline diff — `defense baseline`
+
+Counter-surveillance ("bug sweep"). Record a **known-good** spectrum of a room /
+site, then diff a fresh sweep against it to surface emitters that are **new** or
+**notably stronger** — the signature of a planted transmitter or a new rogue
+device.
+
+```bash
+rfhound defense baseline save 88 960 --out room-clean.json   # capture known-good
+# ...later / periodically...
+rfhound defense baseline diff room-clean.json --threshold 10
+rfhound defense baseline diff room-clean.json --simulate      # demo (injects a bug)
+```
+
+## 6. Spoof detection — `defense spoof-check`
+
+The defensive counterpart to Mayhem's ADS-B/AIS transmitters. Feed in decoded
+messages (JSON array) and RFHound flags spoofing indicators: **ghost aircraft /
+teleporting tracks** (position jumps implying impossible speed), **impossible
+altitude**, **duplicate identities** (one ICAO from two places at once), and for
+AIS **invalid MMSI** + impossible vessel motion.
+
+```bash
+rfhound defense spoof-check adsb --file adsb-messages.json
+rfhound defense spoof-check ais  --file ais-messages.json
+rfhound defense spoof-check adsb --simulate     # demo with a ghost aircraft
+```
+
+ADS-B message objects use `icao, t, lat, lon, alt, speed`; AIS uses
+`mmsi, t, lat, lon, sog`. Wire your decoder's JSON output into this for a live
+spoofing monitor.
+
+## 7. Counter-UAS detection — `defense drone-scan`
+
+Detection-only. Sweeps the common drone control/video bands (900 MHz, 1.2/1.3
+GHz, 2.4 GHz, 5.8 GHz) and reports activity with a coarse confidence. This finds
+*presence* of drone RF; it does not jam or take over anything.
+
+```bash
+rfhound defense drone-scan
+rfhound defense drone-scan --simulate
+```
+
 ## Turning findings into protections
 
 | Finding | Hardening action |
