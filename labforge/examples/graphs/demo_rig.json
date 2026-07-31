@@ -1,0 +1,45 @@
+{
+  "name": "demo_rig",
+  "controllers": [
+    { "id": "esp32-0", "transport": "serial", "port": "/dev/ttyUSB0", "baud": 115200 }
+  ],
+  "vessels": [
+    { "id": "reactor", "kind": "reactor", "max_volume_ml": 50, "initial_volume_ml": 0 },
+    { "id": "waste", "kind": "waste", "max_volume_ml": 1000, "initial_volume_ml": 0 }
+  ],
+  "reagents": [
+    { "id": "water", "source": "stock_water" },
+    { "id": "hcl", "source": "stock_hcl" },
+    { "id": "naoh", "source": "stock_naoh" },
+    { "id": "ethanol", "source": "stock_ethanol" }
+  ],
+  "pumps": [
+    { "id": "p_water", "kind": "syringe", "controller": "esp32-0", "channel": 0,
+      "source": "stock_water", "dest": "reactor",
+      "syringe_volume_ml": 25, "steps_per_ml": 1600, "max_rate_ml_s": 1.0 },
+    { "id": "p_hcl", "kind": "syringe", "controller": "esp32-0", "channel": 1,
+      "source": "stock_hcl", "dest": "reactor",
+      "syringe_volume_ml": 25, "steps_per_ml": 1600, "max_rate_ml_s": 0.5 },
+    { "id": "p_naoh", "kind": "syringe", "controller": "esp32-0", "channel": 2,
+      "source": "stock_naoh", "dest": "reactor",
+      "syringe_volume_ml": 25, "steps_per_ml": 1600, "max_rate_ml_s": 0.5 },
+    { "id": "p_ethanol", "kind": "syringe", "controller": "esp32-0", "channel": 3,
+      "source": "stock_ethanol", "dest": "reactor",
+      "syringe_volume_ml": 25, "steps_per_ml": 1600, "max_rate_ml_s": 1.0 },
+    { "id": "p_drain", "kind": "peristaltic", "controller": "esp32-0", "channel": 4,
+      "source": "reactor", "dest": "waste",
+      "syringe_volume_ml": 100, "steps_per_ml": 400, "max_rate_ml_s": 2.0 }
+  ],
+  "stirrers": [
+    { "id": "stir_reactor", "controller": "esp32-0", "channel": 0,
+      "vessel": "reactor", "default_rpm": 300, "max_rpm": 1500 }
+  ],
+  "heaters": [
+    { "id": "heat_reactor", "controller": "esp32-0", "channel": 0,
+      "vessel": "reactor", "sensor_channel": 0, "max_temp_c": 120 }
+  ],
+  "sensors": [
+    { "id": "temp_reactor", "controller": "esp32-0", "channel": 0,
+      "vessel": "reactor", "quantity": "temperature" }
+  ]
+}

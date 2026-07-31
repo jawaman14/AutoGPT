@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Simple dilution: prepare a dilute HCl solution in the reactor.
+  Runs end-to-end on the demo_rig hardware graph in simulation.
+  This is an educational example, not a validated procedure.
+-->
+<Synthesis name="simple_dilution">
+  <Hardware>
+    <Component id="reactor" type="reactor"/>
+  </Hardware>
+
+  <Reagents>
+    <Reagent id="water" name="water" smiles="O" molar_mass="18.015"/>
+    <Reagent id="hcl" name="hydrochloric acid" concentration="1 mol/L"/>
+  </Reagents>
+
+  <Procedure>
+    <Comment comment="Dilute 5 mL of 1 M HCl into 20 mL water"/>
+    <Add reagent="water" vessel="reactor" volume="20 mL"/>
+    <Add reagent="hcl" vessel="reactor" volume="5 mL" stir="true"/>
+    <Stir vessel="reactor" stir_speed="300 RPM" time="60 s"/>
+  </Procedure>
+</Synthesis>
