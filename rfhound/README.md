@@ -16,6 +16,20 @@ always know what you're looking at.
 
 ---
 
+## Web dashboard
+
+A zero-dependency browser dashboard (live spectrum + waterfall, recon, threat
+detection, knowledge base, hardware status) backed by a JSON REST API — the
+integration surface for a SIEM / monitoring stack. **Receive-and-analyse only:
+there is no transmit endpoint**, so exposing the dashboard never keys the radio.
+
+```bash
+rfhound web --open            # dashboard at http://127.0.0.1:8000
+rfhound web --simulate        # demo it with no hardware
+```
+
+![RFHound dashboard](docs/dashboard.png)
+
 ## Why RFHound instead of the raw tools?
 
 The RF security ecosystem already has excellent, focused tools. What's missing

@@ -126,6 +126,50 @@ rfhound tx disable        # turn transmit back off
 RFHound refuses to transmit outside your declared allow-list, outside the HackRF
 hardware range, or without the per-command `--authorized` flag.
 
+## The web dashboard & REST API
+
+```bash
+rfhound web                       # http://127.0.0.1:8000
+rfhound web --host 0.0.0.0 --port 9000 --open
+rfhound web --simulate            # demo with no hardware
+```
+
+The dashboard is served from Python's standard library (no extra dependencies)
+and is **receive-and-analyse only** — there is deliberately no transmit endpoint.
+Every panel is backed by a JSON endpoint you can consume directly:
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/status` | device, tools, hardware settings, version |
+| `GET /api/sweep?start=&stop=&simulate=` | spectrum array + detected peaks |
+| `GET /api/recon?simulate=` | band survey findings |
+| `GET /api/defense/drone?simulate=` | counter-UAS detections |
+| `GET /api/defense/spoof/adsb` · `/ais` | spoof-detection findings |
+| `GET /api/bands` · `/api/decoders` | knowledge base & decoder recipes |
+
+Bind to `127.0.0.1` (default) unless you intend to expose it; put it behind a
+reverse proxy with auth if you serve it on a network.
+
+## HackRF hardware options
+
+RFHound exposes the HackRF's hardware controls via config (used by sweep and
+capture):
+
+| Setting | Flag | Meaning |
+|---|---|---|
+| `amp_enable` | `-a` | Front-end RF amplifier (+~14 dB) |
+| `antenna_power` | `-p` | **Bias-tee**: 3.3 V / 50 mA on the antenna port for powered antennas/LNAs |
+| `lna_gain` / `vga_gain` | `-l` / `-g` | RX IF and baseband gain |
+| `baseband_filter_hz` | `-b` | Baseband filter bandwidth (capture only; 0 = auto) |
+| `freq_correction_ppm` | `-C` | Crystal clock error correction (capture only) |
+| `device_serial` | `-d` | Select a specific HackRF by serial (multi-unit setups) |
+
+```bash
+rfhound config show
+# edit ~/.config/rfhound/config.json, e.g. set "antenna_power": true to power an
+# active antenna, or "device_serial" to pick one of several HackRFs.
+```
+
 ## The guided menu
 
 Prefer clicking to typing? Just run:

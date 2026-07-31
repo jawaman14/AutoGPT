@@ -49,6 +49,12 @@ class Config:
     amp_enable: bool = False  # front-end +14 dB amplifier
     sample_rate: int = 8_000_000  # Hz
 
+    # --- HackRF hardware options --------------------------------------------
+    antenna_power: bool = False   # bias-tee: 3.3V / 50mA on the antenna port
+    baseband_filter_hz: int = 0   # 0 = auto (<= 0.75 * sample_rate); else Hz
+    freq_correction_ppm: int = 0  # internal crystal clock error correction
+    device_serial: str = ""       # select a specific HackRF by serial (multi-unit)
+
     # --- Transmit safety (off by default) -----------------------------------
     tx_enabled: bool = False
     # Operator explicitly acknowledged the legal terms (ISO timestamp string).

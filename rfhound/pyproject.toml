@@ -34,5 +34,8 @@ Homepage = "https://github.com/jawaman14/AutoGPT/tree/main/rfhound"
 [tool.setuptools.packages.find]
 include = ["rfhound*"]
 
+[tool.setuptools.package-data]
+"rfhound.web" = ["*.html"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

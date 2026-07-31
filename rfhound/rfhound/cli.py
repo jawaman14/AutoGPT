@@ -432,6 +432,19 @@ def cmd_defense(args: argparse.Namespace, cfg: Config) -> int:
     return 1
 
 
+def cmd_web(args: argparse.Namespace, cfg: Config) -> int:
+    from .web import server as web_server
+    force_sim = args.simulate or not device.is_present()
+    if force_sim and not args.simulate:
+        console.warn("No HackRF detected — dashboard will run in SIMULATE mode.")
+    url = f"http://{args.host}:{args.port}"
+    if args.open:
+        import webbrowser
+        webbrowser.open(url)
+    web_server.serve(cfg, host=args.host, port=args.port, force_simulate=force_sim)
+    return 0
+
+
 def cmd_config(args: argparse.Namespace, cfg: Config) -> int:
     if args.config_cmd == "path":
         console.print_(str(config_path()))
@@ -464,6 +477,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("doctor", help="Check tools, HackRF device and config").set_defaults(func=cmd_doctor)
     sub.add_parser("menu", help="Launch the guided interactive menu").set_defaults(func=cmd_menu)
+
+    pw = sub.add_parser("web", help="Launch the browser dashboard + REST API")
+    pw.add_argument("--host", default="127.0.0.1", help="Bind address (default localhost)")
+    pw.add_argument("--port", type=int, default=8000, help="Port (default 8000)")
+    pw.add_argument("--simulate", action="store_true", help="Force simulate mode")
+    pw.add_argument("--open", action="store_true", help="Open a browser window")
+    pw.set_defaults(func=cmd_web)
 
     pb = sub.add_parser("bands", help="Browse the frequency knowledge base")
     pb.add_argument("--category", help="Filter by category (ism, aviation, ...)")

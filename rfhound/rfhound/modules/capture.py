@@ -90,8 +90,7 @@ def capture_iq(
             "-l", str(cfg.lna_gain),
             "-g", str(cfg.vga_gain),
         ]
-        if cfg.amp_enable:
-            args += ["-a", "1"]
+        args += proc.hackrf_common_args(cfg)
         proc.run(args, timeout=seconds + 30)
 
     _write_sigmf(meta_path, freq_hz, sr, note)

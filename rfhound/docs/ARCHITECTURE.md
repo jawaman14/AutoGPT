@@ -19,6 +19,9 @@ rfhound/
 │   ├── bandplan.py    # the frequency knowledge base
 │   ├── plugins.py     # mod/plugin loader (custom bands/recipes/detectors)
 │   ├── exceptions.py  # typed error hierarchy
+│   ├── web/           # browser dashboard + JSON REST API (stdlib http.server)
+│   │   ├── server.py  # routing, JSON serialisers (RX-only, no TX endpoint)
+│   │   └── dashboard.html  # self-contained SPA (canvas spectrum + waterfall)
 │   └── modules/
 │       ├── sweep.py   # hackrf_sweep driver + peak detection + simulate
 │       ├── capture.py # hackrf_transfer record + SigMF metadata

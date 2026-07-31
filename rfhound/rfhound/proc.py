@@ -186,6 +186,29 @@ def stream(
     return proc.returncode or 0
 
 
+def hackrf_common_args(cfg, *, for_sweep: bool = False) -> list[str]:
+    """Build the shared HackRF hardware flags from config.
+
+    Covers device selection (-d), front-end amp (-a), bias-tee antenna power
+    (-p), and — for hackrf_transfer only — baseband filter (-b) and clock ppm
+    correction (-C). hackrf_sweep does not accept -b/-C, so they are omitted
+    when *for_sweep* is True.
+    """
+    args: list[str] = []
+    if getattr(cfg, "device_serial", ""):
+        args += ["-d", cfg.device_serial]
+    if getattr(cfg, "amp_enable", False):
+        args += ["-a", "1"]
+    if getattr(cfg, "antenna_power", False):
+        args += ["-p", "1"]
+    if not for_sweep:
+        if getattr(cfg, "baseband_filter_hz", 0):
+            args += ["-b", str(cfg.baseband_filter_hz)]
+        if getattr(cfg, "freq_correction_ppm", 0):
+            args += ["-C", str(cfg.freq_correction_ppm)]
+    return args
+
+
 def format_command(args: Iterable[str]) -> str:
     """Render a command list as a copy-pasteable shell string."""
     out = []

@@ -161,8 +161,7 @@ def sweep(
             "-g", str(cfg.vga_gain),
             "-1",  # one sweep pass
         ]
-        if cfg.amp_enable:
-            args += ["-a", "1"]
+        args += proc.hackrf_common_args(cfg, for_sweep=True)
         agg: dict[int, float] = {}
         for _ in range(max(1, sweeps)):
             captured: list[str] = []
