@@ -80,6 +80,18 @@ def test_spoof_adsb_simulated(base_url):
     assert any(f["kind"] == "teleport" for f in data["findings"])
 
 
+def test_imsi_simulated(base_url):
+    code, data = get(base_url + "/api/defense/imsi")
+    assert code == 200
+    assert data["alerts"] and data["score"] > 0
+
+
+def test_hop_simulated(base_url):
+    code, data = get(base_url + "/api/defense/hop")
+    assert code == 200
+    assert data["hopping_suspected"] is True
+
+
 def test_404(base_url):
     try:
         get(base_url + "/api/nope")

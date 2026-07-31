@@ -32,8 +32,8 @@ class Action:
 
 
 def _sim(cfg: Config, params: dict) -> bool:
-    """Simulate if explicitly asked, or if no hardware is present."""
-    if params.get("simulate"):
+    """Simulate if explicitly asked, globally configured, or no hardware present."""
+    if params.get("simulate") or getattr(cfg, "simulate_mode", False):
         return True
     return not device.is_present()
 

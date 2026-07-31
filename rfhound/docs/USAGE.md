@@ -181,6 +181,31 @@ rfhound
 …for an interactive menu covering recon, sweep, the knowledge base, and decoders.
 It auto-detects whether a HackRF is attached and drops into `--simulate` if not.
 
+## Global simulate & dev mode
+
+Two global flags sit before any subcommand:
+
+```bash
+rfhound --simulate recon           # force synthetic data for ANY command
+rfhound --dev sweep 433 435        # verbose debug + full tracebacks
+rfhound --dev --simulate web       # a fully offline dev/demo dashboard
+```
+
+`--simulate` can also be made permanent via `"simulate_mode": true` in the
+config, so a dev/demo box always runs against synthetic data with no hardware.
+
+## Nicer terminal (powered by `rich`)
+
+RFHound leans on the `rich` library it already depends on:
+
+```bash
+rfhound sweep 433 435 --watch --interval 1   # live, continuously-updating spectrum
+rfhound recon                                # animated spinner while surveying
+rfhound gnuradio gen wbfm --freq 100.3       # generated code shown with syntax highlighting
+```
+
+All of these degrade gracefully to plain text when `rich` isn't installed.
+
 ## Configuration
 
 ```bash

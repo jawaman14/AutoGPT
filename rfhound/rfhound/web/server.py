@@ -18,6 +18,7 @@ from urllib.parse import urlparse, parse_qs
 
 from .. import __version__, bandplan, console, device, proc
 from ..config import Config, load_config
+from ..modules import cellular as cellular_mod
 from ..modules import decode as decode_mod
 from ..modules import intel as intel_mod
 from ..modules import recon as recon_mod
@@ -138,6 +139,21 @@ def spoof_dict(protocol: str, *, simulate: bool, messages=None) -> dict:
         for f in findings]}
 
 
+def imsi_dict(*, simulate: bool) -> dict:
+    obs = cellular_mod.simulate_observations() if simulate else []
+    alerts = cellular_mod.detect_rogue_bts(obs)
+    return {"simulated": simulate, "score": cellular_mod.score(alerts),
+            "alerts": [{"cid": a.cid, "indicator": a.indicator, "detail": a.detail,
+                        "severity": a.severity} for a in alerts]}
+
+
+def hop_dict(*, simulate: bool) -> dict:
+    slices = intel_mod.simulate_hopping_slices(hopping=True) if simulate else []
+    r = intel_mod.detect_frequency_hopping(slices)
+    return {"simulated": simulate, "hopping_suspected": r.hopping_suspected,
+            "distinct": r.distinct_freqs, "detail": r.detail}
+
+
 def decoders_dict() -> dict:
     out = []
     for r in decode_mod.list_recipes():
@@ -222,6 +238,10 @@ def _make_handler(state: AppState):
                     return self._send_json(spoof_dict("adsb", simulate=sim))
                 if path == "/api/defense/spoof/ais":
                     return self._send_json(spoof_dict("ais", simulate=sim))
+                if path == "/api/defense/imsi":
+                    return self._send_json(imsi_dict(simulate=sim))
+                if path == "/api/defense/hop":
+                    return self._send_json(hop_dict(simulate=sim))
                 return self._send_json({"error": "not found", "path": path}, code=404)
             except Exception as exc:  # never leak a stack trace to the client
                 return self._send_json({"error": str(exc)}, code=500)

@@ -96,15 +96,18 @@ def cmd_bands(args: argparse.Namespace, cfg: Config) -> int:
 
 
 def cmd_sweep(args: argparse.Namespace, cfg: Config) -> int:
-    result = sweep_mod.sweep(
-        cfg,
-        args.start,
-        args.stop,
-        bin_khz=args.bin,
-        snr_db=args.snr,
-        sweeps=args.sweeps,
-        simulate=args.simulate,
-    )
+    if getattr(args, "watch", False):
+        return _sweep_watch(args, cfg)
+    with console.status(f"Sweeping {args.start}-{args.stop} MHz…"):
+        result = sweep_mod.sweep(
+            cfg,
+            args.start,
+            args.stop,
+            bin_khz=args.bin,
+            snr_db=args.snr,
+            sweeps=args.sweeps,
+            simulate=args.simulate,
+        )
     sweep_mod.render_spectrum(result)
     if result.peaks:
         rows = [
@@ -126,6 +129,25 @@ def cmd_sweep(args: argparse.Namespace, cfg: Config) -> int:
     return 0
 
 
+def _sweep_watch(args: argparse.Namespace, cfg: Config) -> int:
+    """Continuously sweep and redraw a live terminal spectrogram (rich.Live)."""
+    import time
+    console.info(f"Live spectrum {args.start}-{args.stop} MHz — Ctrl-C to stop.")
+    try:
+        for _ in range(args.count if args.count else 10_000_000):
+            result = sweep_mod.sweep(cfg, args.start, args.stop, bin_khz=args.bin,
+                                     snr_db=args.snr, simulate=args.simulate)
+            sweep_mod.render_spectrum(result)
+            if result.peaks:
+                top = result.peaks[0]
+                console.print_(f"  peak {top.freq_mhz:.3f} MHz @ {top.power_db} dB "
+                               f"({top.band.name if top.band else 'unknown'})")
+            time.sleep(max(0.2, args.interval))
+    except KeyboardInterrupt:
+        console.warn("stopped.")
+    return 0
+
+
 def cmd_recon(args: argparse.Namespace, cfg: Config) -> int:
     targets = None
     if args.category:
@@ -133,9 +155,11 @@ def cmd_recon(args: argparse.Namespace, cfg: Config) -> int:
         if not targets:
             console.error(f"No bands in category '{args.category}'.")
             return 1
-    report = recon_mod.run_recon(
-        cfg, targets=targets, snr_db=args.snr, bin_khz=args.bin, simulate=args.simulate
-    )
+    with console.status("Surveying bands…"):
+        report = recon_mod.run_recon(
+            cfg, targets=targets, snr_db=args.snr, bin_khz=args.bin,
+            simulate=args.simulate, progress=False,
+        )
     recon_mod.summarize(report)
 
     # Suggest next steps.
@@ -490,7 +514,7 @@ def cmd_defense(args: argparse.Namespace, cfg: Config) -> int:
 
 def cmd_web(args: argparse.Namespace, cfg: Config) -> int:
     from .web import server as web_server
-    force_sim = args.simulate or not device.is_present()
+    force_sim = args.simulate or cfg.simulate_mode or not device.is_present()
     if force_sim and not args.simulate:
         console.warn("No HackRF detected — dashboard will run in SIMULATE mode.")
     url = f"http://{args.host}:{args.port}"
@@ -523,6 +547,8 @@ def cmd_gnuradio(args: argparse.Namespace, cfg: Config) -> int:
         console.error(str(exc))
         return 1
     console.success(f"Wrote GNU Radio flowgraph to {dest}")
+    if not args.quiet:
+        console.syntax(dest.read_text(), "python", title=f"{dest.name} (preview)")
     st = gr_mod.gnuradio_status()
     if not st.installed:
         console.warn("GNU Radio isn't installed here; the script will run where it is "
@@ -587,7 +613,7 @@ def cmd_node(args: argparse.Namespace, cfg: Config) -> int:
         node_register(hub, node_id, name=args.name or node_id, location=args.location or "",
                       token=token)
         console.success(f"Registered node '{node_id}' with hub {hub}")
-        sim = args.simulate or not device.is_present()
+        sim = args.simulate or cfg.simulate_mode or not device.is_present()
         if args.scan == "recon":
             rep = recon_mod.run_recon(cfg, simulate=sim, progress=False)
             data = {"active": len(rep.active_findings), "total": len(rep.findings)}
@@ -638,6 +664,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--version", action="version", version=f"rfhound {__version__}")
     p.add_argument("--dev", action="store_true", help="Developer mode: verbose debug + tracebacks")
+    p.add_argument("--simulate", dest="simulate_global", action="store_true",
+                   help="Global simulate mode: run everything against synthetic data")
     sub = p.add_subparsers(dest="command")
 
     sub.add_parser("doctor", help="Check tools, HackRF device and config").set_defaults(func=cmd_doctor)
@@ -664,6 +692,9 @@ def build_parser() -> argparse.ArgumentParser:
     ps.add_argument("--snr", type=float, default=12.0, help="Peak threshold above floor (dB)")
     ps.add_argument("--sweeps", type=int, default=1, help="Number of peak-held passes")
     ps.add_argument("--top", type=int, default=15, help="Show top-N peaks")
+    ps.add_argument("--watch", action="store_true", help="Live, continuously-updating spectrum")
+    ps.add_argument("--interval", type=float, default=1.0, help="Seconds between watch frames")
+    ps.add_argument("--count", type=int, default=0, help="Watch frames to draw (0 = until Ctrl-C)")
     ps.add_argument("--simulate", action="store_true", help="Synthesise data (no hardware)")
     ps.set_defaults(func=cmd_sweep)
 
@@ -815,6 +846,7 @@ def build_parser() -> argparse.ArgumentParser:
     ggen.add_argument("--rate", type=int, help="Sample rate (Hz)")
     ggen.add_argument("--out", help="Output .py path")
     ggen.add_argument("--data-out", help="Preset output file (wav/iq/f32)")
+    ggen.add_argument("--quiet", action="store_true", help="Don't print the generated code")
     pg.set_defaults(func=cmd_gnuradio, gr_cmd="list")
 
     pm = sub.add_parser("mods", help="Manage extension mods/plugins")
@@ -843,6 +875,13 @@ def main(argv: list[str] | None = None) -> int:
     if getattr(args, "dev", False):
         cfg.dev_mode = True
         console.set_debug(True)
+
+    # Global simulate mode (flag or config) forces synthetic data everywhere.
+    if getattr(args, "simulate_global", False) or cfg.simulate_mode:
+        cfg.simulate_mode = True
+        if hasattr(args, "simulate"):
+            args.simulate = True
+        console.debug("global simulate mode active")
 
     if not getattr(args, "command", None):
         # No subcommand -> friendly interactive menu.

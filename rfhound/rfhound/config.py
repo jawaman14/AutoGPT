@@ -68,6 +68,7 @@ class Config:
     # UX.
     color: bool = True
     dev_mode: bool = False
+    simulate_mode: bool = False   # global: run everything against synthetic data
 
     # --- LLM copilot (optional) ---------------------------------------------
     llm_provider: str = ""    # "anthropic" | "local" (OpenAI-compatible) | ""

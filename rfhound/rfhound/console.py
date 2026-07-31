@@ -13,6 +13,9 @@ try:  # pragma: no cover - exercised implicitly
     from rich.panel import Panel
     from rich.table import Table
     from rich.prompt import Prompt, Confirm
+    from rich.syntax import Syntax
+    from rich.live import Live
+    from rich.text import Text
 
     _HAVE_RICH = True
     _console = _RichConsole()
@@ -166,6 +169,71 @@ def confirm(prompt: str, default: bool = False) -> bool:
     if not resp:
         return default
     return resp in ("y", "yes")
+
+
+class _NullStatus:
+    """Fallback for console.status when rich is unavailable."""
+
+    def __init__(self, msg: str):
+        self.msg = msg
+
+    def __enter__(self):
+        _plain(f"… {self.msg}", "dim")
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def update(self, msg: str):
+        self.msg = msg
+
+
+def status(msg: str):
+    """A spinner/status context manager (rich when available)."""
+    if _HAVE_RICH:
+        return _console.status(msg, spinner="dots")
+    return _NullStatus(msg)
+
+
+def syntax(code: str, lang: str = "python", title: str = "") -> None:
+    """Pretty-print source code with syntax highlighting (rich)."""
+    if _HAVE_RICH:
+        if title:
+            _console.rule(title)
+        _console.print(Syntax(code, lang, theme="ansi_dark", line_numbers=False,
+                              word_wrap=False))
+    else:
+        if title:
+            rule(title)
+        print(code)
+
+
+def live_lines(render_fn, *, refresh: int = 4):
+    """Return a rich Live context bound to render_fn() -> renderable/str.
+
+    Falls back to a no-op context that just calls render_fn once when rich is
+    unavailable. Use as: `with live_lines(fn) as live: ...; live.update()`.
+    """
+    if _HAVE_RICH:
+        return Live(Text(str(render_fn())), refresh_per_second=refresh, console=_console)
+
+    class _NL:
+        def __enter__(self):
+            print(render_fn())
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def update(self, *a, **k):
+            print(render_fn())
+
+    return _NL()
+
+
+def make_text(s: str):
+    """Wrap a string as a rich Text (or return the string in fallback)."""
+    return Text(s) if _HAVE_RICH else s
 
 
 BANNER = r"""
