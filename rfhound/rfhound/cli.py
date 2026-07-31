@@ -18,6 +18,8 @@ from .modules import capture as capture_mod
 from .modules import decode as decode_mod
 from .modules import defense as defense_mod
 from .modules import intel as intel_mod
+from .modules import gnuradio as gr_mod
+from .modules import response as response_mod
 from . import plugins
 from .modules import recon as recon_mod
 from .modules import replay as replay_mod
@@ -413,6 +415,38 @@ def cmd_defense(args: argparse.Namespace, cfg: Config) -> int:
         console.table("Drone-band detections", ["Band", "Freq (MHz)", "Power dB", "Confidence"], rows)
         return 1
 
+    if args.defense_cmd == "hop-detect":
+        if args.simulate:
+            slices = intel_mod.simulate_hopping_slices(hopping=True)
+        else:
+            console.error("Live hop-detect needs sweep peak data; use --simulate for a demo.")
+            return 1
+        report = intel_mod.detect_frequency_hopping(slices)
+        console.rule("Frequency-hopping detection")
+        console.print_(report.detail)
+        if report.hopping_suspected:
+            console.error("Frequency-hopping emitter SUSPECTED (frequency-agile transmitter).")
+            return 1
+        console.success("No hopping pattern detected.")
+        return 0
+
+    if args.defense_cmd == "respond":
+        pb = response_mod.get_playbook(args.threat)
+        if not pb:
+            console.error(f"Unknown threat '{args.threat}'. "
+                          f"Options: {', '.join(response_mod.list_threats())}")
+            return 1
+        console.rule(f"Counter-threat playbook: {pb.threat}")
+        console.print_(pb.summary)
+        for title, items in [("Immediate actions", pb.immediate),
+                             ("Preserve evidence", pb.evidence),
+                             ("Mitigations / hardening", pb.mitigations),
+                             ("Escalation", pb.escalation)]:
+            console.rule(title)
+            for it in items:
+                console.print_(f"  • {it}")
+        return 0
+
     if args.defense_cmd == "resilience":
         payloads = None
         if args.payloads:
@@ -442,6 +476,37 @@ def cmd_web(args: argparse.Namespace, cfg: Config) -> int:
         import webbrowser
         webbrowser.open(url)
     web_server.serve(cfg, host=args.host, port=args.port, force_simulate=force_sim)
+    return 0
+
+
+def cmd_gnuradio(args: argparse.Namespace, cfg: Config) -> int:
+    if args.gr_cmd == "status":
+        st = gr_mod.gnuradio_status()
+        (console.success if st.installed else console.warn)(st.detail)
+        return 0
+    if args.gr_cmd == "list":
+        rows = [[p.id, p.name, p.category, p.description] for p in gr_mod.list_presets()]
+        console.table("GNU Radio flowgraph presets (receive/analysis only)",
+                      ["ID", "Name", "Category", "Description"], rows)
+        console.print_("\nGenerate one:  rfhound gnuradio gen <id> --freq MHz [--out file.py]")
+        return 0
+    # gen
+    try:
+        dest = gr_mod.generate_flowgraph(
+            args.preset, cfg, freq_mhz=args.freq, sample_rate=args.rate,
+            out_file=args.data_out,
+            dest_path=Path(args.out) if args.out else None,
+        )
+    except ValueError as exc:
+        console.error(str(exc))
+        return 1
+    console.success(f"Wrote GNU Radio flowgraph to {dest}")
+    st = gr_mod.gnuradio_status()
+    if not st.installed:
+        console.warn("GNU Radio isn't installed here; the script will run where it is "
+                     "(apt install gnuradio gr-osmosdr).")
+    else:
+        console.print_(f"Run it:  python3 {dest}")
     return 0
 
 
@@ -594,6 +659,12 @@ def build_parser() -> argparse.ArgumentParser:
     fds = fsub.add_parser("drone-scan", help="Counter-UAS: scan drone control/video bands")
     fds.add_argument("--simulate", action="store_true")
 
+    fhp = fsub.add_parser("hop-detect", help="Detect frequency-hopping (agile) emitters")
+    fhp.add_argument("--simulate", action="store_true")
+
+    frs = fsub.add_parser("respond", help="Show the defensive counter-threat playbook for a threat")
+    frs.add_argument("threat", help="jamming|gps_spoof|adsb_spoof|ais_spoof|drone|rogue_emitter|replay")
+
     fres = fsub.add_parser("resilience", help="Resilience-test YOUR OWN device and report")
     fres.add_argument("--device", help="Name/label of the device under test")
     fres.add_argument("--payloads", help="Text file of captured payloads (one per line)")
@@ -603,6 +674,18 @@ def build_parser() -> argparse.ArgumentParser:
                       default=None, help="Did the device actuate on replay? true/false")
     fres.add_argument("--simulate", action="store_true", help="Run a synthetic resilience test")
     pdf.set_defaults(func=cmd_defense)
+
+    pg = sub.add_parser("gnuradio", help="GNU Radio receive/analysis flowgraph presets")
+    gsub = pg.add_subparsers(dest="gr_cmd")
+    gsub.add_parser("status", help="Check whether GNU Radio + gr-osmosdr are installed")
+    gsub.add_parser("list", help="List prebuilt flowgraph presets")
+    ggen = gsub.add_parser("gen", help="Generate a runnable flowgraph")
+    ggen.add_argument("preset", help="Preset id (see 'gnuradio list')")
+    ggen.add_argument("--freq", type=float, required=True, help="Center frequency (MHz)")
+    ggen.add_argument("--rate", type=int, help="Sample rate (Hz)")
+    ggen.add_argument("--out", help="Output .py path")
+    ggen.add_argument("--data-out", help="Preset output file (wav/iq/f32)")
+    pg.set_defaults(func=cmd_gnuradio, gr_cmd="list")
 
     pm = sub.add_parser("mods", help="Manage extension mods/plugins")
     msub = pm.add_subparsers(dest="mods_cmd")

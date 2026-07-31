@@ -29,7 +29,9 @@ rfhound/
 │       ├── decode.py  # registry of decoder "recipes" (rtl_433/dump1090/…)
 │       ├── recon.py   # multi-band auto-survey
 │       ├── defense.py # detection & hardening (jamming/replay/rolling-code)
-│       ├── intel.py   # TSCM baseline diff, ADS-B/AIS spoof detection, C-UAS
+│       ├── intel.py   # TSCM baseline diff, ADS-B/AIS spoof detection, C-UAS, hop-detect
+│       ├── gnuradio.py # GNU Radio receive/analysis flowgraph preset generator
+│       ├── response.py # defensive counter-threat playbooks
 │       └── report.py  # Markdown / HTML reporting
 └── tests/             # pytest suite (runs with no hardware)
 ```

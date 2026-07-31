@@ -135,6 +135,34 @@ rfhound defense drone-scan
 rfhound defense drone-scan --simulate
 ```
 
+## 8. Frequency-hopping detection — `defense hop-detect`
+
+Spot frequency-agile / covert emitters that hop across channels to evade a
+fixed-tuned listener. Analyses peak frequencies across successive sweeps and
+flags a pattern of many short-lived (transient) frequencies.
+
+```bash
+rfhound defense hop-detect --simulate
+```
+
+## 9. Counter-threat playbooks — `defense respond`
+
+Every threat RFHound detects has a **defensive** response playbook: immediate
+actions, evidence to preserve, mitigations to harden the target, and when to
+escalate.
+
+```bash
+rfhound defense respond jamming
+rfhound defense respond gps_spoof
+rfhound defense respond drone        # threats: jamming, gps_spoof, adsb_spoof,
+                                     # ais_spoof, drone, rogue_emitter, replay
+```
+
+> These are blue-team actions — alert, record, harden, escalate. RFHound
+> provides **no active RF countermeasures** (jam-back, spoof-back, drone
+> takeover); those are offensive, usually illegal for non-government operators,
+> and are a decision for authorised personnel with purpose-built equipment.
+
 ## Turning findings into protections
 
 | Finding | Hardening action |

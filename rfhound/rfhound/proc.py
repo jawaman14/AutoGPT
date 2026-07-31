@@ -83,6 +83,51 @@ KNOWN_TOOLS: dict[str, Tool] = {
         "SoapySDR-based power spectrum backend (alternative to hackrf_sweep)",
         "pip install soapy_power",
     ),
+    # --- Extended decoder toolset (all receive-only) ---
+    "dump978-fa": Tool(
+        "dump978-fa", "Decode 978 MHz UAT ADS-B (US general aviation)",
+        "https://github.com/flightaware/dump978",
+    ),
+    "rtlamr": Tool(
+        "rtlamr", "Decode ERT smart utility meters (~912 MHz)",
+        "https://github.com/bemasher/rtlamr",
+    ),
+    "satdump": Tool(
+        "satdump", "Decode weather/Inmarsat/many satellites and produce imagery",
+        "https://github.com/SatDump/SatDump",
+    ),
+    "iridium-extractor": Tool(
+        "iridium-extractor", "Capture Iridium bursts for iridium-toolkit",
+        "https://github.com/muccc/gr-iridium",
+    ),
+    "dsd": Tool(
+        "dsd", "Decode digital voice: DMR, P25, NXDN, D-STAR",
+        "https://github.com/szechyjs/dsd  (or dsd-fme / dsd-neo)",
+    ),
+    "direwolf": Tool(
+        "direwolf", "Decode AX.25 / APRS packet radio (soundmodem)",
+        "apt install direwolf",
+    ),
+    "nrsc5": Tool(
+        "nrsc5", "Decode HD Radio (NRSC-5) digital FM",
+        "https://github.com/theori-io/nrsc5",
+    ),
+    "wsprd": Tool(
+        "wsprd", "Decode WSPR weak-signal beacons (HF)",
+        "part of WSJT-X: https://wsjt.sourceforge.io/",
+    ),
+    "tetra-rx": Tool(
+        "tetra-rx", "Decode TETRA trunked radio (osmo-tetra)",
+        "https://github.com/osmocom/osmo-tetra",
+    ),
+    "noaa-apt": Tool(
+        "noaa-apt", "Decode NOAA APT weather-satellite images (137 MHz)",
+        "https://github.com/martinber/noaa-apt",
+    ),
+    "radiosonde_auto_rx": Tool(
+        "radiosonde_auto_rx", "Auto-decode weather-balloon radiosondes (~400 MHz)",
+        "https://github.com/projecthorus/radiosonde_auto_rx",
+    ),
 }
 
 

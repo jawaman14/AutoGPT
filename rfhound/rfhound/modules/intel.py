@@ -273,6 +273,69 @@ class DroneHit:
     confidence: str
 
 
+@dataclass
+class HoppingReport:
+    slices: int
+    distinct_freqs: int
+    transient_freqs: int
+    persistence: float
+    hopping_suspected: bool
+    detail: str
+
+
+def detect_frequency_hopping(
+    peaks_per_slice: list[list[float]],
+    *,
+    tol_mhz: float = 0.2,
+    transient_frac: float = 0.35,
+) -> HoppingReport:
+    """Detect a frequency-hopping emitter from peaks seen across time slices.
+
+    Input is a list (one per time slice / sweep) of peak frequencies in MHz. A
+    hopper shows up as many *distinct* frequencies each present only briefly
+    (transient), rather than a few persistent carriers. Useful for spotting
+    covert / frequency-agile transmitters.
+    """
+    n = len(peaks_per_slice)
+    if n == 0:
+        return HoppingReport(0, 0, 0, 0.0, False, "no data")
+    # Bucket frequencies within tol.
+    counts: dict[int, int] = {}
+    for slice_peaks in peaks_per_slice:
+        seen = set()
+        for f in slice_peaks:
+            key = round(f / tol_mhz)
+            seen.add(key)
+        for key in seen:
+            counts[key] = counts.get(key, 0) + 1
+    distinct = len(counts)
+    transient = sum(1 for c in counts.values() if c <= max(1, int(n * transient_frac)))
+    persistent = distinct - transient
+    persistence = round((persistent / distinct) if distinct else 0.0, 2)
+    # Hopping suspected: many distinct, mostly-transient frequencies, few persistent.
+    suspected = (
+        distinct >= max(4, int(n * 0.6))
+        and transient >= max(4, int(distinct * 0.6))
+        and persistence < 0.4
+    )
+    detail = (
+        f"{distinct} distinct freqs over {n} slices; {transient} transient, "
+        f"{persistent} persistent (persistence {persistence})."
+    )
+    return HoppingReport(n, distinct, transient, persistence, suspected, detail)
+
+
+def simulate_hopping_slices(n: int = 8, *, hopping: bool = True) -> list[list[float]]:
+    """Synthesise per-slice peak lists for a hopper (or a steady carrier)."""
+    slices = []
+    for i in range(n):
+        if hopping:
+            slices.append([round(433.0 + i * 0.5, 3)])  # a fresh, well-spaced hop each slice
+        else:
+            slices.append([433.92])  # steady carrier
+    return slices
+
+
 def drone_scan(cfg: Config, *, simulate: bool = False) -> list[DroneHit]:
     """Sweep common drone control/video bands and report detected activity.
 
