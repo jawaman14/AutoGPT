@@ -1,0 +1,41 @@
+{
+  "name": "5htp_batch_rig",
+  "controllers": [
+    { "id": "esp32-0", "transport": "serial", "port": "/dev/ttyUSB0", "baud": 115200 }
+  ],
+  "vessels": [
+    { "id": "reactor", "kind": "reactor", "max_volume_ml": 60, "initial_volume_ml": 0 },
+    { "id": "product", "kind": "collection", "max_volume_ml": 100, "initial_volume_ml": 0 }
+  ],
+  "reagents": [
+    { "id": "buffer", "source": "stock_buffer" },
+    { "id": "serine", "source": "stock_ser" },
+    { "id": "hydroxyindole", "source": "stock_5hi" },
+    { "id": "enzyme", "source": "stock_enz" }
+  ],
+  "pumps": [
+    { "id": "p_buffer", "kind": "syringe", "controller": "esp32-0", "channel": 0,
+      "source": "stock_buffer", "dest": "reactor",
+      "syringe_volume_ml": 25, "steps_per_ml": 1600, "max_rate_ml_s": 1.0 },
+    { "id": "p_ser", "kind": "syringe", "controller": "esp32-0", "channel": 1,
+      "source": "stock_ser", "dest": "reactor",
+      "syringe_volume_ml": 25, "steps_per_ml": 1600, "max_rate_ml_s": 1.0 },
+    { "id": "p_5hi", "kind": "syringe", "controller": "esp32-0", "channel": 2,
+      "source": "stock_5hi", "dest": "reactor",
+      "syringe_volume_ml": 25, "steps_per_ml": 1600, "max_rate_ml_s": 0.5 },
+    { "id": "p_enz", "kind": "syringe", "controller": "esp32-0", "channel": 3,
+      "source": "stock_enz", "dest": "reactor",
+      "syringe_volume_ml": 10, "steps_per_ml": 1600, "max_rate_ml_s": 0.3 },
+    { "id": "p_out", "kind": "peristaltic", "controller": "esp32-0", "channel": 4,
+      "source": "reactor", "dest": "product",
+      "syringe_volume_ml": 100, "steps_per_ml": 400, "max_rate_ml_s": 2.0 }
+  ],
+  "stirrers": [
+    { "id": "stir_reactor", "controller": "esp32-0", "channel": 0,
+      "vessel": "reactor", "default_rpm": 300, "max_rpm": 1200 }
+  ],
+  "heaters": [
+    { "id": "heat_reactor", "controller": "esp32-0", "channel": 0,
+      "vessel": "reactor", "sensor_channel": 0, "max_temp_c": 90 }
+  ]
+}

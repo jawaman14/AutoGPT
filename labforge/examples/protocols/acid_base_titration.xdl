@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Warm neutralisation demo: mix base and acid with heating and stirring,
+  then drain and rinse the reactor. Exercises Add / HeatChill / Stir /
+  Transfer / CleanVessel against the demo_rig graph.
+  Educational example only - not a validated or safe-as-written procedure.
+-->
+<Synthesis name="acid_base_titration">
+  <Hardware>
+    <Component id="reactor" type="reactor"/>
+    <Component id="waste" type="waste"/>
+  </Hardware>
+
+  <Reagents>
+    <Reagent id="water" name="water" smiles="O"/>
+    <Reagent id="naoh" name="sodium hydroxide" concentration="0.1 mol/L"/>
+    <Reagent id="hcl" name="hydrochloric acid" concentration="0.1 mol/L"/>
+    <Reagent id="ethanol" name="ethanol" smiles="CCO"/>
+  </Reagents>
+
+  <Procedure>
+    <Comment comment="Charge reactor with base"/>
+    <Add reagent="water" vessel="reactor" volume="10 mL"/>
+    <Add reagent="naoh" vessel="reactor" volume="10 mL" stir="true"/>
+    <HeatChill vessel="reactor" temp="40 C" time="30 s" stir="true"/>
+    <Comment comment="Titrate with acid"/>
+    <Add reagent="hcl" vessel="reactor" volume="10 mL"/>
+    <Stir vessel="reactor" stir_speed="400 RPM" time="45 s"/>
+    <Comment comment="Drain and rinse"/>
+    <Transfer from_vessel="reactor" to_vessel="waste" volume="all"/>
+    <CleanVessel vessel="reactor" solvent="ethanol" volume="10 mL" repeats="2"/>
+  </Procedure>
+</Synthesis>
