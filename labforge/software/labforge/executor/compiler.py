@@ -52,6 +52,8 @@ class CompiledRun:
     operations: List[Operation]
     final_volumes: Dict[str, float]
     warnings: List[str] = field(default_factory=list)
+    #: Informational (non-warning) notes, e.g. computed flow residence times.
+    notes: List[str] = field(default_factory=list)
 
     def total_time_s(self) -> float:
         return sum(op.time_s or 0.0 for op in self.operations)
@@ -80,8 +82,13 @@ class _VolumeModel:
         # effectively unlimited unless declared as a vessel.
         if vessel_id not in self.graph.vessels:
             return
-        new_vol = self.volumes[vessel_id] + delta
         vessel = self.graph.vessels[vessel_id]
+        # Flow reactors / tees do not accumulate: forward to their outlet.
+        if vessel.passthrough:
+            if vessel.outlet:
+                self.add(vessel.outlet, delta)
+            return
+        new_vol = self.volumes[vessel_id] + delta
         eps = 1e-6
         if new_vol < -eps:
             raise CompileError(
@@ -103,6 +110,7 @@ class _Compiler:
         self.vol = _VolumeModel(graph)
         self.ops: List[Operation] = []
         self.warnings: List[str] = []
+        self.notes: List[str] = []
 
     # -- helpers -----------------------------------------------------------
     def _require_pump(self, source: str, dest: str, context: str):
@@ -126,7 +134,21 @@ class _Compiler:
             raise CompileError(f"{context}: no heater attached to vessel '{vessel}'.")
         return heater
 
-    def _pump_transfer(self, source: str, dest: str, volume_ml: float, rate, context: str):
+    def _accumulating(self, node: str):
+        """Resolve a node to the vessel that actually accumulates its liquid,
+        following flow-reactor pass-through outlets. Returns an id or None."""
+        vessel = self.graph.vessels.get(node)
+        seen = set()
+        while vessel is not None and vessel.passthrough and vessel.outlet:
+            if vessel.id in seen:  # guard against a wiring loop
+                return None
+            seen.add(vessel.id)
+            vessel = self.graph.vessels.get(vessel.outlet)
+        if vessel is not None and not vessel.passthrough:
+            return vessel.id
+        return None
+
+    def _pump_transfer(self, source, dest, volume_ml, rate_ml_s, context):
         pump = self._require_pump(source, dest, context)
         if volume_ml <= 0:
             raise CompileError(f"{context}: volume must be positive, got {volume_ml}")
@@ -137,23 +159,54 @@ class _Compiler:
                 f"{context}: {volume_ml:g} mL exceeds syringe barrel "
                 f"({pump.syringe_volume_ml:g} mL); pump '{pump.id}' will use multiple strokes."
             )
-        deltas = {}
+        # Update the dry volume model (pass-through reactors forward to outlet).
         self.vol.add(source, -volume_ml)
         self.vol.add(dest, +volume_ml)
-        if source in self.graph.vessels:
-            deltas[source] = -volume_ml
-        if dest in self.graph.vessels:
-            deltas[dest] = +volume_ml
+        # Report deltas against the vessels that actually accumulate.
+        deltas = {}
+        src_acc = self._accumulating(source)
+        dst_acc = self._accumulating(dest)
+        if src_acc:
+            deltas[src_acc] = deltas.get(src_acc, 0.0) - volume_ml
+        if dst_acc:
+            deltas[dst_acc] = deltas.get(dst_acc, 0.0) + volume_ml
+
+        delivery_s = (volume_ml / rate_ml_s) if rate_ml_s else None
+
+        # Flow: if the destination is a flow reactor, report the residence time.
+        reactor = self.graph.flow_reactor_on_route(source, dest)
+        rate_tag = ""
+        if reactor is not None and rate_ml_s:
+            holdup = reactor.max_volume_ml
+            residence_min = holdup / (rate_ml_s * 60.0)
+            self.notes.append(
+                f"{context}: flow through '{reactor.id}' at "
+                f"{rate_ml_s * 60.0:g} mL/min, holdup {holdup:g} mL "
+                f"=> residence ~{residence_min:.1f} min"
+            )
+            rate_tag = f" @ {rate_ml_s * 60.0:g} mL/min"
+
         self.ops.append(
             Operation(
                 kind="pump",
-                description=f"pump {volume_ml:g} mL: {source} -> {dest} (via {pump.id})",
+                description=f"pump {volume_ml:g} mL: {source} -> {dest} (via {pump.id}){rate_tag}",
                 device_id=pump.id,
                 volume_ml=volume_ml,
-                rate_ml_s=rate,
+                rate_ml_s=rate_ml_s,
+                time_s=delivery_s,
                 volume_deltas=deltas,
             )
         )
+
+    @staticmethod
+    def _rate_ml_s(step, volume_ml):
+        """Derive a mL/s pump rate from a step's flow_rate (mL/min) or time."""
+        flow = getattr(step, "flow_rate_ml_min", None)
+        if flow:
+            return flow / 60.0
+        if getattr(step, "time_s", None):
+            return volume_ml / step.time_s
+        return None
 
     # -- per-step compilation ---------------------------------------------
     def _add(self, step: S.Add):
@@ -172,7 +225,7 @@ class _Compiler:
                         rpm=stirrer.default_rpm,
                     )
                 )
-        rate = (step.volume_ml / step.time_s) if step.time_s else None
+        rate = self._rate_ml_s(step, step.volume_ml)
         self._pump_transfer(source, step.vessel, step.volume_ml, rate, ctx)
 
     def _transfer(self, step: S.Transfer):
@@ -184,7 +237,7 @@ class _Compiler:
                 raise CompileError(
                     f"{ctx}: asked to transfer all, but '{step.from_vessel}' is empty"
                 )
-        rate = (volume / step.time_s) if step.time_s else None
+        rate = self._rate_ml_s(step, volume)
         self._pump_transfer(step.from_vessel, step.to_vessel, volume, rate, ctx)
 
     def _stir(self, step: S.Stir):
@@ -319,6 +372,7 @@ class _Compiler:
             operations=self.ops,
             final_volumes=dict(self.vol.volumes),
             warnings=self.warnings,
+            notes=self.notes,
         )
 
 

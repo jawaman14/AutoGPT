@@ -71,6 +71,8 @@ def execute(
     state = _State(graph_initial_volumes or {})
     result = RunResult(protocol_name=compiled.protocol_name, final_volumes=dict(state.volumes))
 
+    for note in compiled.notes:
+        emit(f"NOTE: {note}")
     for warning in compiled.warnings:
         emit(f"WARNING: {warning}")
 

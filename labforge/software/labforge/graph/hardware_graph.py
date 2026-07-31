@@ -62,6 +62,16 @@ class Vessel:
     kind: str = "reactor"
     max_volume_ml: float = 100.0
     initial_volume_ml: float = 0.0
+    # Flow-synthesis: a pass-through vessel (e.g. a continuous flow reactor or
+    # mixing tee) does not accumulate liquid. Its ``max_volume_ml`` is the
+    # internal holdup used for residence-time; incoming volume is forwarded to
+    # ``outlet`` for accounting.
+    passthrough: bool = False
+    outlet: Optional[str] = None
+
+    @property
+    def is_flow_reactor(self) -> bool:
+        return self.kind == "flow_reactor" or self.passthrough
 
 
 @dataclass
@@ -200,6 +210,13 @@ class HardwareGraph:
     def is_vessel(self, node_id: str) -> bool:
         return node_id in self.vessels
 
+    def flow_reactor_on_route(self, source: str, dest: str) -> Optional[Vessel]:
+        """Return the destination vessel if it is a flow reactor / pass-through."""
+        vessel = self.vessels.get(dest)
+        if vessel is not None and vessel.is_flow_reactor:
+            return vessel
+        return None
+
     # ---------------------------------------------------------- validation
     def validate(self):
         """Raise :class:`GraphError` on dangling controller/vessel references."""
@@ -221,6 +238,11 @@ class HardwareGraph:
                 vessel = getattr(item, attr)
                 if vessel not in self.vessels:
                     raise GraphError(f"{item.id!r} references unknown vessel {vessel!r}")
+        for vessel in self.vessels.values():
+            if vessel.passthrough and vessel.outlet and vessel.outlet not in self.vessels:
+                raise GraphError(
+                    f"flow reactor {vessel.id!r} has unknown outlet {vessel.outlet!r}"
+                )
         return self
 
     def controllers_list(self) -> List[Controller]:

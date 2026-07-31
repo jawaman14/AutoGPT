@@ -20,6 +20,12 @@ solved in isolation:
 Everything runs **end-to-end in simulation with zero hardware**, so you can
 write and validate a procedure on a laptop before you print a single part.
 
+It also models the two ways to run a reaction — **batch** (charge a vessel,
+mix, heat, hold) and **continuous flow** (pump feeds through a temperature-
+controlled reactor at set rates, with computed residence times) — and includes
+a curated **retrosynthesis** layer that turns a target molecule into candidate
+routes and exports the runnable ones to XDL.
+
 > LabForge does not fork or vendor the Cronin Group's XDL/Chempiler code. It
 > implements an independent, MIT-licensed executor for a documented subset of
 > the XDL format, so procedures stay portable to the wider ecosystem.
@@ -41,9 +47,11 @@ LabForge is that bridge.
 labforge/
 ├── software/            # Python suite (installable package: `labforge`)
 │   ├── labforge/
-│   │   ├── protocol/    # XDL parser + step objects
+│   │   ├── protocol/    # XDL parser + step objects (incl. flow_rate)
 │   │   ├── chemistry/   # reagents, molar mass, stoichiometry (RDKit optional)
-│   │   ├── graph/       # hardware connectivity graph
+│   │   ├── synthesis/   # batch-vs-flow method model + residence time
+│   │   ├── retro/       # curated retrosynthesis + route -> XDL export
+│   │   ├── graph/       # hardware connectivity graph (incl. flow reactors)
 │   │   ├── devices/     # device drivers: simulator, ESP32 serial/MQTT
 │   │   ├── transport/   # the line protocol spoken to the ESP32
 │   │   ├── executor/    # compiler (XDL -> commands) + runtime scheduler
@@ -71,6 +79,20 @@ python examples/run_simulation.py
 
 You'll see each XDL step compiled into low-level device commands and a running
 log of simulated pump moves, stir/heat actions, and vessel volumes.
+
+### Retrosynthesis + batch vs flow (worked example)
+
+```bash
+labforge methods                          # batch vs flow comparison
+labforge retro 5htp                       # retrosynthesis of 5-hydroxytryptophan
+labforge retro 5htp --emit-xdl --mode flow
+
+# Full worked example: retro tree -> routes -> generate XDL -> simulate both modes
+python examples/retro_5htp.py
+```
+
+See [`docs/example-5htp.md`](docs/example-5htp.md) and
+[`docs/batch-vs-flow.md`](docs/batch-vs-flow.md).
 
 ## Running on real hardware
 

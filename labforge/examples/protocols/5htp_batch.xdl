@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Synthesis name="L-5-hydroxytryptophan_batch">
+  <Hardware>
+    <Component id="reactor" type="reactor"/>
+    <Component id="product" type="collection"/>
+  </Hardware>
+  <Reagents>
+    <Reagent id="buffer" name="phosphate buffer pH 8 with PLP"/>
+    <Reagent id="hydroxyindole" name="5-hydroxyindole" smiles="Oc1ccc2[nH]ccc2c1"/>
+    <Reagent id="serine" name="L-serine" smiles="NC(CO)C(=O)O"/>
+    <Reagent id="enzyme" name="tryptophan synthase (PLP-dependent)"/>
+  </Reagents>
+  <Procedure>
+    <Comment comment="Biocatalytic 5-HTP (batch): 5-hydroxyindole + L-serine"/>
+    <Add reagent="buffer" vessel="reactor" volume="20 mL"/>
+    <Add reagent="serine" vessel="reactor" volume="10 mL" stir="true"/>
+    <Add reagent="hydroxyindole" vessel="reactor" volume="8 mL" stir="true"/>
+    <Add reagent="enzyme" vessel="reactor" volume="2 mL"/>
+    <HeatChill vessel="reactor" temp="45 C" time="4 h" stir="true"/>
+    <StopStir vessel="reactor"/>
+    <Transfer from_vessel="reactor" to_vessel="product" volume="all"/>
+  </Procedure>
+</Synthesis>

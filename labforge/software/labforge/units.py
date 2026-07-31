@@ -24,6 +24,7 @@ __all__ = [
     "parse_time_s",
     "parse_temp_c",
     "parse_speed_rpm",
+    "parse_flowrate_ml_min",
 ]
 
 
@@ -117,3 +118,22 @@ def parse_speed_rpm(value):
     if unit in ("", "rpm", "revmin", "r"):
         return number
     raise UnitError(f"unknown stir-speed unit in {value!r}")
+
+
+# volume-unit -> mL, time-unit -> minutes, for flow rates like "0.5 mL/min".
+_FLOW_TIME_TO_MIN = {"s": 1.0 / 60.0, "sec": 1.0 / 60.0, "min": 1.0, "h": 60.0, "hr": 60.0}
+
+
+def parse_flowrate_ml_min(value):
+    """Parse a flow rate (e.g. ``"0.5 mL/min"``) into millilitres per minute."""
+    number, unit = _split(value, "flow rate")
+    unit = unit.replace(" ", "")
+    if "/" not in unit:
+        raise UnitError(f"flow rate {value!r} needs volume/time units (e.g. 'mL/min')")
+    vol_part, _, time_part = unit.partition("/")
+    if vol_part not in _VOLUME_TO_ML:
+        raise UnitError(f"unknown volume unit in flow rate {value!r}")
+    if time_part not in _FLOW_TIME_TO_MIN:
+        raise UnitError(f"unknown time unit in flow rate {value!r}")
+    ml = number * _VOLUME_TO_ML[vol_part]
+    return ml / _FLOW_TIME_TO_MIN[time_part]

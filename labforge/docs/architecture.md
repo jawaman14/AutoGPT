@@ -46,8 +46,10 @@ stepper pulses, with a hard safety/validation boundary in the middle.
 
 | Layer | Package | Responsibility |
 |-------|---------|----------------|
-| Protocol | `labforge.protocol` | Parse XDL into typed `Step` objects; keep unsupported steps explicit. |
+| Protocol | `labforge.protocol` | Parse XDL into typed `Step` objects (incl. `flow_rate`); keep unsupported steps explicit. |
 | Chemistry | `labforge.chemistry` | Optional RDKit-backed molar mass / stoichiometry. Degrades gracefully. |
+| Synthesis | `labforge.synthesis` | Batch-vs-flow method profiles + residence-time maths. |
+| Retro | `labforge.retro` | Curated retrosynthesis trees, route enumeration, route → XDL export. |
 | Graph | `labforge.graph` | Declarative wiring: pumps (source→dest), stirrers, heaters, vessels. |
 | Compiler | `labforge.executor.compiler` | Resolve each step to `Operation`s; run a dry volume model; reject unsafe/unmappable procedures. |
 | Runtime | `labforge.executor.runtime` | Execute operations; track live volumes; emergency-stop on any error. |

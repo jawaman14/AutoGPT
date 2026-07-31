@@ -1,0 +1,27 @@
+{
+  "name": "5htp_flow_rig",
+  "controllers": [
+    { "id": "esp32-0", "transport": "serial", "port": "/dev/ttyUSB0", "baud": 115200 }
+  ],
+  "vessels": [
+    { "id": "flow_reactor", "kind": "flow_reactor", "max_volume_ml": 10,
+      "passthrough": true, "outlet": "product" },
+    { "id": "product", "kind": "collection", "max_volume_ml": 100, "initial_volume_ml": 0 }
+  ],
+  "reagents": [
+    { "id": "hydroxyindole_feed", "source": "stock_5hi" },
+    { "id": "serine_feed", "source": "stock_ser" }
+  ],
+  "pumps": [
+    { "id": "p_5hi", "kind": "syringe", "controller": "esp32-0", "channel": 0,
+      "source": "stock_5hi", "dest": "flow_reactor",
+      "syringe_volume_ml": 25, "steps_per_ml": 1600, "max_rate_ml_s": 1.0 },
+    { "id": "p_ser", "kind": "syringe", "controller": "esp32-0", "channel": 1,
+      "source": "stock_ser", "dest": "flow_reactor",
+      "syringe_volume_ml": 25, "steps_per_ml": 1600, "max_rate_ml_s": 1.0 }
+  ],
+  "heaters": [
+    { "id": "heat_flow", "controller": "esp32-0", "channel": 0,
+      "vessel": "flow_reactor", "sensor_channel": 0, "max_temp_c": 90 }
+  ]
+}

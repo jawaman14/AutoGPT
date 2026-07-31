@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Synthesis name="L-5-hydroxytryptophan_flow">
+  <Hardware>
+    <Component id="flow_reactor" type="flow_reactor"/>
+    <Component id="product" type="collection"/>
+  </Hardware>
+  <Reagents>
+    <Reagent id="hydroxyindole_feed" name="5-hydroxyindole in buffer/PLP"/>
+    <Reagent id="serine_feed" name="L-serine in buffer/PLP"/>
+  </Reagents>
+  <Procedure>
+    <Comment comment="Continuous-flow 5-HTP over immobilised tryptophan synthase"/>
+    <HeatChill vessel="flow_reactor" temp="45 C"/>
+    <Add reagent="serine_feed" vessel="flow_reactor" volume="10 mL" flow_rate="0.25 mL/min"/>
+    <Add reagent="hydroxyindole_feed" vessel="flow_reactor" volume="10 mL" flow_rate="0.25 mL/min"/>
+  </Procedure>
+</Synthesis>

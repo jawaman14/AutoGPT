@@ -46,12 +46,20 @@ class Add(Step):
     volume_ml: Optional[float] = None
     time_s: Optional[float] = None
     stir: bool = False
+    #: Continuous-flow feed rate (mL/min). When set, this is a flow addition;
+    #: the delivery time is derived from volume / flow_rate.
+    flow_rate_ml_min: Optional[float] = None
 
     def __post_init__(self):
         self.xdl_name = "Add"
 
     def summary(self) -> str:
         vol = f"{self.volume_ml:g} mL" if self.volume_ml is not None else "?"
+        if self.flow_rate_ml_min is not None:
+            return (
+                f"Add {vol} of {self.reagent} to {self.vessel} "
+                f"@ {self.flow_rate_ml_min:g} mL/min (flow)"
+            )
         tail = " (stirring)" if self.stir else ""
         return f"Add {vol} of {self.reagent} to {self.vessel}{tail}"
 
@@ -64,6 +72,7 @@ class Transfer(Step):
     to_vessel: str = ""
     volume_ml: Optional[float] = None  # None => "all"
     time_s: Optional[float] = None
+    flow_rate_ml_min: Optional[float] = None
 
     def __post_init__(self):
         self.xdl_name = "Transfer"
@@ -222,6 +231,7 @@ def _build_add(attrs):
         volume_ml=_f(attrs, "volume", units.parse_volume_ml),
         time_s=_f(attrs, "time", units.parse_time_s),
         stir=_bool(attrs, "stir"),
+        flow_rate_ml_min=_f(attrs, "flow_rate", units.parse_flowrate_ml_min),
     )
 
 
@@ -237,6 +247,7 @@ def _build_transfer(attrs):
         to_vessel=attrs.get("to_vessel", attrs.get("to", "")),
         volume_ml=volume,
         time_s=_f(attrs, "time", units.parse_time_s),
+        flow_rate_ml_min=_f(attrs, "flow_rate", units.parse_flowrate_ml_min),
     )
 
 

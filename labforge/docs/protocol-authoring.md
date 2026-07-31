@@ -30,8 +30,8 @@ A wrapping `<XDL>` element and `<Prep>/<Reaction>/<Workup>` grouping inside
 
 | Step | Attributes | Meaning |
 |------|-----------|---------|
-| `Add` | `reagent`, `vessel`, `volume`, `time?`, `stir?` | Pump a reagent into a vessel. |
-| `Transfer` | `from_vessel`, `to_vessel`, `volume` (or `"all"`), `time?` | Move liquid between vessels. |
+| `Add` | `reagent`, `vessel`, `volume`, `time?`, `stir?`, `flow_rate?` | Pump a reagent into a vessel. |
+| `Transfer` | `from_vessel`, `to_vessel`, `volume` (or `"all"`), `time?`, `flow_rate?` | Move liquid between vessels. |
 | `Stir` | `vessel`, `stir_speed?`, `time?` | Stir (for a fixed time, then stop, if `time` given). |
 | `StopStir` | `vessel` | Stop stirring. |
 | `HeatChill` | `vessel`, `temp`, `time?`, `stir?` | Bring a vessel to a temperature and optionally hold. |
@@ -50,6 +50,22 @@ Values carry human units and are parsed strictly (a missing unit is an error):
 - time: `s`, `min`, `h`, `d`
 - temperature: `C` / `°C`, `K`, `F`
 - stir speed: `RPM`
+- flow rate: `mL/min`, `mL/h`, `uL/min`, `L/h`
+
+### Flow synthesis
+
+Give an `Add`/`Transfer` a `flow_rate` (instead of, or alongside, `time`) to run
+it as a continuous feed; the delivery time is derived as volume ÷ flow_rate.
+Declare a flow reactor as a **pass-through** vessel so it doesn't accumulate:
+
+```json
+{ "id": "flow_reactor", "kind": "flow_reactor", "max_volume_ml": 10,
+  "passthrough": true, "outlet": "product" }
+```
+
+The compiler forwards feed volume to the reactor's `outlet` and reports the
+residence time (holdup ÷ flow rate). Full details and the batch-vs-flow
+trade-offs are in [`batch-vs-flow.md`](batch-vs-flow.md).
 
 ## The hardware graph: JSON
 
