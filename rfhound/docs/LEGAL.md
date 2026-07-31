@@ -38,6 +38,14 @@ and even that is gated behind consent + an allow-list + a per-command
 sanctioned test, use a tool built for that (e.g. Universal Radio Hacker)
 knowingly and deliberately.
 
+These exclusions are **not** conditional on your environment or credentials. A
+shielded RF enclosure and operator training make TX *resilience testing* safe and
+legal — which is why RFHound supports gated replay of your own captures — but
+they do not turn a general-purpose jammer / RollJam / brute-forcer into something
+RFHound will ship. A defence programme reaches its goal through **detection and
+hardening** (`rfhound defense`), not by fielding those attack primitives. See
+[`DEFENSE.md`](DEFENSE.md).
+
 ## Sensitive bands — extra care
 
 - **GPS / GNSS (≈1575 MHz):** never transmit. Interfering with navigation is

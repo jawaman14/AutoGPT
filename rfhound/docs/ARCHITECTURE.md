@@ -24,6 +24,7 @@ rfhound/
 │       ├── replay.py  # hackrf_transfer replay (gated through safety.py)
 │       ├── decode.py  # registry of decoder "recipes" (rtl_433/dump1090/…)
 │       ├── recon.py   # multi-band auto-survey
+│       ├── defense.py # detection & hardening (jamming/replay/rolling-code)
 │       └── report.py  # Markdown / HTML reporting
 └── tests/             # pytest suite (runs with no hardware)
 ```

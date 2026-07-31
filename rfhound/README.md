@@ -31,6 +31,7 @@ the law. That's RFHound.
 | Decode a protocol | `rfhound decode run rtl433` — drives rtl_433 / dump1090 / … |
 | Save a signal for deep analysis | `rfhound capture 433.92 10` — IQ + SigMF metadata for URH |
 | Replay your *own* signal (authorized) | `rfhound replay file.sigmf-data --authorized` (gated) |
+| **Detect** jamming / replay / weak fobs | `rfhound defense …` — detection & hardening, not attacks |
 
 ## Highlights
 
@@ -86,6 +87,25 @@ Example recon output (simulated):
   rfhound decode run rtl433 --freq 433.920   # ISM 433 MHz
   rfhound decode run adsb   --freq 1090.000  # ADS-B (1090ES)
 ```
+
+## Defensive module — build protections, not attacks
+
+RFHound's `defense` commands are the "harden your devices" half of the toolkit.
+They are receive-and-analyse (plus the existing *gated* replay-of-your-own-signal
+for the resilience harness). See [`docs/DEFENSE.md`](docs/DEFENSE.md).
+
+```bash
+rfhound defense monitor 433 435            # detect jamming / interference on a band
+rfhound defense replay-check --file obs.txt  # detect replay attacks in observed traffic
+rfhound defense rolling-assess --file caps.txt  # is this fob fixed- or rolling-code?
+rfhound defense resilience --device myfob --replayed --actuated true  # hardening report
+```
+
+**What this module deliberately is not:** it contains no jammer/DoS transmitter,
+no RollJam capture-and-replay attack, and no brute-force code generator. You
+don't need those to build defenses — you detect jamming, you assess posture, and
+you replay your *own* capture to prove replay-resilience. See
+[`docs/LEGAL.md`](docs/LEGAL.md).
 
 ## What can you actually do across 1 MHz – 6 GHz?
 

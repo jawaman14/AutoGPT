@@ -16,6 +16,7 @@ from .config import Config, TxAllowRange, load_config, save_config, config_path
 from .exceptions import RFHoundError
 from .modules import capture as capture_mod
 from .modules import decode as decode_mod
+from .modules import defense as defense_mod
 from .modules import recon as recon_mod
 from .modules import replay as replay_mod
 from .modules import report as report_mod
@@ -276,6 +277,78 @@ def cmd_tx(args: argparse.Namespace, cfg: Config) -> int:
     return 0
 
 
+def cmd_defense(args: argparse.Namespace, cfg: Config) -> int:
+    if args.defense_cmd == "monitor":
+        report = defense_mod.monitor_interference(
+            cfg, args.start, args.stop,
+            iterations=args.samples, interval_s=args.interval,
+            threshold_db=args.threshold, simulate=args.simulate,
+        )
+        defense_mod.print_interference(report)
+        return 1 if report.jammed else 0
+
+    if args.defense_cmd == "rolling-assess":
+        if args.simulate:
+            payloads = defense_mod.simulate_payloads(args.kind)
+        elif args.file:
+            payloads = Path(args.file).read_text().splitlines()
+        else:
+            console.error("Provide --file <payloads.txt> (one code per line) or --simulate.")
+            return 1
+        assessment = defense_mod.assess_rolling_code(payloads)
+        defense_mod.print_rolling(assessment)
+        return 0
+
+    if args.defense_cmd == "replay-check":
+        # Observations file: 'timestamp payload' per line, or --simulate.
+        if args.simulate:
+            t0 = 1000.0
+            obs = [  # same fixed code re-sent 3x in <1s => replay signature
+                defense_mod.Observation(t0, "10101100"),
+                defense_mod.Observation(t0 + 0.4, "10101100"),
+                defense_mod.Observation(t0 + 0.7, "10101100"),
+            ]
+        elif args.file:
+            obs = []
+            for line in Path(args.file).read_text().splitlines():
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split()
+                if len(parts) >= 2:
+                    obs.append(defense_mod.Observation(float(parts[0]), parts[1]))
+        else:
+            console.error("Provide --file <observations.txt> ('ts payload' per line) or --simulate.")
+            return 1
+        findings = defense_mod.detect_replays(obs, rolling_expected=not args.fixed)
+        if not findings:
+            console.success("No replay signatures detected.")
+            return 0
+        console.error(f"Possible replay attack(s) detected: {len(findings)}")
+        for f in findings:
+            console.print_(f"  • payload {f.payload}: seen {f.count}x, "
+                           f"min gap {f.min_gap_s}s — {f.reason}")
+        return 1
+
+    if args.defense_cmd == "resilience":
+        payloads = None
+        if args.payloads:
+            payloads = Path(args.payloads).read_text().splitlines()
+        result = defense_mod.run_resilience_test(
+            cfg,
+            device=args.device or "device-under-test",
+            payloads=payloads,
+            replayed=args.replayed,
+            device_actuated=(None if args.actuated is None else args.actuated),
+            simulate=args.simulate,
+        )
+        defense_mod.print_resilience(result)
+        return 0
+
+    console.error("Unknown defense subcommand.")
+    return 1
+
+
 def cmd_config(args: argparse.Namespace, cfg: Config) -> int:
     if args.config_cmd == "path":
         console.print_(str(config_path()))
@@ -372,6 +445,40 @@ def build_parser() -> argparse.ArgumentParser:
     te.add_argument("--jurisdiction", help="Your jurisdiction (for reports)")
     te.add_argument("--yes", action="store_true", help="Accept legal terms non-interactively")
     pt.set_defaults(func=cmd_tx)
+
+    pdf = sub.add_parser("defense", help="Defensive analysis: detect attacks, assess resilience")
+    fsub = pdf.add_subparsers(dest="defense_cmd", required=True)
+
+    fm = fsub.add_parser("monitor", help="Detect jamming / interference on a band")
+    fm.add_argument("start", type=float, help="Start frequency (MHz)")
+    fm.add_argument("stop", type=float, help="Stop frequency (MHz)")
+    fm.add_argument("--samples", type=int, default=12, help="Number of sweeps to take")
+    fm.add_argument("--interval", type=float, default=1.0, help="Seconds between sweeps")
+    fm.add_argument("--threshold", type=float, default=10.0,
+                    help="Noise-floor rise over baseline that triggers an alarm (dB)")
+    fm.add_argument("--simulate", action="store_true", help="Synthesise a jamming event")
+
+    fr = fsub.add_parser("rolling-assess", help="Assess a device's fixed/rolling-code posture")
+    fr.add_argument("--file", help="Text file of captured payloads, one per line")
+    fr.add_argument("--kind", default="fixed", choices=["fixed", "counter", "rolling"],
+                    help="With --simulate, which synthetic device to model")
+    fr.add_argument("--simulate", action="store_true", help="Use synthetic payloads")
+
+    frc = fsub.add_parser("replay-check", help="Detect replay attacks in observed transmissions")
+    frc.add_argument("--file", help="'timestamp payload' per line")
+    frc.add_argument("--fixed", action="store_true",
+                     help="Device uses a fixed code (only flag implausibly fast repeats)")
+    frc.add_argument("--simulate", action="store_true", help="Use a synthetic replay trace")
+
+    fres = fsub.add_parser("resilience", help="Resilience-test YOUR OWN device and report")
+    fres.add_argument("--device", help="Name/label of the device under test")
+    fres.add_argument("--payloads", help="Text file of captured payloads (one per line)")
+    fres.add_argument("--replayed", action="store_true",
+                      help="You performed the gated replay (rfhound replay --authorized)")
+    fres.add_argument("--actuated", type=lambda s: s.lower() in ("1", "true", "yes", "y"),
+                      default=None, help="Did the device actuate on replay? true/false")
+    fres.add_argument("--simulate", action="store_true", help="Run a synthetic resilience test")
+    pdf.set_defaults(func=cmd_defense)
 
     pcfg = sub.add_parser("config", help="Show / init configuration")
     csub = pcfg.add_subparsers(dest="config_cmd")
