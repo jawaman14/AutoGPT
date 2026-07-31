@@ -92,6 +92,13 @@ def test_hop_simulated(base_url):
     assert data["hopping_suspected"] is True
 
 
+def test_at_endpoint(base_url):
+    code, data = get(base_url + "/api/at?freq=433.92")
+    assert code == 200
+    assert data["found"] is True
+    assert "rtl433" in data["decoders"]
+
+
 def test_404(base_url):
     try:
         get(base_url + "/api/nope")

@@ -151,6 +151,11 @@
       <!-- Bands -->
       <div class="card section" id="bands">
         <h2>Frequency knowledge base</h2>
+        <div class="row">
+          <label>At</label><input type="number" id="atFreq" value="433.92" step="0.01" style="width:110px"><span class="muted">MHz</span>
+          <button id="atBtn" class="ghost">What's here?</button>
+        </div>
+        <div id="atOut" class="muted" style="margin-bottom:10px"></div>
         <div class="row"><label>Search</label><input type="text" id="bandSearch" placeholder="tpms, adsb, drone, cellular…"></div>
         <div class="scroll"><table id="bandsTbl"><thead><tr><th>Range (MHz)</th><th>Name</th><th>Category</th><th>Decoder</th></tr></thead><tbody></tbody></table></div>
       </div>
@@ -272,6 +277,16 @@ async function refreshKpis(){ try{await doDrone();await doAdsb();await doImsi();
 
 $('#sweepBtn').onclick=doSweep;$('#reconBtn').onclick=doRecon;
 $('#droneBtn').onclick=doDrone;$('#adsbBtn').onclick=doAdsb;$('#imsiBtn').onclick=doImsi;$('#hopBtn').onclick=doHop;
+async function doAt(){
+  const d=await api(`/api/at?freq=${$('#atFreq').value}`);
+  if(!d.found){$('#atOut').innerHTML=`<span class="warn">${d.freq_mhz} MHz not in the band plan.</span>`;return;}
+  $('#atOut').innerHTML=`<b style="color:var(--accent)">${d.band}</b> `+
+    `<span class="tag">${d.category}</span> ${d.range_mhz[0].toFixed(3)}–${d.range_mhz[1].toFixed(3)} MHz`+
+    `<div style="margin-top:5px">Decoders: ${d.decoders.map(x=>`<span class="tag">${x}</span>`).join(' ')||'—'}</div>`+
+    `<div style="margin-top:4px">Detectors: ${d.detectors.slice(0,3).join(' · ')}</div>`+
+    `<div style="margin-top:4px">Try: <code>${d.commands[2]||d.commands[0]}</code></div>`;
+}
+$('#atBtn').onclick=doAt;
 $('#bandSearch').oninput=renderBands;
 let autoTimer=null;$('#autoSweep').onchange=e=>{if(e.target.checked)autoTimer=setInterval(doSweep,1500);else clearInterval(autoTimer);};
 window.addEventListener('resize',drawWaterfall);

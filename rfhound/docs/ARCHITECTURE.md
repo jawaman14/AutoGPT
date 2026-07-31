@@ -39,6 +39,7 @@ rfhound/
 │       ├── gnuradio.py # GNU Radio receive/analysis flowgraph preset generator
 │       ├── response.py # defensive counter-threat playbooks
 │       ├── cellular.py # rogue base station / IMSI-catcher detection
+│       ├── toolbox.py # frequency→tools ('at') and protocol→frequency ('tune')
 │       └── report.py  # Markdown / HTML reporting
 └── tests/             # pytest suite (runs with no hardware)
 ```

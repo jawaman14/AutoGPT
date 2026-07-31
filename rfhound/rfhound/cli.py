@@ -21,6 +21,7 @@ from .modules import intel as intel_mod
 from .modules import gnuradio as gr_mod
 from .modules import response as response_mod
 from .modules import cellular as cellular_mod
+from .modules import toolbox as toolbox_mod
 from . import plugins
 from .modules import recon as recon_mod
 from .modules import replay as replay_mod
@@ -92,6 +93,68 @@ def cmd_bands(args: argparse.Namespace, cfg: Config) -> int:
         for b in bands:
             console.rule(b.name)
             console.print_(b.description)
+    return 0
+
+
+def cmd_at(args: argparse.Namespace, cfg: Config) -> int:
+    tb = toolbox_mod.at_frequency(args.freq)
+    if not tb:
+        console.warn(f"{args.freq} MHz is not in RFHound's band plan "
+                     f"(HackRF covers 1-6000 MHz).")
+        return 1
+    if args.json:
+        import json
+        console.print_(json.dumps({
+            "freq_mhz": args.freq, "band": tb.band.name, "category": tb.band.category,
+            "range_mhz": [tb.band.low_hz / 1e6, tb.band.high_hz / 1e6],
+            "decoders": tb.decoders, "detectors": tb.detectors,
+            "gnuradio": tb.gnuradio, "commands": tb.commands}, indent=2))
+        return 0
+    b = tb.band
+    console.panel(
+        f"{b.name}   ({b.low_hz/1e6:.3f}–{b.high_hz/1e6:.3f} MHz · {b.category} · {b.region})\n\n"
+        f"{b.description}",
+        title=f"You are at {args.freq} MHz", style="cyan")
+    console.rule("Decoders for this band")
+    if tb.decoders:
+        rows = []
+        for rid in tb.decoders:
+            r = decode_mod.get_recipe(rid)
+            ready, _ = decode_mod.check_recipe(r) if r else (False, None)
+            rows.append([rid, r.name if r else "—", "✓" if ready else "✗ (install)"])
+        console.table("", ["ID", "Name", "Tool ready"], rows)
+    else:
+        console.print_("  (no protocol decoder — try a GNU Radio preset below)")
+    console.rule("Threat detectors that apply here")
+    for d in tb.detectors:
+        console.print_(f"  • rfhound defense {d}")
+    console.rule("GNU Radio presets")
+    console.print_("  " + ", ".join(tb.gnuradio))
+    console.rule("Try these")
+    for c in tb.commands:
+        console.print_(f"  $ {c}")
+    return 0
+
+
+def cmd_tune(args: argparse.Namespace, cfg: Config) -> int:
+    matches = toolbox_mod.tune_search(args.query)
+    if not matches:
+        console.warn(f"No band matches '{args.query}'. Try: adsb, tpms, pager, "
+                     f"drone, cellular, ais, weather…")
+        return 1
+    if args.json:
+        import json
+        console.print_(json.dumps([m.__dict__ for m in matches], indent=2))
+        return 0
+    rows = [[f"{m.tune_mhz:.4f}", m.name, f"{m.low_mhz:.3f}–{m.high_mhz:.3f}",
+             m.category, m.decoder or "—"] for m in matches]
+    console.table(f"Tune to — matches for '{args.query}'",
+                  ["Tune (MHz)", "Band", "Range", "Category", "Decoder"], rows)
+    top = matches[0]
+    console.print_(f"\n→ Best match: tune to [bold]{top.tune_mhz:.4f} MHz[/bold] for {top.name}"
+                   if console.have_rich() else
+                   f"\n-> Best match: tune to {top.tune_mhz:.4f} MHz for {top.name}")
+    console.print_(f"  $ rfhound at {top.tune_mhz:.3f}      # see the full toolbox here")
     return 0
 
 
@@ -684,6 +747,16 @@ def build_parser() -> argparse.ArgumentParser:
     pb.add_argument("--search", help="Substring search of name/description")
     pb.add_argument("-v", "--verbose", action="store_true", help="Show descriptions")
     pb.set_defaults(func=cmd_bands)
+
+    pat = sub.add_parser("at", help="Identify the band at a frequency and list its tools")
+    pat.add_argument("freq", type=float, help="Frequency (MHz)")
+    pat.add_argument("--json", action="store_true", help="Machine-readable output")
+    pat.set_defaults(func=cmd_at)
+
+    ptu = sub.add_parser("tune", help="Find the frequency to tune to for a protocol/name")
+    ptu.add_argument("query", help="Protocol/name, e.g. adsb, tpms, pager, drone")
+    ptu.add_argument("--json", action="store_true", help="Machine-readable output")
+    ptu.set_defaults(func=cmd_tune)
 
     ps = sub.add_parser("sweep", help="Wideband spectrum sweep")
     ps.add_argument("start", type=float, help="Start frequency (MHz)")

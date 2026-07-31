@@ -23,6 +23,7 @@ from ..modules import decode as decode_mod
 from ..modules import intel as intel_mod
 from ..modules import recon as recon_mod
 from ..modules import sweep as sweep_mod
+from ..modules import toolbox as toolbox_mod
 
 _DASHBOARD = Path(__file__).with_name("dashboard.html")
 
@@ -154,6 +155,17 @@ def hop_dict(*, simulate: bool) -> dict:
             "distinct": r.distinct_freqs, "detail": r.detail}
 
 
+def at_dict(freq_mhz: float) -> dict:
+    tb = toolbox_mod.at_frequency(freq_mhz)
+    if not tb:
+        return {"found": False, "freq_mhz": freq_mhz}
+    return {"found": True, "freq_mhz": freq_mhz, "band": tb.band.name,
+            "category": tb.band.category, "description": tb.band.description,
+            "range_mhz": [tb.band.low_hz / 1e6, tb.band.high_hz / 1e6],
+            "decoders": tb.decoders, "detectors": tb.detectors,
+            "gnuradio": tb.gnuradio, "commands": tb.commands}
+
+
 def decoders_dict() -> dict:
     out = []
     for r in decode_mod.list_recipes():
@@ -242,6 +254,9 @@ def _make_handler(state: AppState):
                     return self._send_json(imsi_dict(simulate=sim))
                 if path == "/api/defense/hop":
                     return self._send_json(hop_dict(simulate=sim))
+                if path == "/api/at":
+                    freq = float(qs.get("freq", ["100"])[0])
+                    return self._send_json(at_dict(freq))
                 return self._send_json({"error": "not found", "path": path}, code=404)
             except Exception as exc:  # never leak a stack trace to the client
                 return self._send_json({"error": str(exc)}, code=500)
