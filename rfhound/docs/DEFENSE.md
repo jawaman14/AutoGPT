@@ -145,6 +145,26 @@ flags a pattern of many short-lived (transient) frequencies.
 rfhound defense hop-detect --simulate
 ```
 
+## 9b. Rogue base station / IMSI-catcher detection — `defense imsi-catcher`
+
+The **defensive** counterpart to an IMSI catcher (SnoopSnitch / EFF Crocodile
+Hunter approach). RFHound does not impersonate a network or intercept anyone — it
+ingests observed cellular broadcast parameters and flags the classic indicators
+of a fake base station: **no/weak encryption (A5/0), empty neighbor list,
+unusual/changing LAC, an implausibly strong new cell, unexpected operator, or a
+Cell-ID reused across frequencies.**
+
+```bash
+rfhound defense imsi-catcher --simulate            # demo with a planted catcher
+rfhound defense imsi-catcher --file cells.json     # your observed cell records
+```
+
+`cells.json` is an array of objects with fields like `rat, mcc, mnc, lac, cid,
+arfcn, rxlev, cipher, neighbors`. RFHound does **not** demodulate cellular itself
+(use gr-gsm / a supported baseband to produce the observations) and performs no
+cellular transmission of any kind. **SS7 / network-side location is out of scope**
+— that's carrier-network interception, not RF, and not something this tool does.
+
 ## 9. Counter-threat playbooks — `defense respond`
 
 Every threat RFHound detects has a **defensive** response playbook: immediate

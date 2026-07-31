@@ -35,8 +35,29 @@ _ANSI = {
 }
 
 
+_DEBUG = False
+
+
 def have_rich() -> bool:
     return _HAVE_RICH
+
+
+def set_debug(on: bool) -> None:
+    global _DEBUG
+    _DEBUG = on
+
+
+def is_debug() -> bool:
+    return _DEBUG
+
+
+def debug(msg: str) -> None:
+    if not _DEBUG:
+        return
+    if _HAVE_RICH:
+        _console.print(f"[dim]· debug:[/dim] {msg}", style="dim")
+    else:
+        _plain(f"· debug: {msg}", "dim")
 
 
 def _plain(msg: str, colour: str | None = None) -> None:

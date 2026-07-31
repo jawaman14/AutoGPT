@@ -145,6 +145,8 @@ ACARS/APRS, NOAA weather-satellite imagery, GPS L1 (receive-only), and the busy
 - [`docs/USAGE.md`](docs/USAGE.md) — install the decoders, recipes, workflows
 - [`docs/DEFENSE.md`](docs/DEFENSE.md) — detection & hardening: jamming, replay, spoofing, TSCM, C-UAS, hop-detect, response playbooks
 - [`docs/GNURADIO.md`](docs/GNURADIO.md) — prebuilt GNU Radio receive/analysis flowgraph presets
+- [`docs/COPILOT.md`](docs/COPILOT.md) — drive RFHound with Claude / a local LLM (receive-only, safe)
+- [`docs/MULTINODE.md`](docs/MULTINODE.md) — link multiple receivers/operators into one hub
 - [`docs/FREQUENCIES.md`](docs/FREQUENCIES.md) — the frequency knowledge base
 - [`docs/MODDING.md`](docs/MODDING.md) — extend RFHound with your own bands/decoders/detectors
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how it's built and how to extend it

@@ -22,6 +22,12 @@ rfhound/
 │   ├── web/           # browser dashboard + JSON REST API (stdlib http.server)
 │   │   ├── server.py  # routing, JSON serialisers (RX-only, no TX endpoint)
 │   │   └── dashboard.html  # self-contained SPA (canvas spectrum + waterfall)
+│   ├── llm/           # LLM copilot — safe, RX-only action registry + agent
+│   │   ├── actions.py # the ONLY actions a model may call (no TX / no exec)
+│   │   └── agent.py   # anthropic / local / offline providers
+│   ├── net/           # multi-node linking (hub aggregator + node client)
+│   │   ├── hub.py     # aggregator server (roster + report feed)
+│   │   └── node.py    # push status/findings to a hub
 │   └── modules/
 │       ├── sweep.py   # hackrf_sweep driver + peak detection + simulate
 │       ├── capture.py # hackrf_transfer record + SigMF metadata
@@ -32,6 +38,7 @@ rfhound/
 │       ├── intel.py   # TSCM baseline diff, ADS-B/AIS spoof detection, C-UAS, hop-detect
 │       ├── gnuradio.py # GNU Radio receive/analysis flowgraph preset generator
 │       ├── response.py # defensive counter-threat playbooks
+│       ├── cellular.py # rogue base station / IMSI-catcher detection
 │       └── report.py  # Markdown / HTML reporting
 └── tests/             # pytest suite (runs with no hardware)
 ```

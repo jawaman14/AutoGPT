@@ -20,6 +20,7 @@ from .modules import defense as defense_mod
 from .modules import intel as intel_mod
 from .modules import gnuradio as gr_mod
 from .modules import response as response_mod
+from .modules import cellular as cellular_mod
 from . import plugins
 from .modules import recon as recon_mod
 from .modules import replay as replay_mod
@@ -415,6 +416,27 @@ def cmd_defense(args: argparse.Namespace, cfg: Config) -> int:
         console.table("Drone-band detections", ["Band", "Freq (MHz)", "Power dB", "Confidence"], rows)
         return 1
 
+    if args.defense_cmd == "imsi-catcher":
+        if args.simulate:
+            obs = cellular_mod.simulate_observations()
+        elif args.file:
+            import json
+            raw = json.loads(Path(args.file).read_text())
+            obs = [cellular_mod.CellObservation(**o) for o in raw]
+        else:
+            console.error("Provide --file <cells.json> or --simulate.")
+            return 1
+        alerts = cellular_mod.detect_rogue_bts(obs)
+        sc = cellular_mod.score(alerts)
+        console.rule("Rogue base station / IMSI-catcher detection")
+        if not alerts:
+            console.success(f"No rogue-BTS indicators (score {sc}/100).")
+            return 0
+        console.error(f"Rogue-BTS indicators: {len(alerts)}  ·  likelihood {sc}/100")
+        for a in alerts:
+            console.print_(f"  • [{a.severity}] CID={a.cid} {a.indicator}: {a.detail}")
+        return 1
+
     if args.defense_cmd == "hop-detect":
         if args.simulate:
             slices = intel_mod.simulate_hopping_slices(hopping=True)
@@ -510,6 +532,83 @@ def cmd_gnuradio(args: argparse.Namespace, cfg: Config) -> int:
     return 0
 
 
+def cmd_dev(args: argparse.Namespace, cfg: Config) -> int:
+    console.set_debug(True)
+    console.rule("RFHound developer diagnostics")
+    console.print_(f"version: {__version__}")
+    console.print_(f"rich: {console.have_rich()}  ·  config: {config_path()}")
+    console.print_(f"bands: {len(bandplan.BANDS)}  ·  decoder recipes: "
+                   f"{len(decode_mod.list_recipes())}  ·  "
+                   f"threats: {len(response_mod.list_threats())}")
+    from .llm import actions as llm_actions
+    console.print_(f"llm actions (safe, RX-only): {len(llm_actions.ACTIONS)}")
+    console.print_(f"gnuradio presets: {len(gr_mod.list_presets())}")
+    console.rule("External tools")
+    for tool, ok, path in proc.tool_status():
+        console.print_(f"  [{'✓' if ok else '✗'}] {tool.name}: {path or 'not found'}")
+    console.debug("dev mode active — full tracebacks enabled")
+    return 0
+
+
+def cmd_ask(args: argparse.Namespace, cfg: Config) -> int:
+    from .llm import Copilot
+    copilot = Copilot(cfg, provider=args.provider)
+    console.print_(f"[copilot:{copilot.provider}]")
+    try:
+        result = copilot.ask(args.query)
+    except Exception as exc:
+        console.error(f"Copilot error: {exc}")
+        if not args.provider or args.provider == "offline":
+            raise
+        console.print_("Tip: check ANTHROPIC_API_KEY / --provider / llm_base_url, "
+                       "or use --provider offline.")
+        return 2
+    for a in result.actions_run:
+        console.info(f"ran {a['action']}({a['params']})")
+    console.print_(result.text)
+    return 0
+
+
+def cmd_hub(args: argparse.Namespace, cfg: Config) -> int:
+    from .net import serve_hub
+    serve_hub(host=args.host, port=args.port, token=args.token or cfg.hub_token)
+    return 0
+
+
+def cmd_node(args: argparse.Namespace, cfg: Config) -> int:
+    from .net import node_register, node_report
+    hub = args.hub or cfg.hub_url
+    node_id = args.id or cfg.node_id or "node-1"
+    token = args.token or cfg.hub_token
+    if not hub:
+        console.error("No hub URL. Pass --hub http://host:port (or set hub_url in config).")
+        return 1
+    try:
+        node_register(hub, node_id, name=args.name or node_id, location=args.location or "",
+                      token=token)
+        console.success(f"Registered node '{node_id}' with hub {hub}")
+        sim = args.simulate or not device.is_present()
+        if args.scan == "recon":
+            rep = recon_mod.run_recon(cfg, simulate=sim, progress=False)
+            data = {"active": len(rep.active_findings), "total": len(rep.findings)}
+        elif args.scan == "drone":
+            hits = intel_mod.drone_scan(cfg, simulate=sim)
+            data = {"drone_hits": len(hits)}
+        elif args.scan == "imsi":
+            obs = cellular_mod.simulate_observations() if sim else []
+            alerts = cellular_mod.detect_rogue_bts(obs)
+            data = {"rogue_bts_score": cellular_mod.score(alerts), "alerts": len(alerts)}
+        else:
+            data = {"status": "online"}
+        if args.scan or True:
+            node_report(hub, node_id, args.scan or "status", data, token=token)
+            console.success(f"Pushed report ({args.scan or 'status'}): {data}")
+    except Exception as exc:
+        console.error(f"Node link failed: {exc}")
+        return 2
+    return 0
+
+
 def cmd_config(args: argparse.Namespace, cfg: Config) -> int:
     if args.config_cmd == "path":
         console.print_(str(config_path()))
@@ -538,6 +637,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="HackRF reconnaissance & pentesting toolkit (receive-first).",
     )
     p.add_argument("--version", action="version", version=f"rfhound {__version__}")
+    p.add_argument("--dev", action="store_true", help="Developer mode: verbose debug + tracebacks")
     sub = p.add_subparsers(dest="command")
 
     sub.add_parser("doctor", help="Check tools, HackRF device and config").set_defaults(func=cmd_doctor)
@@ -662,6 +762,11 @@ def build_parser() -> argparse.ArgumentParser:
     fhp = fsub.add_parser("hop-detect", help="Detect frequency-hopping (agile) emitters")
     fhp.add_argument("--simulate", action="store_true")
 
+    fic = fsub.add_parser("imsi-catcher",
+                          help="Detect rogue base station / IMSI-catcher indicators (defensive)")
+    fic.add_argument("--file", help="JSON array of observed cell records")
+    fic.add_argument("--simulate", action="store_true")
+
     frs = fsub.add_parser("respond", help="Show the defensive counter-threat playbook for a threat")
     frs.add_argument("threat", help="jamming|gps_spoof|adsb_spoof|ais_spoof|drone|rogue_emitter|replay")
 
@@ -674,6 +779,31 @@ def build_parser() -> argparse.ArgumentParser:
                       default=None, help="Did the device actuate on replay? true/false")
     fres.add_argument("--simulate", action="store_true", help="Run a synthetic resilience test")
     pdf.set_defaults(func=cmd_defense)
+
+    sub.add_parser("dev", help="Developer diagnostics").set_defaults(func=cmd_dev)
+
+    pa = sub.add_parser("ask", help="Ask the LLM copilot (receive/analysis only)")
+    pa.add_argument("query", help="Natural-language request")
+    pa.add_argument("--provider", choices=["offline", "anthropic", "local"],
+                    help="LLM backend (default: config or offline)")
+    pa.set_defaults(func=cmd_ask)
+
+    ph = sub.add_parser("hub", help="Run the multi-node aggregator hub")
+    ph.add_argument("--host", default="127.0.0.1")
+    ph.add_argument("--port", type=int, default=8787)
+    ph.add_argument("--token", default="", help="Shared bearer token for node auth")
+    ph.set_defaults(func=cmd_hub)
+
+    pn = sub.add_parser("node", help="Push this receiver's findings to a hub")
+    pn.add_argument("--hub", help="Hub URL, e.g. http://10.0.0.5:8787")
+    pn.add_argument("--id", help="Node id")
+    pn.add_argument("--name", help="Node display name")
+    pn.add_argument("--location", help="Node location label")
+    pn.add_argument("--scan", choices=["recon", "drone", "imsi"],
+                    help="Run this scan and push the result")
+    pn.add_argument("--token", default="", help="Shared bearer token")
+    pn.add_argument("--simulate", action="store_true")
+    pn.set_defaults(func=cmd_node)
 
     pg = sub.add_parser("gnuradio", help="GNU Radio receive/analysis flowgraph presets")
     gsub = pg.add_subparsers(dest="gr_cmd")
@@ -710,6 +840,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     cfg = load_config()
+    if getattr(args, "dev", False):
+        cfg.dev_mode = True
+        console.set_debug(True)
 
     if not getattr(args, "command", None):
         # No subcommand -> friendly interactive menu.
@@ -721,6 +854,8 @@ def main(argv: list[str] | None = None) -> int:
         return args.func(args, cfg)
     except RFHoundError as exc:
         console.error(str(exc))
+        if cfg.dev_mode:
+            raise
         return 2
     except KeyboardInterrupt:
         console.warn("Interrupted.")

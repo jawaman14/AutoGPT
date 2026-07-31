@@ -67,6 +67,17 @@ class Config:
 
     # UX.
     color: bool = True
+    dev_mode: bool = False
+
+    # --- LLM copilot (optional) ---------------------------------------------
+    llm_provider: str = ""    # "anthropic" | "local" (OpenAI-compatible) | ""
+    llm_model: str = ""       # e.g. "claude-..." or a local model name
+    llm_base_url: str = ""    # local/OpenAI-compatible endpoint base URL
+
+    # --- Multi-node linking -------------------------------------------------
+    hub_url: str = ""         # aggregator this node reports to
+    node_id: str = ""         # this node's identity in a sensor mesh
+    hub_token: str = ""       # shared bearer token for hub auth
 
     def is_tx_range_allowed(self, freq_hz: int) -> bool:
         return any(r.contains(freq_hz) for r in self.tx_allow_ranges)
