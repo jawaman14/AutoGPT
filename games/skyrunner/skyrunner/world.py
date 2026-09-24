@@ -34,6 +34,7 @@ class Airfield:
     radar_km: float = 0.0
     setting: str = "flat"  # flat | plateau | pit | beach
     tree_lines: bool = False
+    haul_road: int | None = None  # pit strips: runway end (0/1) with a graded exit to take off over
 
     @property
     def dir(self) -> tuple[float, float]:
@@ -74,7 +75,7 @@ AIRFIELDS: tuple[Airfield, ...] = (
     Airfield("COV", "Smuggler's Cove", 11500, -8000, 10, 320, 18, 3, "sand", "shady",
              setting="beach"),
     Airfield("QRY", "Old Quarry", -10000, 5500, 160, 240, 12, None, "dirt", "shady",
-             setting="pit"),
+             setting="pit", haul_road=0),
     Airfield("ISL", "Isla Verde", 12800, 11500, 300, 550, 20, 12, "grass", "regional"),
 )
 AIRFIELD_BY_CODE = {a.code: a for a in AIRFIELDS}
@@ -173,6 +174,13 @@ class World:
             flat = _smoothstep(110, 60, dist)
             side = np.exp(-((across - 55) / 30) ** 2) * 70 * _smoothstep(90, 0, along)
             h = h * (1 - flat) + elev * flat + side
+            if af.haul_road is not None:
+                # the old haul road: a graded cut out of the downhill end, the
+                # only way to get a loaded aircraft back out of the pit
+                s_end = -1 if af.haul_road == 0 else 1
+                beyond = s_end * (dx * ux + dy * uy) - af.length / 2
+                cut = (beyond > -20) & (np.abs(dx * uy - dy * ux) < 70 + np.maximum(beyond, 0) * 0.3)
+                h = np.where(cut, np.minimum(h, elev - np.maximum(beyond, 0) * 0.06), h)
         else:
             reach = 650 if af.setting == "beach" else 260
             blend = _smoothstep(reach, 50, dist)
@@ -215,11 +223,11 @@ class World:
                 continue
             ux, uy = af.dir
             for end in (-1, 1):
-                d = af.length / 2 + 60
+                d = af.length / 2 + 110
                 for k in np.linspace(-45, 45, 13):
                     x = af.x + end * ux * d + uy * k
                     y = af.y + end * uy * d - ux * k
-                    pts.append((x, y, self.height(x, y), 22.0))
+                    pts.append((x, y, self.height(x, y), 16.0))
         return np.array(pts, dtype=np.float32).reshape(-1, 4)
 
     def _bucket_trees(self, bucket=250.0):
@@ -267,6 +275,19 @@ class World:
                     if z < tz + th and (tx - x) ** 2 + (ty - y) ** 2 < (radius + th * 0.25) ** 2:
                         return True
         return False
+
+    def obstacle_top(self, x: float, y: float, radius: float = 30.0) -> float:
+        """Highest thing to hit near (x, y): terrain/sea surface or a tree top."""
+        top = self.ground(x, y)
+        b = self._bucket
+        bi, bj = int(x // b), int(y // b)
+        for di in (-1, 0, 1):
+            for dj in (-1, 0, 1):
+                for idx in self._tree_grid.get((bi + di, bj + dj), ()):
+                    tx, ty, tz, th = self.trees[idx]
+                    if (tx - x) ** 2 + (ty - y) ** 2 < radius ** 2:
+                        top = max(top, float(tz + th))
+        return top
 
     def heights_many(self, xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
         """Vectorised bilinear terrain height (sea floor included)."""

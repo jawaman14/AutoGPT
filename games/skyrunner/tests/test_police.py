@@ -50,8 +50,10 @@ def test_unidentified_primary_track_builds_suspicion_and_dispatch(world):
     ps = PoliceSystem(world, random.Random(1))
     har = AIRFIELD_BY_CODE["HAR"]
     sig = _sig(world, har.x + 5000, har.y + 3000, 800)
-    _run(ps, [Target(sig, hot=True)], 30)
-    assert ps.wanted >= 1
+    _run(ps, [Target(sig, hot=True)], 20)
+    assert ps.wanted == 0  # a brief primary blip is just VFR traffic...
+    _run(ps, [Target(sig, hot=True)], 45)
+    assert ps.wanted >= 1  # ...a sustained one isn't
     assert any(u.faction == "police" for u in ps.units)
 
 

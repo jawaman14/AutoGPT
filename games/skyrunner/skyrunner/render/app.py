@@ -7,16 +7,11 @@ import sys
 from direct.gui.OnscreenText import OnscreenText
 from direct.showbase.ShowBase import ShowBase
 from panda3d.core import (
-    AmbientLight,
     InputDevice,
-    AntialiasAttrib,
-    DirectionalLight,
     ClockObject,
-    Fog,
     KeyboardButton,
     TextNode,
     Vec3,
-    Vec4,
     WindowProperties,
     loadPrcFileData,
 )
@@ -28,6 +23,8 @@ from ..sensors import AEROSTAT_POS
 from ..world import AIRFIELD_BY_CODE
 from . import models
 from .hud import HELP_TEXT, HangarMenu, Hud, JobMenu, LoadMenu
+from .quality import get as quality_preset
+from .scene import build_world_scene, graphics_prc
 
 SKY = (0.55, 0.72, 0.9, 1)
 CAM_MODES = ("chase", "cockpit", "tower")
@@ -51,6 +48,7 @@ CREW_KEYS = {  # one-shot crew commands issued from the pilot's seat
     "k": ("kick", {}),
     "o": ("call_boat", {}),
     "v": ("pump", {}),
+    "i": ("turn_around", {}),
 }
 PRESS_KEYS = {
     "g": "flaps_down",
@@ -75,18 +73,16 @@ def _button(name: str):
 
 
 class SkyrunnerApp(ShowBase):
-    def __init__(self, session: Session, offscreen: bool = False, server=None):
-        if offscreen:
-            loadPrcFileData("", "window-type offscreen\naudio-library-name null\nwin-size 1280 720")
-        else:
-            loadPrcFileData("", "win-size 1280 720\nwindow-title Skyrunner\nframebuffer-multisample 1\nmultisamples 4\nsync-video 1")
+    def __init__(self, session: Session, offscreen: bool = False, server=None, graphics: str = "high", bot=None):
+        self.quality = quality_preset(graphics)
+        if offscreen and self.quality.shaders:  # software rendering: no shader generator
+            self.quality = quality_preset("medium" if self.quality.textures else "low")
+        loadPrcFileData("", graphics_prc(self.quality, offscreen))
         super().__init__()
         self.s = session
         self.server = server
+        self.bot = bot  # bots.autorun.AutoRunner: the AI flies, you watch
         self.disableMouse()
-        self.setBackgroundColor(*SKY)
-        self.render.setShaderAuto() if not offscreen else None
-        self.render.setAntialias(AntialiasAttrib.MMultisample)
         self.camLens.setNearFar(0.5, 60_000)
         self.camLens.setFov(70)
 
@@ -116,25 +112,7 @@ class SkyrunnerApp(ShowBase):
 
     # ------------------------------------------------------------ scene
     def _build_scene(self):
-        w = self.s.world
-        sun = DirectionalLight("sun")
-        sun.setColor(Vec4(1.0, 0.96, 0.88, 1))
-        sun_np = self.render.attachNewNode(sun)
-        sun_np.setHpr(-35, -50, 0)
-        self.render.setLight(sun_np)
-        amb = AmbientLight("amb")
-        amb.setColor(Vec4(0.42, 0.45, 0.52, 1))
-        self.render.setLight(self.render.attachNewNode(amb))
-        fog = Fog("haze")
-        fog.setColor(*SKY[:3])
-        fog.setLinearRange(6000, 30000)
-        self.render.setFog(fog)
-
-        models.build_terrain(w).reparentTo(self.render)
-        models.build_water().reparentTo(self.render)
-        models.build_trees(w).reparentTo(self.render)
-        for af in w.airfields:
-            models.build_airfield(w, af).reparentTo(self.render)
+        self.scene = build_world_scene(self, self.s.world, self.quality)
         self.beacons = []
         self._build_player()
         self.pursuer_nodes: dict[int, tuple] = {}
@@ -152,6 +130,9 @@ class SkyrunnerApp(ShowBase):
         self.player, self.props = models.build_aircraft(spec.visual, self.s.fm.mass.gear_height_ft * 0.3048)
         self.player.reparentTo(self.render)
         self._player_key = spec.key
+        if self.quality.shadows:
+            self.scene.sun.reparentTo(self.player)  # the shadow camera follows us
+            self.scene.sun.setHpr(self.render, -35, -50, 0)
 
     def _sync_beacons(self):
         want = sorted({(j.dest, j.drop_point) for j in self.s.active_jobs}, key=str)
@@ -353,10 +334,12 @@ class SkyrunnerApp(ShowBase):
                 self._build_player()
             if self.server is not None:
                 self.server.pump(self.s)
-            self.s.update(dt, self._gather_input())
+            inp = self._gather_input()
+            self.s.update(dt, inp, controls=self.bot.step(dt) if self.bot else None)
             if self.server is not None:
                 self.server.publish(self.s)
         self._sync_scene(dt)
+        self.scene.update(dt)
         self.hud.update(self.cam_mode, self.mouse_yoke)
         m = self._active_menu()
         self.hud.flight.show() if m is None else self.hud.flight.hide()
@@ -483,8 +466,8 @@ class SkyrunnerApp(ShowBase):
         self.camera.lookAt(target + fwd * L * 1.5 + Vec3(0, 0, 0.5))
 
 
-def run(session: Session, server=None) -> None:
-    app = SkyrunnerApp(session, server=server)
+def run(session: Session, server=None, graphics: str = "high", bot=None) -> None:
+    app = SkyrunnerApp(session, server=server, graphics=graphics, bot=bot)
     props = WindowProperties()
     props.setTitle("Skyrunner - cargo, balance, and the long arm of the law")
     app.win.requestProperties(props)

@@ -20,13 +20,15 @@ class Role(str, Enum):
     COPILOT = "copilot"
     SPOTTER = "spotter"
     BOAT = "boat"
+    BOSS = "boss"  # the organisation's HQ
     CONTROLLER = "controller"
-    INTERCEPTOR = "interceptor"
+    INTERCEPTOR = "interceptor"  # police pilot: flies one unit in 3D
     CUTTER = "cutter"
+    CHIEF = "chief"  # the task force's HQ
 
     @property
     def side(self) -> Side:
-        return Side.LAW if self in (Role.CONTROLLER, Role.INTERCEPTOR, Role.CUTTER) else Side.RUNNER
+        return Side.LAW if self in (Role.CONTROLLER, Role.INTERCEPTOR, Role.CUTTER, Role.CHIEF) else Side.RUNNER
 
 
 class Mode(str, Enum):
@@ -42,23 +44,25 @@ _CREW_AIR = {"kick", "pump", "call_boat", "auto_kick"}
 
 PERMISSIONS: dict[Role, set[str]] = {
     Role.PILOT: _GROUND_OPS | _CREW_AIR | {
-        "buy_aircraft", "buy_gear", "hire_spotter", "transponder", "autopilot", "confirm", "chat",
+        "buy_aircraft", "buy_gear", "hire_spotter", "transponder", "autopilot", "confirm", "chat", "turn_around", "hq",
     },
     Role.COPILOT: _GROUND_OPS | _CREW_AIR | {"hire_spotter", "chat"},
     Role.SPOTTER: {"spotter_move", "chat"},
     Role.BOAT: {"boat_goto", "chat"},
-    Role.CONTROLLER: {"launch", "dispatch", "recall", "encrypt", "aerostat", "chat"},
-    Role.INTERCEPTOR: {"chat"},
-    Role.CUTTER: {"chat"},
+    Role.BOSS: {"hq", "chat"},
+    Role.CONTROLLER: {"launch", "dispatch", "recall", "encrypt", "aerostat", "chat", "hq"},
+    Role.INTERCEPTOR: {"claim_unit", "release_unit", "chat"},
+    Role.CUTTER: {"cutter_goto", "chat"},
+    Role.CHIEF: {"hq", "chat"},
 }
 
 # Roles a human can take in each mode. Everything else is AI or absent.
 MODE_ROLES: dict[Mode, tuple[Role, ...]] = {
     Mode.SOLO: (Role.PILOT,),
-    Mode.POLICE: (Role.CONTROLLER,),
-    Mode.COOP: (Role.PILOT, Role.COPILOT, Role.SPOTTER),
-    Mode.VERSUS: (Role.PILOT, Role.COPILOT, Role.SPOTTER, Role.CONTROLLER),
-    Mode.CAMPAIGN: (Role.PILOT, Role.COPILOT, Role.SPOTTER),
+    Mode.POLICE: (Role.CONTROLLER, Role.INTERCEPTOR, Role.CUTTER, Role.CHIEF),
+    Mode.COOP: (Role.PILOT, Role.COPILOT, Role.SPOTTER, Role.BOAT, Role.BOSS),
+    Mode.VERSUS: tuple(Role),
+    Mode.CAMPAIGN: (Role.PILOT, Role.COPILOT, Role.SPOTTER, Role.BOAT),
 }
 
 

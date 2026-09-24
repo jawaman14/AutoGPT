@@ -27,28 +27,32 @@ from panda3d.core import (
 from ..aircraft import Visual
 from ..world import CELL, GRID, HALF, World
 
-_FMT = None
+_FMT: dict[bool, GeomVertexFormat] = {}
 
 
-def _format() -> GeomVertexFormat:
-    global _FMT
-    if _FMT is None:
+def _format(uv: bool = False) -> GeomVertexFormat:
+    if uv not in _FMT:
         arr = GeomVertexArrayFormat()
         arr.addColumn(InternalName.getVertex(), 3, GeomEnums.NT_float32, GeomEnums.C_point)
         arr.addColumn(InternalName.getNormal(), 3, GeomEnums.NT_float32, GeomEnums.C_normal)
         arr.addColumn(InternalName.getColor(), 4, GeomEnums.NT_float32, GeomEnums.C_color)
-        _FMT = GeomVertexFormat.registerFormat(GeomVertexFormat(arr))
-    return _FMT
+        if uv:
+            arr.addColumn(InternalName.getTexcoord(), 2, GeomEnums.NT_float32, GeomEnums.C_texcoord)
+        _FMT[uv] = GeomVertexFormat.registerFormat(GeomVertexFormat(arr))
+    return _FMT[uv]
 
 
-def mesh_from_arrays(name: str, verts: np.ndarray, normals: np.ndarray, colors: np.ndarray, tris: np.ndarray) -> GeomNode:
-    """verts/normals (N,3), colors (N,4) floats; tris (M,3) ints."""
+def mesh_from_arrays(name: str, verts: np.ndarray, normals: np.ndarray, colors: np.ndarray, tris: np.ndarray,
+                     uvs: np.ndarray | None = None) -> GeomNode:
+    """verts/normals (N,3), colors (N,4) floats; tris (M,3) ints; optional uvs (N,2)."""
     n = len(verts)
-    data = np.empty((n, 10), dtype=np.float32)
+    data = np.empty((n, 10 if uvs is None else 12), dtype=np.float32)
     data[:, 0:3] = verts
     data[:, 3:6] = normals
     data[:, 6:10] = colors
-    vdata = GeomVertexData(name, _format(), Geom.UHStatic)
+    if uvs is not None:
+        data[:, 10:12] = uvs
+    vdata = GeomVertexData(name, _format(uvs is not None), Geom.UHStatic)
     vdata.uncleanSetNumRows(n)
     vdata.modifyArray(0).modifyHandle().copyDataFrom(data.tobytes())
     prim = GeomTriangles(Geom.UHStatic)
@@ -160,38 +164,103 @@ def terrain_colors(world: World) -> np.ndarray:
     return np.clip(col, 0, 1)
 
 
-def build_terrain(world: World) -> NodePath:
-    h = world.heights
-    c = np.linspace(-HALF, HALF, GRID)
+def build_terrain(world: World, quality=None) -> NodePath:
+    """The island. Low quality: half-resolution mesh, vertex colours. Medium/high:
+    full mesh, white vertices under a baked colour texture plus a tiling detail
+    texture (the detail stage repeats every ~40 m)."""
+    from panda3d.core import TextureStage
+
+    step = getattr(quality, "terrain_step", 1)
+    textured = bool(getattr(quality, "textures", False))
+    h = world.heights[::step, ::step]
+    n = h.shape[0]
+    c = np.linspace(-HALF, HALF, n)
     X, Y = np.meshgrid(c, c)
     verts = np.stack([X, Y, h], -1).reshape(-1, 3)
-    gy, gx = np.gradient(h, CELL)
+    gy, gx = np.gradient(h, CELL * step)
     normals = np.stack([-gx, -gy, np.ones_like(h)], -1)
     normals /= np.linalg.norm(normals, axis=-1, keepdims=True)
-    cols = np.concatenate([terrain_colors(world), np.ones(h.shape + (1,))], -1)
-    i = np.arange(GRID - 1)
+    colors = terrain_colors(world)
+    cols = np.concatenate([np.ones(h.shape + (3,)) if textured else colors[::step, ::step], np.ones(h.shape + (1,))], -1)
+    i = np.arange(n - 1)
     ii, jj = np.meshgrid(i, i)
-    a = (jj * GRID + ii).reshape(-1)
-    b, cc, d = a + 1, a + GRID + 1, a + GRID
+    a = (jj * n + ii).reshape(-1)
+    b, cc, d = a + 1, a + n + 1, a + n
     tris = np.concatenate([np.stack([a, b, cc], -1), np.stack([a, cc, d], -1)])
-    return NodePath(mesh_from_arrays("terrain", verts, normals.reshape(-1, 3), cols.reshape(-1, 4), tris))
+    uvs = np.stack([(X + HALF) / (2 * HALF), (Y + HALF) / (2 * HALF)], -1).reshape(-1, 2) if textured else None
+    node = NodePath(mesh_from_arrays("terrain", verts, normals.reshape(-1, 3), cols.reshape(-1, 4), tris, uvs))
+    if textured:
+        from . import textures
+
+        node.setTexture(textures.terrain_texture(world, colors, quality.terrain_tex))
+        detail = TextureStage("detail")
+        detail.setMode(TextureStage.MModulate)
+        node.setTexture(detail, textures.detail_texture())
+        node.setTexScale(detail, 2 * HALF / 40.0, 2 * HALF / 40.0)
+    return node
 
 
-def build_water(size=90_000.0) -> NodePath:
-    mb = MeshBuilder()
-    s = size / 2
-    mb.quad((-s, -s, 0), (s, -s, 0), (s, s, 0), (-s, s, 0), (0.12, 0.33, 0.52, 0.88))
-    np_ = mb.node("water")
-    np_.setTransparency(TransparencyAttrib.MAlpha)
-    return np_
+def build_water(size=90_000.0, quality=None) -> NodePath:
+    if getattr(quality, "textures", False):
+        from . import textures
+
+        s = size / 2
+        verts = np.array([(-s, -s, 0), (s, -s, 0), (s, s, 0), (-s, s, 0)], float)
+        tile = size / 180.0  # one ripple tile per 180 m
+        uvs = np.array([(0, 0), (tile, 0), (tile, tile), (0, tile)], float)
+        node = NodePath(mesh_from_arrays("water", verts, np.tile((0, 0, 1.0), (4, 1)), np.ones((4, 4)),
+                                         np.array([(0, 1, 2), (0, 2, 3)]), uvs))
+        node.setTexture(textures.water_texture())
+    else:
+        mb = MeshBuilder()
+        s = size / 2
+        mb.quad((-s, -s, 0), (s, -s, 0), (s, s, 0), (-s, s, 0), (0.12, 0.33, 0.52, 0.88))
+        node = mb.node("water")
+    node.setTransparency(TransparencyAttrib.MAlpha)
+    return node
 
 
-def build_trees(world: World) -> NodePath:
+def build_sky(radius: float = 50_000.0) -> NodePath:
+    """Gradient dome, drawn first, follows the camera (set up by the caller)."""
+    from . import textures
+
+    rings, segs = 8, 24
+    v, t = [], []
+    for r in range(rings + 1):
+        el = math.radians(-8 + 98 * r / rings)
+        for k in range(segs + 1):
+            az = 2 * math.pi * k / segs
+            v.append((radius * math.cos(el) * math.cos(az), radius * math.cos(el) * math.sin(az), radius * math.sin(el)))
+    for r in range(rings):
+        for k in range(segs):
+            a = r * (segs + 1) + k
+            b, c, d = a + 1, a + segs + 2, a + segs + 1
+            t += [(a, c, b), (a, d, c)]  # facing inwards
+    v = np.array(v)
+    z = np.clip(v[:, 2] / radius, 0, 1)
+    cols = np.concatenate([textures.sky_colors(z), np.ones((len(v), 1))], -1)
+    node = NodePath(mesh_from_arrays("sky", v, -v / radius, cols, np.array(t)))
+    node.setLightOff()
+    node.setFogOff()
+    node.setBin("background", 0)
+    node.setDepthWrite(False)
+    node.setDepthTest(False)
+    return node
+
+
+def build_trees(world: World, quality=None) -> NodePath:
+    keep = getattr(quality, "tree_keep", 1)
+    seg = getattr(quality, "tree_segments", 5)
     mb = MeshBuilder()
     rng = np.random.default_rng(5)
-    for x, y, z, ht in world.trees:
+    for k, (x, y, z, ht) in enumerate(world.trees):
         g = rng.uniform(0.75, 1.1)
-        mb.cone(x, y, z + ht * 0.2, ht * 0.28, ht * 0.8, (0.10 * g, 0.28 * g, 0.12 * g), segments=5)
+        hue = rng.uniform(-0.03, 0.03)
+        if k % keep and ht < 21:  # keep the deliberate tree lines at strip ends
+            continue
+        mb.cone(x, y, z + ht * 0.2, ht * 0.28, ht * 0.8, (0.10 * g + hue, 0.28 * g, 0.12 * g - hue), segments=seg)
+        if seg > 5:  # a second, smaller tier on high
+            mb.cone(x, y, z + ht * 0.5, ht * 0.2, ht * 0.55, (0.12 * g + hue, 0.32 * g, 0.14 * g), segments=seg)
         mb.cone(x, y, z - 0.5, ht * 0.06, ht * 0.25, (0.30, 0.22, 0.12), segments=3)
     return mb.node("trees")
 
@@ -205,7 +274,7 @@ SURFACE_COLORS = {
 }
 
 
-def build_airfield(world: World, af) -> NodePath:
+def build_airfield(world: World, af, quality=None) -> NodePath:
     mb = MeshBuilder()
     z = world.airfield_elev(af) + 0.12
     ux, uy = af.dir
@@ -215,7 +284,18 @@ def build_airfield(world: World, af) -> NodePath:
         return (af.x + ux * a + px * c, af.y + uy * a + py * c, z + dz)
 
     L, W = af.length / 2, af.width / 2
-    mb.quad(p(-L, -W), p(-L, W), p(L, W), p(L, -W), SURFACE_COLORS[af.surface])
+    surface_node = None
+    if getattr(quality, "textures", False):
+        from . import textures
+
+        corners = np.array([p(-L, -W), p(-L, W), p(L, W), p(L, -W)], float)
+        uvs = np.array([(0, 0), (1, 0), (1, af.length / (af.width * 2)), (0, af.length / (af.width * 2))], float)
+        surface_node = NodePath(mesh_from_arrays(f"surf-{af.code}", corners, np.tile((0, 0, 1.0), (4, 1)),
+                                                 np.ones((4, 4)), np.array([(0, 2, 1), (0, 3, 2)]), uvs))
+        surface_node.setTexture(textures.surface_texture(af.surface))
+        surface_node.setTwoSided(True)
+    else:
+        mb.quad(p(-L, -W), p(-L, W), p(L, W), p(L, -W), SURFACE_COLORS[af.surface])
     white = (0.95, 0.95, 0.95)
     if af.surface == "asphalt":
         # centreline dashes, threshold bars, aiming blocks
@@ -260,6 +340,8 @@ def build_airfield(world: World, af) -> NodePath:
     mb.box(x, y, z + 3, 0.2, 0.2, 6, (0.6, 0.6, 0.6))
     mb.box(x + 1.2, y, z + 5.8, 2.4, 0.5, 0.5, orange)
     node = mb.node(f"af-{af.code}")
+    if surface_node is not None:
+        surface_node.reparentTo(node)
     node.setDepthOffset(2)
     return node
 

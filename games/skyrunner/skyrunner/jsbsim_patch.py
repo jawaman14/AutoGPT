@@ -82,23 +82,32 @@ def build_patched_root(specs: list[AircraftSpec], cache_dir: str | None = None) 
     for entry in src.iterdir():
         if entry.name == "aircraft" or not entry.is_dir():
             continue
-        link = dst / entry.name
-        if not link.exists():
-            link.symlink_to(entry, target_is_directory=True)
+        _symlink(dst / entry.name, entry, True)
 
     for spec in specs:
         model = spec.jsbsim_model
         adir = dst / "aircraft" / model
         adir.mkdir(exist_ok=True)
         for entry in (src / "aircraft" / model).iterdir():
-            link = adir / entry.name
-            if entry.name != f"{model}.xml" and not link.exists():
-                link.symlink_to(entry, target_is_directory=entry.is_dir())
+            if entry.name != f"{model}.xml":
+                _symlink(adir / entry.name, entry, entry.is_dir())
         tree = ET.parse(src / "aircraft" / model / f"{model}.xml")
         mb = tree.getroot().find("mass_balance")
         for pm in mb.findall("pointmass"):
             mb.remove(pm)
         for st in spec.stations:
             mb.append(_pointmass(st.name, st.x_in, st.y_in, st.z_in))
-        tree.write(adir / f"{model}.xml", xml_declaration=True, encoding="utf-8")
+        # write-then-rename: parallel sim workers may be reading this file
+        tmp = adir / f".{model}.{os.getpid()}.tmp"
+        tree.write(tmp, xml_declaration=True, encoding="utf-8")
+        os.replace(tmp, adir / f"{model}.xml")
     return str(dst)
+
+
+def _symlink(link: Path, target: Path, is_dir: bool) -> None:
+    if link.exists() or link.is_symlink():
+        return
+    try:
+        link.symlink_to(target, target_is_directory=is_dir)
+    except FileExistsError:  # another process got there first
+        pass

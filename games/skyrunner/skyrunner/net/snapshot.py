@@ -13,7 +13,7 @@ from ..police import SIGHT_RANGE_M
 from ..roles import Role, Side
 from ..world import AIRFIELD_BY_CODE
 
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 2
 
 
 def _r(v: float, nd: int = 1) -> float:
@@ -35,7 +35,45 @@ def build_snapshot(sess, role: Role, seq: int = 0) -> dict:
         snap.update(_runner(sess, role))
     else:
         snap.update(_law(sess))
+        if role == Role.INTERCEPTOR:
+            snap.update(_police_pilot(sess, role))
+    if sess.nights is not None:
+        snap["season"] = sess.nights.view(role.side.value)
     return snap
+
+
+def _pose(x, y, z, heading, pitch=0.0, roll=0.0) -> dict:
+    return {"x": _r(x), "y": _r(y), "z": _r(z), "heading": _r(heading), "pitch": _r(pitch), "roll": _r(roll)}
+
+
+def _police_pilot(sess, role: Role) -> dict:
+    """The police pilot's cockpit: own unit exact, other aircraft only if seen."""
+    ps = sess.police
+    me = next((u for u in ps.units if u.pilot == role.value), None)
+    out: dict = {"me": None, "visual": [], "claim_pending": role.value in ps.pending_claim}
+    if me is None:
+        return out
+    out["me"] = dict(_pose(me.x, me.y, me.z, me.heading, 0.0, me.bank), id=me.id, kind=me.kind,
+                     speed_kts=_r(me.speed / 0.514444), fuel_s=_r(me.fuel_s), state=me.state,
+                     agl=_r(me.z - sess.world.ground(me.x, me.y)))
+    sig = sess.runner_signature()
+    if sig is not None and ps._can_see(me, sig):
+        st = sess.state
+        out["visual"].append(dict(_pose(st.x, st.y, st.alt, st.heading, st.pitch, st.roll), id=ps.alias("runner"),
+                                  kind="runner", type=sess.spec.key, dist=_r(me.dist_to(sig))))
+    for a in sess.smugglers:
+        if a.active:
+            asig = a.signature(sess.world)
+            if ps._can_see(me, asig):
+                out["visual"].append(dict(_pose(a.x, a.y, a.z, a.heading), id=ps.alias(a.id), kind="ai",
+                                          type="c310", dist=_r(me.dist_to(asig))))
+    for u in ps.units:
+        if u is not me and u.state != "crashed" and me.dist_to(u) < SIGHT_RANGE_M * 1.5:
+            out["visual"].append(dict(_pose(u.x, u.y, u.z, u.heading, 0.0, u.bank), id=u.id, kind=u.kind,
+                                      type=u.kind, dist=_r(me.dist_to(u))))
+    c = ps.cases.get("runner")
+    out["bust_meter"] = _r(c.bust_meter) if c else 0.0
+    return out
 
 
 def _runner(sess, role: Role) -> dict:
@@ -50,6 +88,8 @@ def _runner(sess, role: Role) -> dict:
         out["aircraft"] = {
             "type": sess.spec.name, "x": _r(s.x), "y": _r(s.y), "alt": _r(s.alt), "heading": _r(s.heading),
             "ias": _r(s.ias_kts), "gs": _r(s.gs_kts), "vs": _r(s.vs_fpm, 0), "fuel": _r(s.fuel_lb),
+            "pitch": _r(s.pitch), "roll": _r(s.roll), "key": sess.spec.key, "throttle": _r(sess.fm.controls.throttle, 2),
+            "flaps": _r(sess.fm.controls.flaps, 2),
             "ferry_fuel": _r(sess.loadout.ferry_fuel_lb()), "endurance_h": _r(hours, 2), "range_km": _r(range_km),
             "phase": sess.phase, "location": sess.location, "parked": sess.parked, "on_ground": s.on_ground,
             "transponder": sess.transponder, "squawk": sess.squawk, "autopilot": sess.autopilot.engaged,
@@ -70,7 +110,8 @@ def _runner(sess, role: Role) -> dict:
     if s is not None:
         for u in sess.police.units:  # what you can see out of the window
             if u.state != "crashed" and math.dist((u.x, u.y, u.z), (s.x, s.y, s.alt)) < SIGHT_RANGE_M:
-                intel.append({"unit": u.id, "x": _r(u.x), "y": _r(u.y), "age": 0.0, "source": "visual"})
+                intel.append({"unit": u.id, "x": _r(u.x), "y": _r(u.y), "z": _r(u.z), "heading": _r(u.heading),
+                              "bank": _r(u.bank), "kind": u.kind, "age": 0.0, "source": "visual"})
         for c in sess.maritime.boats:
             if c.kind == "cutter" and math.hypot(c.x - s.x, c.y - s.y) < 9000:
                 intel.append({"unit": c.id, "x": _r(c.x), "y": _r(c.y), "age": 0.0, "source": "visual"})

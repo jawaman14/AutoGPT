@@ -5,6 +5,8 @@
   python -m skyrunner --mode coop          # host: friends join as co-pilot / spotter
   python -m skyrunner --mode versus        # host: a friend runs the task-force desk
   python -m skyrunner --police             # play the task force against AI runners
+  python -m skyrunner --players 6          # seats and rule layers for a table of six
+  python -m skyrunner --watch --graphics low   # the AI flies the career; you watch
 """
 from __future__ import annotations
 
@@ -26,7 +28,19 @@ def main() -> None:
     ap.add_argument("--bind", default="0.0.0.0", help="address to listen on when hosting")
     ap.add_argument("--new", action="store_true", help="ignore the save file and start fresh")
     ap.add_argument("--seed", type=int, default=1, help="job board RNG seed")
+    ap.add_argument("--players", type=int, help="how many people are playing: picks mode, seats and rule layer")
+    ap.add_argument("--layer", type=int, choices=[1, 2, 3, 4, 5], help="rule layer (5 = HQs and seasons)")
+    ap.add_argument("--graphics", choices=["low", "medium", "high"], default="high")
+    ap.add_argument("--watch", action="store_true", help="the pilot bot flies; you watch (and can host seats)")
     args = ap.parse_args()
+    features = None
+    if args.players or args.layer:
+        from .layers import features_for, plan_match
+
+        plan = plan_match(args.players or 1, versus=args.mode != "coop", layer=args.layer)
+        print(plan.describe())
+        args.mode = plan.mode.value if args.mode in ("solo", "coop", "versus") else args.mode
+        features = features_for(plan.layer) | ({"hq"} if plan.layer >= 5 else set())
 
     if args.police:
         from .station import main as station_main
@@ -40,7 +54,7 @@ def main() -> None:
     save = SAVE_DIR / ("campaign.json" if mode == Mode.CAMPAIGN else "save.json")
     if args.new and save.exists():
         save.unlink()
-    session = Session.load_or_new(save, seed=args.seed, mode=mode)
+    session = Session.load_or_new(save, seed=args.seed, mode=mode, features=features)
     if mode == Mode.CAMPAIGN:
         from .campaign import Campaign
 
@@ -58,7 +72,13 @@ def main() -> None:
 
     from .render.app import run  # imported late so headless use never needs a display
 
-    run(session, server=server)
+    bot = None
+    if args.watch:
+        from .bots.autorun import AutoRunner
+
+        bot = AutoRunner(session)
+        session.say("Watching the AI fly. [C] cycles cameras.")
+    run(session, server=server, graphics=args.graphics, bot=bot)
 
 
 if __name__ == "__main__":

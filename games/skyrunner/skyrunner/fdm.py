@@ -44,6 +44,7 @@ class Controls:
     flaps: float = 0.0  # 0..1
     brake: float = 0.0
     pitch_trim: float = 0.0
+    diff_brake: float = 0.0  # -1 left wheel only .. +1 right wheel only (pivot turns)
 
 
 @dataclass
@@ -172,7 +173,8 @@ class FlightModel:
         f["fcs/pitch-trim-cmd-norm"] = c.pitch_trim
         for i in range(self.n_engines):
             f[f"fcs/throttle-cmd-norm[{i}]"] = c.throttle
-        left = right = c.brake
+        left = min(1.0, c.brake + max(0.0, -c.diff_brake))
+        right = min(1.0, c.brake + max(0.0, c.diff_brake))
         if self.spec.toe_brake_steering and self._prev_ground:
             # no steerable nosewheel in the model: pedals feed differential braking
             left = max(left, -c.rudder * 0.35)

@@ -597,7 +597,7 @@ Flight   W/S or UP/DOWN pitch     A/D or LEFT/RIGHT roll     Q/E rudder / nosewh
 View     C cycle camera (chase / cockpit / tower)    M big map    P pause
 Ground   J job board   L load planner & fuel (F fills the ferry tank)   H hangar, gear, spotters, crew
 Crew     N transponder on/off   U autopilot (hold alt/hdg)   K kick a bale   O call the boat
-         V ferry fuel pump   ENTER continue after crash/bust    ESC close menu / quit
+         V ferry fuel pump   I push aircraft round (stopped)   ENTER continue   ESC close menu / quit
 
 Goal: haul passengers & cargo between strips for money. Balance the load:
 too heavy = long roll & weak climb, CG too far aft = pitch-up / stall,

@@ -38,6 +38,13 @@ SWEEP_INTERVAL_S = 1.0
 LAUNCH_DELAY_S = 6.0
 ENCRYPTION_DELAY_S = 8.0
 
+# suspicion per second for a primary-only radar track (see _classify)
+PRIMARY_RATE = 1.2
+PRIMARY_RATE_NEAR = 3.0
+INBOUND_LOW_MULT = 2.5
+DROP_PATTERN_RATE = 3.0
+SUSPICION_DECAY = 3.0
+
 LAW_FEATURES = {"interceptors", "aerostat", "cutters", "encryption", "df", "informants", "rivals"}
 
 
@@ -68,6 +75,9 @@ class Pursuer:
     chatter_t: float = -1e9
     had_visual: bool = False
     fuel_s: float = -1.0  # seconds of flying left; set at launch
+    pilot: str | None = None  # a human flying it (role name); None = AI
+    stick: tuple[float, float, float] = (0.0, 0.0, 0.6)  # roll, pitch (+ = climb), throttle
+    bank: float = 0.0  # deg, for rendering and the human flight model
 
     @property
     def spec(self):
@@ -89,6 +99,8 @@ class Pursuer:
         if self.fuel_s < 0:
             self.fuel_s = ENDURANCE_S[self.kind]
         self.fuel_s -= dt
+        if self.pilot is not None:
+            return self._fly_manual(dt, world)
         vmax_kts, turn, climb, look, _ = self.spec
         vmax = vmax_kts * KT
         orbit = False
@@ -129,6 +141,47 @@ class Pursuer:
             self.state = "crashed"
             self.just_crashed = True
             self.z = world.ground(self.x, self.y)
+
+
+    def _fly_manual(self, dt: float, world: World) -> None:
+        """A human at the controls. Same envelope as the AI (speed, turn, climb
+        limits from UNIT_TYPES) so balance numbers from AI units still hold;
+        what a human adds is judgement, not performance."""
+        vmax_kts, turn, climb, _, _ = self.spec
+        vmax = vmax_kts * KT
+        roll_in, pitch_in, thr = (max(-1.0, min(1.0, v)) for v in self.stick)
+        if self.kind == "heli":
+            # helicopter: pedals/cyclic turn it on the spot, throttle is forward speed
+            want = max(0.0, thr) * vmax
+            self.speed += max(-5 * dt, min(5 * dt, want - self.speed))
+            self.bank = roll_in * 20.0
+            self.heading = (self.heading + roll_in * turn * dt) % 360
+        else:
+            vmin = 0.35 * vmax
+            want = vmin + max(0.0, thr) * (vmax - vmin)
+            self.speed += max(-6 * dt, min(6 * dt, want - self.speed))
+            bank_t = roll_in * 60.0
+            self.bank += max(-60 * dt, min(60 * dt, bank_t - self.bank))
+            rate = math.degrees(9.81 * math.tan(math.radians(self.bank)) / max(self.speed, 30.0))
+            self.heading = (self.heading + max(-turn * 1.4, min(turn * 1.4, rate)) * dt) % 360
+        h = math.radians(self.heading)
+        self.x += math.sin(h) * self.speed * dt
+        self.y += math.cos(h) * self.speed * dt
+        self.z += pitch_in * climb * dt
+        self.z = min(self.z, 4000.0)
+        if self.z < world.ground(self.x, self.y) + 2 or world.tree_hit(self.x, self.y, self.z, 4):
+            self.state = "crashed"
+            self.just_crashed = True
+            self.pilot = None
+            self.z = world.ground(self.x, self.y)
+
+    @property
+    def vx(self) -> float:
+        return math.sin(math.radians(self.heading)) * self.speed
+
+    @property
+    def vy(self) -> float:
+        return math.cos(math.radians(self.heading)) * self.speed
 
 
 @dataclass
@@ -182,6 +235,7 @@ class PoliceSystem:
     events: list[str] = field(default_factory=list)  # runner-facing messages
     law_events: list[str] = field(default_factory=list)  # controller-facing messages
     score: dict[str, int] = field(default_factory=lambda: {"busts": 0, "clean_stops": 0, "bales_seized": 0, "boats_seized": 0})
+    no_customs: bool = False  # the tower chief is on the organisation's payroll tonight
 
     def __post_init__(self):
         self.sensors = SensorNet(self.world, random.Random(self.rng.random()))
@@ -196,6 +250,7 @@ class PoliceSystem:
         self.aerostat_ready_t: float | None = None
         self._alias: dict[str, str] = {}
         self._unalias: dict[str, str] = {}
+        self.pending_claim: dict[str, str] = {}  # role -> unit kind waiting to launch
 
     # ---------------------------------------------------- anonymous track numbers
     def alias(self, target_id: str | None) -> str | None:
@@ -301,6 +356,11 @@ class PoliceSystem:
                     speed=UNIT_TYPES[kind][0] * KT * 0.5, id=f"{CALLSIGNS[kind]}-{self._serial}",
                     target_id=target_id, goal=goal, state="pursuit" if target_id else "goto")
         self.units.append(u)
+        for role, want in list(self.pending_claim.items()):
+            if want == kind:
+                u.pilot = role
+                del self.pending_claim[role]
+                break
         where = f"toward {self.alias(target_id)}" if target_id else "to assigned area"
         self._say(u.id, f"airborne from {base.name}, vectoring {where}", (u.x, u.y))
         return u
@@ -439,6 +499,9 @@ class PoliceSystem:
                 if goal is None:
                     u.state = "return"
             if u.faction == "police" and 0 <= u.fuel_s < 1.0 and u.state != "return":
+                if u.pilot:
+                    self.law_events.append(f"{u.id}: bingo fuel - autopilot taking her home")
+                    u.pilot = None
                 u.state, u.target_id, u.goal = "return", None, None
                 self._say(u.id, "bingo fuel, RTB", (u.x, u.y))
             if u.state == "return":
@@ -569,14 +632,19 @@ class PoliceSystem:
         if site_code:
             site = self.sensors.site(site_code)
             d = math.hypot(sig.x - site.x, sig.y - site.y)
-            rate = 8 + 25 * (1 - d / site.range_m)
+            # A primary-only blip is not a crime: plenty of VFR traffic flies
+            # without a transponder. Suspicion comes from a sustained track and
+            # from behaviour (tuned by skyrunner.sim.tactical; see docs/BALANCE.md).
+            rate = PRIMARY_RATE + PRIMARY_RATE_NEAR * (1 - d / site.range_m)
             if sig.transponder and not c.tipped:
                 rate = 0.0  # identified, filed traffic
             elif sig.transponder:
                 rate *= 0.5
+            elif sig.agl < 150 and sig.speed_kts > 100 and self._inbound_from_sea(sig):
+                rate *= INBOUND_LOW_MULT  # low and fast, coming in off the sea: the classic profile
             # low and slow over water looks like an airdrop
             if (self.world.is_water(sig.x, sig.y) and sig.speed_kts < 110 and sig.agl < 350):
-                rate += 6
+                rate += DROP_PATTERN_RATE
                 if not c.drop_alerted:
                     c.drop_alerted = True
                     self.law_events.append(f"ALERT: possible airdrop pattern near {sig.x / 1000:.1f},{sig.y / 1000:.1f} km")
@@ -591,7 +659,15 @@ class PoliceSystem:
                 else:
                     c.wanted = 1
         else:
-            c.suspicion = max(0.0, c.suspicion - 5 * dt)
+            c.suspicion = max(0.0, c.suspicion - SUSPICION_DECAY * dt)
+
+    def _inbound_from_sea(self, sig: Signature) -> bool:
+        """Is the track heading inland from open water behind it?"""
+        sp = math.hypot(sig.vx, sig.vy)
+        if sp < 1:
+            return False
+        bx, by = sig.x - sig.vx / sp * 3000, sig.y - sig.vy / sp * 3000
+        return self.world.is_water(bx, by) and not self.world.is_water(sig.x, sig.y)
 
     # ---------------------------------------------------- landing
     def landing_check(self, s, field_: Airfield, carrying_hot: bool, tid: str = "runner") -> bool:
@@ -602,7 +678,7 @@ class PoliceSystem:
                 return True
         if field_.police and c.wanted > 0:
             return True
-        if field_.police and carrying_hot and self.rng.random() < 0.35:
+        if field_.police and carrying_hot and not self.no_customs and self.rng.random() < 0.35:
             self.events.append("Customs inspection!")
             return True
         return False

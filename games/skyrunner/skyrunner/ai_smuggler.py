@@ -39,6 +39,8 @@ class AISmuggler:
     vx: float = 0.0
     vy: float = 0.0
     squawk: str = ""
+    hot: bool = True  # False: a decoy flying the same profile with nothing aboard
+    kind: str = "ai"  # ai (police-mode traffic) | crew (organisation contract run) | decoy
 
     @property
     def active(self) -> bool:

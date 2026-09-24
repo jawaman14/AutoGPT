@@ -32,7 +32,15 @@ HELP = {
     "spotter": "UP/DOWN pick a strip  ENTER send the spotter there (60 s)",
     "controller": "Click a unit, then right-click the map (or click a track) to dispatch.\n"
                   "H heli  I interceptor  C cutter (to mouse)  R recall  E encryption  B aerostat  TAB next unit",
+    "boss": "1 launder  2/3/4 buy laundromat/car lot/marina  B bribe (N next official)  X drop bribe\n"
+            "L lawyer  P burner phones  C counter-intel  Y loyalty bonus  K crews  D decoys  R route\n"
+            "Z lie low  U upgrade aircraft  G scanner  H detector  ENTER ready",
+    "chief": "H/I/C fund heli/interceptor/cutter (+1, wraps to 0)  A aerostat  R recruit informant\n"
+             "W wiretap  U audit  S internal-affairs sweep  E encryption  P press conference\n"
+             "Z patrol zone  ENTER ready",
 }
+BRIBE_NAMES = ("harbor", "tower", "dispatcher")
+ZONE_NAMES = ("west", "north", "sea")
 
 
 def _fmt_km(v: float) -> str:
@@ -103,8 +111,10 @@ class StationApp(ShowBase):
         for k in ("1", "2", "3"):
             self.accept(k, self._set_tab, [RUNNER_TABS[int(k) - 1]])
         keys = {"arrow_up": "up", "arrow_down": "down", "arrow_left": "left", "arrow_right": "right",
-                "enter": "enter", "a": "a", "+": "+", "=": "+", "-": "-", "f": "f", "k": "k", "o": "o", "v": "v",
-                "t": "t", "h": "h", "i": "i", "c": "c", "r": "r", "e": "e", "b": "b", "tab": "tab"}
+                "enter": "enter", "+": "+", "=": "+", "-": "-", "tab": "tab"}
+        keys.update({ch: ch for ch in "abcdefghijklmnopqrstuvwxyz"})
+        if self.role in (Role.BOSS, Role.CHIEF):
+            keys.update({d: d for d in "1234"})
         for k, name in keys.items():
             self.accept(k, self._key, [name])
         self.accept("mouse1", self._click, [1])
@@ -112,6 +122,8 @@ class StationApp(ShowBase):
         self.accept("escape", sys.exit)
 
     def _set_tab(self, tab: str):
+        if self.role in (Role.BOSS, Role.CHIEF):
+            return
         self.tab, self.sel = tab, 0
 
     def _cmd(self, name: str, **args):
@@ -165,7 +177,11 @@ class StationApp(ShowBase):
         snap = self.link.snapshot()
         if snap is None:
             return
-        if self.role == Role.CONTROLLER:
+        if self.role == Role.BOSS:
+            self._boss_key(k, snap)
+        elif self.role == Role.CHIEF:
+            self._chief_key(k, snap)
+        elif self.role == Role.CONTROLLER:
             self._law_key(k, snap)
         elif self.role == Role.SPOTTER:
             if k in ("up", "down"):
@@ -199,6 +215,50 @@ class StationApp(ShowBase):
             elif k == "enter" and rows:
                 kind, j = rows[min(self.sel, len(rows) - 1)]
                 self._cmd("accept_job" if kind == "board" else "drop_job", job_id=j["id"])
+
+    def _hq(self, order: str, **args):
+        self._cmd("hq", order=order, **args)
+
+    def _boss_key(self, k: str, snap: dict):
+        org = (snap.get("season") or {}).get("org", {})
+        self.bribe_i = getattr(self, "bribe_i", 0)
+        simple = {"1": ("launder", {}), "2": ("buy_front", {"kind": "laundromat"}),
+                  "3": ("buy_front", {"kind": "car_lot"}), "4": ("buy_front", {"kind": "marina"}),
+                  "p": ("opsec", {}), "c": ("counterintel", {}), "y": ("loyalty", {}), "z": ("lie_low", {}),
+                  "u": ("upgrade", {}), "g": ("gear", {"name": "scanner"}), "h": ("gear", {"name": "detector"}),
+                  "enter": ("ready", {})}
+        if k in simple:
+            self._hq(simple[k][0], **simple[k][1])
+        elif k == "n":
+            self.bribe_i = (self.bribe_i + 1) % len(BRIBE_NAMES)
+        elif k == "b":
+            self._hq("bribe", who=BRIBE_NAMES[self.bribe_i])
+        elif k == "x":
+            self._hq("drop_bribe", who=BRIBE_NAMES[self.bribe_i])
+        elif k == "l":
+            self._hq("lawyer", on=not org.get("lawyer"))
+        elif k == "k":
+            self._hq("crews", n=(org.get("crews", 0) + 1) % 3)
+        elif k == "d":
+            self._hq("decoys", n=(org.get("decoys", 0) + 1) % 3)
+        elif k == "r":
+            cur = org.get("route", "west")
+            self._hq("route", zone=ZONE_NAMES[(ZONE_NAMES.index(cur) + 1) % 3])
+
+    def _chief_key(self, k: str, snap: dict):
+        law = (snap.get("season") or {}).get("law", {})
+        funded = law.get("funded", {})
+        simple = {"a": "aerostat", "r": "recruit", "w": "wiretap", "u": "audit", "s": "ia_sweep",
+                  "e": "encryption", "p": "press", "enter": "ready"}
+        if k in simple:
+            self._hq(simple[k])
+        elif k in ("h", "i", "c"):
+            unit = {"h": "heli", "i": "interceptor", "c": "cutter"}[k]
+            self._hq("fund", unit=unit, n=(funded.get(unit, 0) + 1) % 4)
+        elif k == "z":
+            cur = law.get("patrol")
+            nxt = ZONE_NAMES[0] if cur is None else (ZONE_NAMES[ZONE_NAMES.index(cur) + 1] if cur != "sea" else None)
+            self._hq("patrol", zone=nxt)
 
     def _law_key(self, k: str, snap: dict):
         pos = self._mouse_world()
@@ -272,7 +332,9 @@ class StationApp(ShowBase):
             ls.moveTo(mx - s, 0, my + s)
             ls.drawTo(mx + s, 0, my - s)
 
-        if snap["side"] == "law":
+        if self.role in (Role.BOSS, Role.CHIEF):
+            self._draw_hq(snap, circle, labels)
+        elif snap["side"] == "law":
             self._draw_law(snap, circle, arrow, cross, labels, ls)
         else:
             self._draw_runner(snap, circle, arrow, cross, labels, ls)
@@ -348,6 +410,59 @@ class StationApp(ShowBase):
         lines += snap["messages"][-5:]
         self.panel.setText("\n".join(lines))
 
+    def _draw_hq(self, snap, circle, labels):
+        """The HQ screens: books, orders and the news."""
+        from .hq import ZONE_CENTRE
+
+        ss = snap.get("season")
+        if not ss:
+            self.title.setText("No HQ in this game (needs layer 5 / --players 5+)")
+            self.panel.setText("")
+            return
+        for z, (x, y) in ZONE_CENTRE.items():
+            circle(x, y, 4500, (0.9, 0.8, 0.3, 0.5))
+            labels.append((z.upper(), x, y, (1, 0.9, 0.4, 1)))
+        head = f"NIGHT {ss['night']}/{ss['nights']}  {ss['phase'].upper()}"
+        if ss["winner"]:
+            head += f"  -  {'ORGANISATION' if ss['winner'] == 'runner' else 'TASK FORCE'} WINS ({ss['reason']})"
+        lines = [f"Public: heat {ss['public']['heat']}   task-force support {ss['public']['support']}", ""]
+        if self.role == Role.BOSS:
+            o = ss["org"]
+            self.title.setText("THE ORGANISATION  -  " + head)
+            ev = ss["evidence"]
+            lines += [
+                f"Dirty ${o['dirty']:,}   Clean ${o['clean']:,} / ${ss['retire_target']:,} to retire",
+                f"Fronts: {', '.join(o['fronts'])}  (wash ${ss['capacity']:,}/night, ${o['laundered_tonight']:,} tonight)",
+                f"Case against you: {ss['evidence_rumor']}" + (f" ({ev:.0f}/100 - your sources)" if ev is not None else ""),
+                f"Crew loyalty {o['loyalty']:.0%}   lawyer {'on retainer' if o['lawyer'] else 'no'}"
+                f"   gear {', '.join(o['gear']) or '-'}   aircraft tier {o['tier']}",
+                f"Payroll: {', '.join(o['bribes']) or 'nobody'}   next bribe: {BRIBE_NAMES[getattr(self, 'bribe_i', 0)]}",
+                "",
+                f"TONIGHT (moves left {o['actions']}):  route {o['route']}  crews {o['crews']}  decoys {o['decoys']}"
+                f"  phones {'burner' if o['opsec'] else 'home'}{'  LYING LOW' if o['lie_low'] else ''}"
+                f"{'  READY' if o['ready'] else ''}",
+            ]
+            if ss.get("patrol_leak"):
+                lines.append(f"Dispatcher: the patrol goes {ss['patrol_leak']} tonight")
+        else:
+            L = ss["law"]
+            self.title.setText("TASK FORCE HQ  -  " + head)
+            est = ss.get("clean_estimate")
+            lines += [
+                f"Evidence {L['evidence']:.0f}/{ss['indict_evidence']:.0f}   budget ${L['budget_k']:.0f}k tonight"
+                f"   support {L['support']:.0f}",
+                f"Informants {L['informants']}   encryption {'yes' if L['encryption'] else 'no'}"
+                f"   wiretap warrant {'yes' if ss['wiretap_ok'] else 'no (need 20)'}",
+                f"Known fronts {ss['known_fronts']}   laundered estimate {'$' + format(est, ',') if est else 'unknown'}",
+                "",
+                f"TONIGHT (moves left {L['actions']}): heli {L['funded']['heli']}  interceptor {L['funded']['interceptor']}"
+                f"  cutter {L['funded']['cutter']}  aerostat {'up' if L['aerostat'] else 'down'}  patrol {L['patrol'] or '-'}",
+                f"  wiretap {'on' if L['wiretap'] else '-'}  audit {'on' if L['audit'] else '-'}"
+                f"  IA sweep {'on' if L['ia_sweep'] else '-'}{'  READY' if L['ready'] else ''}",
+            ]
+        lines += ["", "NEWS:"] + [f"  {n[:60]}" for n in ss["news"][-4:]] + ["", "LOG:"] + [f"  {n[:60]}" for n in ss["log"][-6:]]
+        self.panel.setText("\n".join(lines))
+
     def _draw_law(self, snap, circle, arrow, cross, labels, ls):
         for r in snap["radars"]:
             circle(r["x"], r["y"], r["range"], (1, 0.25, 0.25, 0.6) if r["active"] else (0.4, 0.2, 0.2, 0.4), 48)
@@ -402,7 +517,7 @@ class StationApp(ShowBase):
 def main() -> None:
     ap = argparse.ArgumentParser(description="Skyrunner station (co-pilot / spotter / task-force desk)")
     ap.add_argument("--connect", help="HOST:PORT of the pilot's game (started with --host)")
-    ap.add_argument("--role", default="copilot", choices=["copilot", "spotter", "controller"])
+    ap.add_argument("--role", default="copilot", choices=["copilot", "spotter", "controller", "boss", "chief"])
     ap.add_argument("--name", default="player")
     ap.add_argument("--police", action="store_true", help="offline: run the task-force desk against AI runners")
     ap.add_argument("--seed", type=int, default=3)

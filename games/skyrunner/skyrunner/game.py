@@ -20,7 +20,7 @@ from .autopilot import Autopilot
 from .comms import RadioNet
 from .controls import ControlMapper, InputFrame
 from .events import EventBus
-from .fdm import FT, FlightModel, FlightState
+from .fdm import FT, Controls, FlightModel, FlightState
 from .jobs import Job, generate_jobs, new_id
 from .jsbsim_patch import MassData, build_patched_root, read_mass_data
 from .loadout import Loadout, ferry_tank
@@ -38,6 +38,7 @@ OFF_FIELD_MAX_GS_KTS = 15.0
 KICK_MAX_KTS = 130.0
 KICK_TIME = {"copilot": 2.0, "pilot": 4.0}
 PUMP_RATE_LB_MIN = {"copilot": 60.0, "pilot": 25.0}
+TURNAROUND_S = {"solo": 20.0, "crew": 10.0}  # push the aircraft round by hand
 SPOTTER_FEE = 400
 SPOTTER_RANGE_M = 5000.0
 SPOTTER_DELAY_S = 5.0
@@ -131,7 +132,18 @@ class Session:
         self.campaign = None  # set by campaign.Campaign.attach
         self.runner_score = {"bales_delivered": 0, "escapes": 0}
         self.fuel_caches: dict[str, float] = {}  # shady strips: fuel you flew in yourself
+        self.turnaround_t = 0.0
+        self.pilot_input: dict[str, tuple[float, float, float]] = {}  # police pilots' sticks
         self._scanner_seen = 0.0
+        self.nights = None  # nights.NightDirector when the Organisation layer is on
+        if "hq" in self.features:
+            from .nights import NightDirector
+
+            # no human boss: the pilot runs the organisation (AI only when nobody flies);
+            # no human chief: a human controller runs the budget, else the AI chief does
+            self.nights = NightDirector(
+                self, runner_ai="adaptive" if self.mode == Mode.POLICE and Role.BOSS not in self.humans else None,
+                law_ai=None if (Role.CHIEF in self.humans or Role.CONTROLLER in self.humans) else "adaptive")
         self._switch_aircraft(self.aircraft_key, fuel_frac=0.6)
         self.spawn_at(self.location or START_FIELD)
         if self.police.controller == "ai":
@@ -246,7 +258,7 @@ class Session:
         self.autopilot.disengage()
         self.kick_queue = 0
         self.pumping = False
-        self.log = FlightLog()
+        self.log = FlightLog(touchdowns_seen=self.fm.touchdowns)
         self.state = self.fm.state()
         self.fm.controls.brake = 1.0
 
@@ -322,6 +334,9 @@ class Session:
         self.transponder = (not self.transponder) if on is None else bool(on)
         self.say(f"Transponder {'ON, squawking ' + self.squawk if self.transponder else 'OFF'}")
 
+    def _cmd_turn_around(self, role):
+        return self.turn_around()
+
     def _cmd_autopilot(self, role, on: bool | None = None):
         on = (not self.autopilot.engaged) if on is None else bool(on)
         if on:
@@ -358,6 +373,15 @@ class Session:
     def _cmd_confirm(self, role):
         if self.phase in ("crashed", "busted"):
             self.respawn()
+
+    def _cmd_hq(self, role, order: str, **args):
+        if self.nights is None:
+            return "No HQ in this game (needs layer 5)."
+        if role == Role.PILOT and Role.BOSS in self.humans:
+            return f"{self.humans[Role.BOSS]} is the boss - ask them."
+        if role == Role.CONTROLLER and Role.CHIEF in self.humans:
+            return f"{self.humans[Role.CHIEF]} holds the budget - ask them."
+        return self.nights.order(role.side.value, str(order), **args)
 
     def _cmd_chat(self, role, text: str):
         text = str(text)[:200]
@@ -401,6 +425,37 @@ class Session:
             return None
         return self.police.recall(unit)
 
+    def _cmd_claim_unit(self, role, unit: str | None = None, kind: str = "interceptor"):
+        """Police pilot seat: take the controls of an airborne unit, or launch one."""
+        ps = self.police
+        if any(u.pilot == role.value for u in ps.units):
+            return "You're already flying one."
+        if unit:
+            u = next((u for u in ps.units if u.id == unit and u.faction == "police" and u.state != "crashed"), None)
+            if u is None or u.pilot:
+                return "Can't take that one."
+            u.pilot = role.value
+            self.law_say(f"{self.humans.get(role, role.value)} has the controls of {u.id}")
+            return None
+        if kind not in ("heli", "interceptor"):
+            return "Helicopter or interceptor."
+        err = ps.launch(kind)
+        if err:
+            return err
+        ps.pending_claim[role.value] = kind
+        self.law_say(f"{kind} launching for {self.humans.get(role, role.value)}")
+        return None
+
+    def _cmd_release_unit(self, role):
+        for u in self.police.units:
+            if u.pilot == role.value:
+                u.pilot = None
+                return None
+        return "Not flying anything."
+
+    def set_pilot_input(self, role: str, roll: float, pitch: float, throttle: float) -> None:
+        self.pilot_input[role] = (float(roll), float(pitch), float(throttle))
+
     def _cmd_encrypt(self, role, on: bool = True):
         return self.police.set_encryption(bool(on))
 
@@ -438,8 +493,8 @@ class Session:
         return None
 
     def _informant_roll(self, job: Job) -> None:
-        if "informants" not in self.features:
-            return
+        if "informants" not in self.features or self.nights is not None:
+            return  # with HQs, informants are the Task Force's to recruit
         chance = 1 - (1 - INFORMANT_BASE) * (1 - SPOTTER_LEAK) ** len(self.spotters)
         if self.rng.random() < chance:
             x, y = self.job_xy(job)
@@ -631,6 +686,27 @@ class Session:
         self.police.reset()
         self.spawn_at(code)
 
+    def turn_around(self) -> str | None:
+        """Get out and swing the tail round: the bush pilot's answer to a
+        runway too narrow to turn on. Engine off, takes a while."""
+        s = self.state
+        if s is None or not s.on_ground or s.gs_kts > 1.5 or self.phase not in ("parked", "flying"):
+            return "Stop on the ground first."
+        if self.turnaround_t > 0:
+            return "Already pushing her round."
+        self.turnaround_t = TURNAROUND_S["crew" if self.crew_count() > 1 else "solo"]
+        self.say(f"Pushing the aircraft round ({self.turnaround_t:.0f} s)...")
+        return None
+
+    def _finish_turnaround(self) -> None:
+        s = self.state
+        self.fm.spawn(s.x, s.y, (s.heading + 180.0) % 360.0, self.world.ground(s.x, s.y), self.loadout)
+        self.fm.controls.brake = 1.0
+        self.fm.step(0.3, self.world.ground)
+        self.state = self.fm.state()
+        self.mapper.reset()
+        self.say("Turned round.")
+
     # ================================================================ in-flight crew work
     def request_kick(self, role: Role, count: int = 1) -> str | None:
         s = self.state
@@ -731,19 +807,29 @@ class Session:
         return None
 
     # ================================================================ tick
-    def update(self, dt: float, inp: InputFrame | None = None) -> None:
+    def update(self, dt: float, inp: InputFrame | None = None, controls: Controls | None = None) -> None:
+        """Advance one frame. `controls` (from a bot) replaces the pilot's input and autopilot."""
         self.time += dt
         inp = inp or InputFrame()
         if self.runner_active:
-            self._update_runner(dt, inp)
+            self._update_runner(dt, inp, controls)
         self._update_world(dt)
         if self.campaign is not None:
             self.campaign.tick(self)
+        if self.nights is not None:
+            self.nights.tick(dt)
 
-    def _update_runner(self, dt: float, inp: InputFrame) -> None:
+    def _update_runner(self, dt: float, inp: InputFrame, bot_controls: Controls | None = None) -> None:
         if self.phase in ("crashed", "busted"):
             if "confirm" in inp.pressed:
                 self.respawn()
+            return
+        if self.turnaround_t > 0:
+            self.turnaround_t -= dt
+            if self.turnaround_t <= 0:
+                self._finish_turnaround()
+            self.fm.controls = type(self.fm.controls)(brake=1.0)
+            self.state = self.fm.step(dt, self.world.ground)
             return
         pilot_aft = self.kicker == "pilot" and self.kick_queue > 0
         if pilot_aft:
@@ -752,7 +838,9 @@ class Session:
             self.autopilot.disengage()
             self.say("Autopilot disconnected")
         controls = self.mapper.update(dt, inp)
-        if self.state is not None and self.autopilot.engaged:
+        if bot_controls is not None and not pilot_aft:
+            controls = bot_controls
+        elif self.state is not None and self.autopilot.engaged:
             controls = self.autopilot.update(dt, self.state, controls)
         if self.parked and not ({"throttle_up", "brake"} & inp.held) and controls.throttle < 0.05:
             controls.brake = 1.0  # parking brake while in menus
@@ -800,8 +888,11 @@ class Session:
             elif tr == "crashed":
                 self.law_say(f"{self.police.alias(a.id)} crashed")
             if a.active:
-                targets.append(Target(a.signature(self.world), True, 5000, a.id))
+                targets.append(Target(a.signature(self.world), a.hot, 5000 if a.hot else 0, a.id))
 
+        for u in self.police.units:
+            if u.pilot:
+                u.stick = self.pilot_input.get(u.pilot, u.stick)
         outcomes = self.police.tick(dt, self.time, targets)
         for tid, what in outcomes.items():
             if tid == "runner":

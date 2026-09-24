@@ -87,6 +87,12 @@ class NetClient:
             self._loop.call_soon_threadsafe(self._writer.write, data)
         return self._seq
 
+    def send_input(self, roll: float, pitch: float, throttle: float) -> None:
+        """Police pilot stick: fire-and-forget, the latest one wins."""
+        data = _line({"t": "input", "roll": round(roll, 3), "pitch": round(pitch, 3), "throttle": round(throttle, 3)})
+        if self._writer is not None:
+            self._loop.call_soon_threadsafe(self._writer.write, data)
+
     def wait_ack(self, seq: int, timeout: float = 3.0) -> tuple[bool, str] | None:
         end = time.monotonic() + timeout
         while time.monotonic() < end:
@@ -128,6 +134,9 @@ class LocalLink:
     def snapshot(self) -> dict:
         self._seq += 1
         return build_snapshot(self.sess, self.role, self._seq)
+
+    def send_input(self, roll: float, pitch: float, throttle: float) -> None:
+        self.sess.set_pilot_input(self.role.value, roll, pitch, throttle)
 
     def tick(self, dt: float) -> None:
         self.sess.update(dt)

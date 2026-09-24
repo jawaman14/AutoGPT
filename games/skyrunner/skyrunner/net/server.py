@@ -27,7 +27,7 @@ from .snapshot import PROTOCOL_VERSION, build_snapshot
 
 DEFAULT_PORT = 47800
 MAX_LINE = 1 << 20
-SNAPSHOT_HZ = 15.0
+SNAPSHOT_HZ = 20.0
 
 
 class _Client:
@@ -52,6 +52,7 @@ class HostServer:
         self._ready = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True, name="skyrunner-net")
         self._server = None
+        self.sticks: dict[Role, tuple[float, float, float]] = {}
 
     # ------------------------------------------------------------ thread side
     def start(self) -> "HostServer":
@@ -113,6 +114,12 @@ class HostServer:
                 if msg.get("t") == "cmd" and isinstance(msg.get("args", {}), dict):
                     args = {str(k)[:32]: v for k, v in list(msg.get("args", {}).items())[:8]}
                     self.inbox.put((role, int(msg.get("seq", 0)), str(msg.get("name", ""))[:32], args))
+                elif msg.get("t") == "input" and role == Role.INTERCEPTOR:
+                    try:  # latest stick position wins; no queueing, no acks
+                        self.sticks[role] = tuple(max(-1.0, min(1.0, float(msg.get(k, 0.0))))
+                                                  for k in ("roll", "pitch", "throttle"))
+                    except (TypeError, ValueError):
+                        pass
         except (asyncio.TimeoutError, ValueError, ConnectionError, OSError):
             pass
         finally:
@@ -145,6 +152,10 @@ class HostServer:
                     sess.set_copilot("human")
                 elif role == Role.CONTROLLER:
                     sess.police.controller = "human"
+                elif role == Role.BOSS and sess.nights:
+                    sess.nights.runner_ai = None
+                elif role == Role.CHIEF and sess.nights:
+                    sess.nights.law_ai = None
                 sess.say(f"{name} joined as {role.value}.")
                 sess.law_say(f"{name} joined as {role.value}.")
             else:
@@ -153,7 +164,13 @@ class HostServer:
                     sess.set_copilot(None)
                 elif role == Role.CONTROLLER:
                     sess.police.controller = "ai"
+                elif role == Role.INTERCEPTOR:
+                    sess.command(role, "release_unit")
+                elif role == Role.CHIEF and sess.nights and Role.CONTROLLER not in sess.humans:
+                    sess.nights.law_ai = "adaptive"
                 sess.say(f"{name} ({role.value}) left.")
+        for role, (roll, pitch, thr) in list(self.sticks.items()):
+            sess.set_pilot_input(role.value, roll, pitch, thr)
         while not self.inbox.empty():
             role, seq, name, args = self.inbox.get_nowait()
             ok, msg = sess.command(role, name, **args)

@@ -196,10 +196,12 @@ class Maritime:
         self.boats.append(b)
         return b
 
-    def new_cutter(self, goal: tuple[float, float] | None = None) -> Boat:
+    def new_cutter(self, goal: tuple[float, float] | None = None, at: tuple[float, float] | None = None) -> Boat:
+        """A Coast Guard cutter, from the station or already on picket at `at`."""
         self._serial += 1
-        b = Boat(f"Cutter-{self._serial}", "cutter", *self.cg_station, home=self.cg_station,
-                 goal=goal, state="patrol" if goal else "standby")
+        x, y = at or self.cg_station
+        b = Boat(f"Cutter-{self._serial}", "cutter", x, y, home=self.cg_station,
+                 goal=goal or (at if at else None), state="patrol" if (goal or at) else "standby")
         self.boats.append(b)
         return b
 
