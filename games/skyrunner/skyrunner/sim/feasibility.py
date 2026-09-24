@@ -95,7 +95,7 @@ def landing_trial(key: str, code: str, load: str) -> Trial:
     bot = PilotBot(s, [Leg("land", af.x, af.y, code)])
     bot.phase = "enroute"
     t0 = s.time
-    out = fly(s, bot, 600)
+    fly(s, bot, 600)
     ok = s.phase == "parked" and s.location == code
     return Trial(key, code, load, "landing", ok, s.last_outcome if not ok else "landed", w, s.time - t0)
 

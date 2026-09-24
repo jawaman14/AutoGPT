@@ -39,26 +39,28 @@ from dataclasses import asdict, dataclass, field
 # Every number the balance simulator is allowed to move lives here.
 RULES: dict[str, float] = {
     "nights": 10,
-    "retire_target": 60_000,  # clean $ to win
+    "retire_target": 45_000,  # clean $ to win
     "indict_evidence": 100.0,
-    "start_dirty": 12_000,
-    "start_budget_k": 20.0,
+    "start_dirty": 16_000,
+    "start_budget_k": 15.0,
     "actions_per_night": 3,
-    "overhead": 1_500,  # per night: crew wages, hangar, "consulting"
-    "run_payout": 13_000,  # base value of one run for the C172
+    "overhead": 1_000,  # per night: crew wages, hangar, "consulting"
+    "run_payout": 15_000,  # base value of one run for the C172
     "crew_fee": 3_000,  # contract crew (AI run)
     "crew_share": 0.6,  # organisation's share of a contract crew's load
     "decoy_fee": 1_500,
     "heat_decay": 6.0,
     "lie_low_decay": 18.0,
-    "support_base_k": 12.0,  # law budget = base + support term + heat term
+    "support_base_k": 9.0,  # law budget = base + support term + heat term
     "support_k": 12.0,
     "heat_k": 0.10,
     "seizure_share": 0.8,  # fraction of seized value paid to the task force (1984: up to 80%)
-    "evidence_bust": 12.0,
+    "evidence_bust": 6.0,
+    "evidence_crew_bust": 2.0,
+    "bust_fine": 3_000,
     "evidence_flip": 10.0,
     "evidence_informant": 2.5,  # per informant per night
-    "evidence_wiretap": 4.0,
+    "evidence_wiretap": 3.0,
     "evidence_audit_k": 6.0,  # per point of laundering exposure
     "evidence_bribe": 12.0,
     "evidence_decay": 1.5,
@@ -93,7 +95,7 @@ BRIBES = {  # name: (cost per night, what it does)
 }
 
 LAW_COSTS_K = {  # $k per night unless noted
-    "heli": 3.0, "interceptor": 5.0, "cutter": 4.0, "aerostat": 4.0,
+    "heli": 4.0, "interceptor": 7.0, "cutter": 4.0, "aerostat": 6.0,
     "informant": 3.0, "informant_upkeep": 1.0, "wiretap": 7.0, "audit": 4.0,
     "ia_sweep": 4.0, "encryption": 5.0,  # one-off
 }
@@ -487,6 +489,7 @@ class Season:
             "tip": tip or wire,
             "tip_zone": o.route if (tip or wire) else None,
             "leak_patrol": L.patrol if leak_patrol else None,
+            "leak_aerostat": L.aerostat if leak_patrol else False,
             "no_customs": "tower" in o.bribes,
             "informant_mult": 1.0 + L.informants * (1.0 - o.loyalty),
         }
@@ -526,12 +529,13 @@ class Season:
                 o.heat += 10
                 L.support += 7
                 L.bank_k += r.seized_value / 1000 * R["seizure_share"]
-                ev = R["evidence_bust"] * (0.5 if o.lawyer else 1.0)
+                # a contract crew doesn't know who they work for; your own pilot does
+                ev = (R["evidence_bust"] if r.kind == "main" else R["evidence_crew_bust"]) * (0.5 if o.lawyer else 1.0)
                 L.evidence += ev
                 rep.lines.append(f"Pilot arrested with ${r.seized_value:,} of contraband.")
                 if r.kind == "main" and not live:
-                    o.dirty -= 5_000
-                flip = R["flip_base"] * (1 - o.loyalty) * (0.35 if o.lawyer else 1.0)
+                    o.dirty -= int(R["bust_fine"])
+                flip = R["flip_base"] * (1 - o.loyalty) * (0.35 if o.lawyer else 1.0) if r.kind == "main" else 0.0
                 if self.rng.random() < flip:
                     L.informants = min(3, L.informants + 1)
                     L.evidence += R["evidence_flip"]
@@ -610,7 +614,7 @@ class Season:
             return self._end("runner", "retired rich")
         if L.evidence >= R["indict_evidence"]:
             return self._end("law", "boss indicted")
-        if o.dirty + o.clean < -5_000:
+        if o.dirty + o.clean < -10_000:
             return self._end("law", "organisation broke")
         if self.night >= R["nights"]:
             rp, lp = self.runner_progress, self.law_progress
@@ -670,13 +674,15 @@ class Season:
 # ================================================================ abstract night
 @dataclass
 class Calibration:
-    """Per-zone probabilities for the abstract resolver. Defaults are hand
-    estimates; `skyrunner.sim.tactical` measures them with bot flights."""
-    detect: dict = field(default_factory=lambda: {"west": 0.30, "north": 0.22, "sea": 0.40})
-    aerostat_detect: dict = field(default_factory=lambda: {"west": 0.25, "north": 0.20, "sea": 0.35})
-    intercept_per_unit: dict = field(default_factory=lambda: {"heli": 0.30, "interceptor": 0.45})
-    bust_given_intercept: float = 0.6
-    crash: dict = field(default_factory=lambda: {"west": 0.05, "north": 0.06, "sea": 0.02})
+    """Per-zone probabilities for the abstract resolver. Defaults are the rates
+    the pilot bot flew against the AI task force (`python -m skyrunner.sim
+    tactical`, 189 flights; see docs/BALANCE.md)."""
+    detect: dict = field(default_factory=lambda: {"west": 0.222, "north": 0.667, "sea": 0.222})
+    aerostat_detect: dict = field(default_factory=lambda: {"west": 0.444, "north": 0.0, "sea": 0.778})
+    intercept_per_unit: dict = field(default_factory=lambda: {"heli": 0.7, "interceptor": 1.0})  # unit weights
+    intercept_k: float = 2.025  # hazard = k * ln(1 + weighted units) * patrol match: extra units add less
+    bust_given_intercept: float = 0.888
+    crash: dict = field(default_factory=lambda: {"west": 0.06, "north": 0.01, "sea": 0.01})
     cutter_seize: float = 0.35
     boat_catch_if_spotted: float = 0.5
 
@@ -690,8 +696,14 @@ def resolve_abstract(season: Season, plan: dict, rng: random.Random, cal: Calibr
     kinds = ["main"] * plan["runs"] + ["crew"] * plan["crews"] + ["decoy"] * plan["decoys"]
     n_tracks = len(kinds)
     units = plan["funded"]
+    main_zone = plan["route"]
+    if plan.get("leak_patrol") is not None or plan.get("leak_aerostat"):
+        # the man in dispatch called: go where the patrol and the balloon aren't
+        avoid = {plan.get("leak_patrol")} | ({"west", "sea"} if plan.get("leak_aerostat") else set())
+        if main_zone in avoid:
+            main_zone = next((z for z in ("north", "west", "sea") if z not in avoid), main_zone)
     for i, kind in enumerate(kinds):
-        zone = plan["route"] if kind == "main" else rng.choice(ZONES)
+        zone = main_zone if kind == "main" else rng.choice(ZONES)
         r = RunResult(kind, zone)
         p_det = cal.detect[zone] + (cal.aerostat_detect[zone] if plan["aerostat"] else 0.0)
         if kind == "main" and plan["tip"]:
@@ -702,10 +714,9 @@ def resolve_abstract(season: Season, plan: dict, rng: random.Random, cal: Calibr
         r.detected = rng.random() < p_det
         if r.detected:
             match = 1.6 if plan["patrol"] == zone else (1.2 if kind == "main" and plan["tip"] else 0.8)
-            if kind == "main" and plan["leak_patrol"] == zone:
-                match *= 0.5  # they knew where the patrol was and went round it
-            haz = (units["heli"] * cal.intercept_per_unit["heli"] + units["interceptor"] * cal.intercept_per_unit["interceptor"])
-            haz *= match
+            weighted = (units["heli"] * cal.intercept_per_unit["heli"]
+                        + units["interceptor"] * cal.intercept_per_unit["interceptor"])
+            haz = cal.intercept_k * math.log1p(weighted) * match
             haz /= 1.0 + 0.6 * max(0, n_tracks - 1) / max(1, units["heli"] + units["interceptor"])  # spread thin
             if "scanner" in o.gear and not plan["encryption"]:
                 haz *= 0.75

@@ -64,7 +64,7 @@ def test_internal_affairs_finds_bribes_and_turns_them_into_evidence():
 
 
 def test_bust_builds_evidence_less_with_a_lawyer():
-    a, b = _season(), _season()
+    a, b = _season(evidence_decay=0), _season(evidence_decay=0)
     b.org.lawyer = True
     for ss in (a, b):
         ss.start_operation()

@@ -39,6 +39,8 @@ KICK_MAX_KTS = 130.0
 KICK_TIME = {"copilot": 2.0, "pilot": 4.0}
 PUMP_RATE_LB_MIN = {"copilot": 60.0, "pilot": 25.0}
 TURNAROUND_S = {"solo": 20.0, "crew": 10.0}  # push the aircraft round by hand
+UNLOAD_HOT_S = 60.0  # the buyers count the goods on the strip
+RAID_RANGE_M = 2000.0
 SPOTTER_FEE = 400
 SPOTTER_RANGE_M = 5000.0
 SPOTTER_DELAY_S = 5.0
@@ -133,6 +135,8 @@ class Session:
         self.runner_score = {"bales_delivered": 0, "escapes": 0}
         self.fuel_caches: dict[str, float] = {}  # shady strips: fuel you flew in yourself
         self.turnaround_t = 0.0
+        self.unloading: list[Job] = []
+        self.unload_t = 0.0
         self.pilot_input: dict[str, tuple[float, float, float]] = {}  # police pilots' sticks
         self._scanner_seen = 0.0
         self.nights = None  # nights.NightDirector when the Organisation layer is on
@@ -858,6 +862,8 @@ class Session:
         self._rules(dt, s)
         if self.phase not in ("crashed", "busted"):
             self._crew_work(dt, s)
+        if self.phase == "parked" and self.unloading:
+            self._unload_tick(dt)
 
     def runner_signature(self) -> Signature | None:
         s = self.state
@@ -1049,6 +1055,9 @@ class Session:
                 log.airborne = True
                 log.departed_from = log.departed_from or self.location
             if self.phase == "parked":
+                if self.unloading:
+                    self.say("Took off with the load still aboard - no deal.")
+                    self.unloading = []
                 self.phase = "flying"
                 self.location = None
                 self.police.reset(keep_wanted=True)
@@ -1094,27 +1103,57 @@ class Session:
         if self.police.landing_check(s, af, self.carrying_hot()):
             return self._bust(f"arrested on landing at {af.name}")
         delivered = [j for j in self.active_jobs if j.dest == af.code]
+        hot_here = [j for j in delivered if j.hot and af.kind in ("bush", "shady")]
+        if hot_here:
+            # the buyers count it before they pay: sit tight and hope nobody followed you in
+            self.unloading = hot_here
+            self.unload_t = UNLOAD_HOT_S
+            self.say(f"Unloading - {UNLOAD_HOT_S:.0f} s. Watch the sky.")
+            delivered = [j for j in delivered if j not in hot_here]
         for job in delivered:
-            drums = [i for i in job.items if i.label == "Fuel drum"]
-            if drums and af.kind in ("bush", "shady"):
-                fuel = sum(i.weight_lb for i in drums) * 0.9
-                self.fuel_caches[af.code] = self.fuel_caches.get(af.code, 0.0) + fuel
-                self.say(f"{fuel:.0f} lb of fuel cached at {af.name}.")
-            pay, notes = self._grade(job)
-            self.money += pay
-            self.active_jobs.remove(job)
-            self.loadout.remove_job(job.id)
-            self.say(f"Delivered '{job.title}': +${pay:,} {notes}".rstrip())
-            self.bus.emit("job_delivered", self.time, audience=("runner",), job_id=job.id, pay=pay, dest=af.code,
-                          hot=job.hot)
+            self._complete_delivery(job, af)
         self.fm.apply_loadout(self.loadout)
         self.police.reset(keep_wanted=True)
-        self.log = FlightLog()
+        self.log = FlightLog(touchdowns_seen=self.fm.touchdowns)
         self.refresh_board(af.code)
-        if not delivered:
+        if not delivered and not hot_here:
             self.say(f"Parked at {af.name}.")
         self.bus.emit("landed", self.time, audience=("runner",), code=af.code)
         self.save()
+
+    def _complete_delivery(self, job: Job, af: Airfield) -> None:
+        drums = [i for i in job.items if i.label == "Fuel drum"]
+        if drums and af.kind in ("bush", "shady"):
+            fuel = sum(i.weight_lb for i in drums) * 0.9
+            self.fuel_caches[af.code] = self.fuel_caches.get(af.code, 0.0) + fuel
+            self.say(f"{fuel:.0f} lb of fuel cached at {af.name}.")
+        pay, notes = self._grade(job)
+        self.money += pay
+        self.active_jobs.remove(job)
+        self.loadout.remove_job(job.id)
+        self.say(f"Delivered '{job.title}': +${pay:,} {notes}".rstrip())
+        self.bus.emit("job_delivered", self.time, audience=("runner",), job_id=job.id, pay=pay, dest=af.code,
+                      hot=job.hot)
+
+    def _unload_tick(self, dt: float) -> None:
+        """A hot load being counted out on a bush/shady strip. Police arriving = raid."""
+        if not self.unloading:
+            return
+        s = self.state
+        for u in self.police.units:
+            if (u.faction == "police" and u.state != "crashed"
+                    and math.hypot(u.x - s.x, u.y - s.y) < RAID_RANGE_M and u.z - s.alt < 600):
+                self.unloading = []
+                return self._bust(f"raided on the ground at {self.airfield.name if self.airfield else 'the strip'}")
+        self.unload_t -= dt
+        if self.unload_t <= 0:
+            af = self.airfield
+            for job in self.unloading:
+                if job in self.active_jobs:
+                    self._complete_delivery(job, af)
+            self.unloading = []
+            self.fm.apply_loadout(self.loadout)
+            self.save()
 
     def _grade(self, job: Job) -> tuple[int, str]:
         pay = float(job.payout)

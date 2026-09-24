@@ -51,6 +51,7 @@ strength (P3).
 |---|---|---|---|
 | Low flying, terrain masking | Aerostat (20 m floor), helicopter patrols | Radar sites | Valleys, transponder discipline |
 | Transponder off | "Squawk lost" alert when a tracked squawk vanishes | Squawk-lost alert | Go dark on the ramp, never squawk |
+| Squawk and fly like legitimate traffic | Letdown tell: a squawk that drops off the scope low toward a shady strip is flagged | Strip raids (60 s unload window) | Bush strips instead of shady ones, a patrol leak, an airdrop instead of a landing |
 | Radio scanner | Encryption (slower dispatch) | Encryption | A bribed dispatcher leaks it anyway |
 | Radar detector | Nothing: it only warns, you still have to act | Informants | Crew loyalty bonuses, counter-intel sweeps, fewer spotters |
 | Decoy flights | Visual identification (police pilot), patience | Wiretaps | Burner phones |

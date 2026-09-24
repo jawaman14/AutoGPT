@@ -151,6 +151,43 @@ def runner_adaptive(ss: Season, rng: random.Random, mem: dict) -> None:
     ss.runner_cmd("ready")
 
 
+def runner_smart(ss: Season, rng: random.Random, mem: dict) -> None:
+    """Uses every source it has: scanner first, then the dispatcher, routes weighted
+    by radar exposure, decoys when the heat draws attention, defence when the case
+    builds, growth while it's quiet."""
+    o = ss.org
+    view = ss.view("runner")
+    danger = {"thin": 0, "building": 1, "serious": 2, "closing in": 3}[view["evidence_rumor"]]
+    if "scanner" not in o.gear and o.dirty > 6_000:
+        ss.runner_cmd("gear", name="scanner")
+    elif "dispatcher" not in o.bribes and o.dirty > 12_000:
+        ss.runner_cmd("bribe", who="dispatcher")
+    if danger >= 2:
+        if not o.lawyer:
+            ss.runner_cmd("lawyer", on=True)
+        ss.runner_cmd("opsec")
+        if danger == 3 or mem.get("rat"):
+            ss.runner_cmd("counterintel")
+    else:
+        if o.lawyer and danger == 0:
+            ss.runner_cmd("lawyer", on=False)
+        if o.loyalty < 0.45:
+            ss.runner_cmd("loyalty")
+        _grow(ss, rng)
+        ss.runner_cmd("crews", n=1 if o.heat > 45 or o.dirty < 15_000 else 2)
+    if o.heat > 40:
+        ss.runner_cmd("decoys", n=1)
+    last = ss.reports[-1] if ss.reports else None
+    mem["rat"] = bool(last and any(r.busted and r.kind == "main" and not r.intercepted for r in last.runs))
+    z = rng.choices(ZONES, weights=[0.45, 0.25, 0.30])[0]  # west is the least watched
+    if z == mem.get("last_route") and rng.random() < 0.5:
+        z = rng.choice([x for x in ZONES if x != z])
+    mem["last_route"] = z
+    ss.runner_cmd("route", zone=z)
+    _launder_all(ss)
+    ss.runner_cmd("ready")
+
+
 def runner_random(ss: Season, rng: random.Random, mem: dict) -> None:
     """Uniformly random legal orders: explores the action space for the sim."""
     options = [
@@ -270,7 +307,7 @@ def law_random(ss: Season, rng: random.Random, mem: dict) -> None:
 RUNNER_POLICIES = {
     "greedy": runner_greedy, "cautious": runner_cautious, "corrupt": runner_corrupt,
     "shadow": runner_shadow, "launderer": runner_launderer, "adaptive": runner_adaptive,
-    "random": runner_random,
+    "smart": runner_smart, "random": runner_random,
 }
 LAW_POLICIES = {
     "interdiction": law_interdiction, "investigator": law_investigator, "balanced": law_balanced,

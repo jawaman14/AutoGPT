@@ -44,6 +44,8 @@ PRIMARY_RATE_NEAR = 3.0
 INBOUND_LOW_MULT = 2.5
 DROP_PATTERN_RATE = 3.0
 SUSPICION_DECAY = 3.0
+ODD_DESTINATION_SUSPICION = 100.0  # shady strips: nobody legit goes there
+BUSH_DESTINATION_SUSPICION = 30.0  # farm and bush strips get honest traffic too
 
 LAW_FEATURES = {"interceptors", "aerostat", "cutters", "encryption", "df", "informants", "rivals"}
 
@@ -209,6 +211,8 @@ class Case:
     squawk: str = ""
     tipped: bool = False
     drop_alerted: bool = False
+    odd_destination: set = field(default_factory=set)  # strips a squawking "legit" flight let down into
+    last_contact: tuple | None = None  # (x, y, agl, vx, vy, squawking) at the last radar contact
 
 
 @dataclass
@@ -306,7 +310,8 @@ class PoliceSystem:
     def reset(self, keep_wanted: bool = False, tid: str = "runner") -> None:
         c = self.case(tid)
         wanted = c.wanted
-        self.cases[tid] = Case(tid, wanted=wanted if keep_wanted else 0, tipped=c.tipped and keep_wanted)
+        self.cases[tid] = Case(tid, wanted=wanted if keep_wanted else 0, tipped=c.tipped and keep_wanted,
+                               last_known=c.last_known if keep_wanted and wanted else None)
         for u in self.units:
             if u.target_id == tid and u.faction == "rival":
                 u.state = "return"
@@ -629,6 +634,29 @@ class PoliceSystem:
             c.squawk = ""
         if c.wanted:
             return
+        if site_code:
+            c.last_contact = (sig.x, sig.y, sig.agl, sig.vx, sig.vy, sig.transponder)
+        elif c.last_contact is not None:
+            # radar just lost it: where, how low, and heading where?
+            x, y, agl, vx, vy, squawking = c.last_contact
+            c.last_contact = None
+            af, dist = self.world.nearest_airfield(x, y)
+            toward = math.degrees(math.atan2(af.x - x, af.y - y))
+            track = math.degrees(math.atan2(vx, vy))
+            if (squawking and agl < 700 and af.kind in ("bush", "shady") and dist < 6000
+                    and abs(_wrap180(toward - track)) < 50 and af.code not in c.odd_destination):
+                # legitimate traffic doesn't let down into an unlit quarry or a farmer's field
+                c.odd_destination.add(af.code)
+                bump = ODD_DESTINATION_SUSPICION if af.kind == "shady" else BUSH_DESTINATION_SUSPICION
+                c.suspicion = min(100.0, c.suspicion + bump)
+                if c.suspicion >= 100:
+                    self.law_events.append(f"Track {self.alias(sig.id)} flagged: nobody legit lands at {af.name}")
+                    if self.controller == "ai":
+                        self._ai_escalate(c, 1, sig)
+                    else:
+                        c.wanted = 1
+                self._say("Center", f"{sig.squawk or 'squawking traffic'} dropped off the scope low, toward {af.name}", None)
+                c.last_known = (af.x, af.y, self.now)
         if site_code:
             site = self.sensors.site(site_code)
             d = math.hypot(sig.x - site.x, sig.y - site.y)

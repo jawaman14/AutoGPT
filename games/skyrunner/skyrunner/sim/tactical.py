@@ -24,6 +24,8 @@ from ..world import AIRFIELD_BY_CODE
 # zone -> (origin, destination or "SEA")
 MISSIONS = {"west": ("FRM", "QRY"), "north": ("FRM", "EGL"), "sea": ("COV", "SEA")}
 
+BOT_CRASH_CAP = 0.06
+
 LAW_CONFIGS = {
     # name: (heli, interceptor, cutter, aerostat, patrol_match, tip)
     "light": (1, 0, 0, False, False, False),
@@ -126,6 +128,10 @@ def run_trial(zone: str, law: str, tactic: str, seed: int, aircraft: str = "c172
             tr.intercepted = True
 
     out = fly(s, bot, max_time=2400, on_frame=frame)
+    # a hot load on a strip takes a minute to unload: the police may yet arrive
+    t_end = s.time + 120
+    while s.unloading and s.time < t_end and s.phase == "parked":
+        s.update(1 / 10)
     # let the boat finish its trip to the cove (airdrops pay on arrival)
     if job.is_airdrop and s.phase not in ("crashed", "busted"):
         t_end = s.time + 900
@@ -195,15 +201,17 @@ def calibrate(results: list[dict]):
         aer = rates(results, zone=z, law="aerostat")
         if base.get("n", 0) >= 4:
             cal.detect[z] = round(min(0.9, base["flagged"]), 3)
-            cal.crash[z] = round(min(0.15, max(0.01, base["crashed"])), 3)
+            # the bot crashes more than a competent human on low-level legs: cap it
+            cal.crash[z] = round(min(BOT_CRASH_CAP, max(0.01, base["crashed"])), 3)
         if aer.get("n", 0) >= 4 and base.get("n", 0) >= 4:
             cal.aerostat_detect[z] = round(max(0.0, aer["flagged"] - base["flagged"]), 3)
     flagged = [r for r in results if r["law"] == "standard" and r["flagged"]]
     if len(flagged) >= 6:
         p = sum(r["intercepted"] for r in flagged) / len(flagged)
         # standard posture: 1 heli + 1 interceptor, patrol elsewhere (match 0.8)
-        haz = min(3.0, -math.log(max(0.05, 1 - p)) / 0.8)
-        cal.intercept_per_unit = {"heli": round(haz * 0.4, 3), "interceptor": round(haz * 0.6, 3)}
+        haz = min(3.0, -math.log(max(0.05, 1 - p)) / 0.8)  # patrol elsewhere: match 0.8
+        w = cal.intercept_per_unit["heli"] + cal.intercept_per_unit["interceptor"]  # 1 heli + 1 interceptor
+        cal.intercept_k = round(haz / math.log1p(w), 3)
     inter = [r for r in results if r["intercepted"]]
     if len(inter) >= 6:
         cal.bust_given_intercept = round(min(0.9, sum(r["busted"] for r in inter) / len(inter)), 3)

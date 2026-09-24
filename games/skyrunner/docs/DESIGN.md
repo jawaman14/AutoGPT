@@ -197,10 +197,15 @@ controller. The AI controller should land at about 70% for new players.
    tracks, radio/scanner/DF, spotters and informants, transponder, radar detector, aerostat, ferry
    tanks, loading time, autopilot, airdrops, boats and cutters, AI smuggler, controller mode,
    campaign engine with chapters 1–4, listen server + station client, role-filtered snapshots.
-3. **Phase 3 (3D multiplayer):** remote 3D clients (co-pilot cockpit view, interceptor pilot in a
-   JSBSim `pc7`/`T37`), UDP with prediction, human-driven boats, night and FLIR, wind and
-   weather, AEW patrol aircraft, chapters 5–6.
-4. **Phase 4 (depth):** fixer/mechanic roles, the hidden informant, decoy flights,
-   planted beacons, persistent career across chapters, chapters 7–8 and the task-force campaign.
+3. **Phase 3 [done] (seats, HQs, bots, balance):** remote 3D seats (co-pilot in the right seat; police
+   pilot flying a heli/interceptor with the AI units' envelope, fog-of-war visuals) over TCP with
+   interpolation; boss and chief HQ seats and a season of nights (`hq.py`, `nights.py`); decoy
+   flights and contract crews; rule layers scaled by player count (`layers.py`); a pilot bot flying
+   JSBSim, HQ bots, and feasibility / tactical / strategic simulators that drove the balance changes
+   in [BALANCE.md](BALANCE.md); textured graphics with low/medium/high presets. Design reasoning:
+   [MULTIPLAYER.md](MULTIPLAYER.md).
+4. **Phase 4 (depth):** UDP snapshots with prediction, human-driven boats, night and FLIR, wind,
+   AEW patrol aircraft, fixer/mechanic roles, the hidden informant, planted beacons, persistent
+   career across chapters, chapters 5–8 and the task-force campaign, smarter runner bots.
 5. **Phase 5 (content):** bigger map (mainland coast + island chain), more aircraft (JSBSim
    `L410`, `C130`), audio, real 3D models, matchmaking and a dedicated server.

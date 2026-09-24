@@ -94,7 +94,8 @@ class NightDirector:
                 self._begin()
         elif self.phase == "operation":
             self._track()
-            if sess.phase in ("parked", "crashed", "busted") and self.ended_at is None:
+            if (sess.phase in ("crashed", "busted") or (sess.phase == "parked" and not sess.unloading)) \
+                    and self.ended_at is None:
                 self.ended_at = sess.time
                 self._close_main()
             if self.ended_at is not None:
@@ -135,8 +136,9 @@ class NightDirector:
             rng = self._bot_rng
             ps.add_tip(x + rng.uniform(-1500, 1500), y + rng.uniform(-1500, 1500), 3000,
                        "informant: the organisation moves a load tonight", squawk=sess.squawk, target_id="runner")
-        if plan["leak_patrol"]:
-            sess.say(f"Your man in dispatch: patrol over the {plan['leak_patrol']} tonight.")
+        if plan["leak_patrol"] or plan.get("leak_aerostat"):
+            sess.say(f"Your man in dispatch: patrol over the {plan['leak_patrol'] or 'nowhere'} tonight"
+                     + (", and the balloon is up." if plan.get("leak_aerostat") else "."))
         # contract crews and decoys
         self.crews = []
         for k in range(plan["crews"] + plan["decoys"]):

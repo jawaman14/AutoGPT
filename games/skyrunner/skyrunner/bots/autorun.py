@@ -48,7 +48,7 @@ class AutoRunner:
             return None
         if self.bot is not None and self.bot.phase != "done":
             return self.bot.step(dt)
-        if not s.parked:
+        if not s.parked or s.unloading:
             return None
         self._wait += dt
         if self._wait < 3.0:  # a moment on the ground between flights

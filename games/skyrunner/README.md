@@ -15,15 +15,23 @@ setting (full plan and storyline: [docs/DESIGN.md](docs/DESIGN.md)).
   task-force desk and hunt the runners.
 - **Crew play**: a friend can join as co-pilot to load, kick bales out of the door to a go-fast boat,
   pump ferry fuel and work the radio scanner. Another can be your ground spotter. A rival player can
-  run the police desk against you.
+  run the police desk against you, or climb into a police interceptor or helicopter and fly it in 3D.
+- **Two headquarters**: with five or more players, a boss runs the smuggling organisation (laundering
+  fronts, bribes, contract crews, decoys, lawyers) and a chief runs the task force (budget,
+  informants, wiretaps, audits) over a season of nights. The rules scale with the number of players.
+- **Balanced by simulation**: a pilot bot flies the real JSBSim aircraft against the AI police in
+  hundreds of runs, HQ bots play thousands of seasons, and the rules were changed where the numbers
+  said so ([docs/BALANCE.md](docs/BALANCE.md)).
 
 | Approach to Eagle's Nest (280 m mesa strip) | Job board | Police on your tail |
 |---|---|---|
 | ![approach](docs/approach-eagles-nest.png) | ![jobs](docs/job-board.png) | ![police](docs/police-chase.png) |
 | **Campaign briefing** | **Go-fast boat at the rendezvous** | |
 | ![briefing](docs/campaign-briefing.png) | ![boat](docs/airdrop-boat.png) | |
-| **Co-pilot station** (load plan, boat, drop marker, spotter ring) | **Task-force desk** (radar rings, units, radio) | |
-| ![copilot](docs/station-copilot.png) | ![desk](docs/station-taskforce.png) | |
+| **Co-pilot station** (load plan, boat, drop marker, spotter ring) | **Task-force desk** (radar rings, units, radio) | **Police pilot seat** (3D, remote) |
+| ![copilot](docs/station-copilot.png) | ![desk](docs/station-taskforce.png) | ![police pilot](docs/seat-police-pilot.png) |
+| **Organisation HQ** (boss) | **Task-force HQ** (chief) | **Graphics: low vs medium** |
+| ![boss](docs/station-boss.png) | ![chief](docs/station-chief.png) | ![graphics](docs/graphics-low-vs-medium.png) |
 
 *(Screenshots from Panda3D's software renderer in a headless CI box, which ignores line colours and
 lighting. With a GPU you get both, plus multisampling.)*
@@ -38,8 +46,16 @@ pip install -r requirements.txt
 python -m skyrunner                    # sandbox, solo (add --new to wipe the save)
 python -m skyrunner --mode campaign    # story mode, 1979 ->
 python -m skyrunner --police           # play the task force against AI runners
-python -m pytest -q tests              # 77 headless tests, ~12 s
+python -m skyrunner --players 6        # seats and rule layers for a table of six (prints the plan)
+python -m skyrunner --watch --graphics low   # the AI pilot plays the career; you watch
+python -m skyrunner.sim strategic      # simulate thousands of HQ seasons (~10 s)
+python -m pytest -q tests              # 108 headless tests, ~35 s
 ```
+
+Graphics: `--graphics high` (default: textures, per-pixel lighting, sun shadows, 4x MSAA), `medium`
+(textures, fixed-function lighting) or `low` (vertex colours, half-resolution terrain, a third of the
+trees, no shaders). Use low for watching bots or on old hardware. The simulators and tests don't load
+Panda3D at all.
 
 Requirements: Python 3.10+ and any GPU with OpenGL 2.1 or newer. On first launch the game builds a
 patched copy of the JSBSim aircraft data in your temp directory (see *How JSBSim is used*).
@@ -53,11 +69,31 @@ patched copy of the JSBSim aircraft data in your temp directory (see *How JSBSim
 | Task force vs AI | `python -m skyrunner --police` | You run the desk; AI runners come in low from the south |
 | Co-op crew | host: `python -m skyrunner --mode coop` | Host flies; friends join as `copilot` and/or `spotter` |
 | Versus | host: `python -m skyrunner --mode versus` | Host + crew run loads; a friend runs the task-force `controller` desk |
+| Any table | host: `python -m skyrunner --players N` | Picks the mode, seats and rule layer for N people (below) |
+
+More players unlock more rules. Every seat gets a real job, and the short side's empty seats are
+full-strength AI ([docs/MULTIPLAYER.md](docs/MULTIPLAYER.md) has the design reasoning):
+
+| Players | Layer | Runners (human) | Law (human) |
+|---|---|---|---|
+| 1 | 3 Crew | pilot | AI |
+| 2 | 4 Intel | pilot | controller |
+| 3 | 4 Intel | pilot, co-pilot | controller |
+| 4 | 4 Intel | pilot, co-pilot | controller, police pilot |
+| 5–6 | 5 Organisation | + boss | + chief |
+| 7–8 | 5 Organisation | + spotter | + cutter |
+
+Layers: **1 Flight** (W&B, fuel, strips) · **2 Heat** (contraband, radar, police aircraft) ·
+**3 Crew** (co-pilot, airdrops, boats, cutters, ferry tanks) · **4 Intel** (scanner vs encryption,
+detector vs aerostat, spotters, DF, informants) · **5 Organisation** (a season of nights between two
+HQs).
 
 Friends join from their own machine:
 
 ```bash
-python -m skyrunner.station --connect HOST_IP:47800 --role copilot      # or spotter / controller
+python -m skyrunner.station --connect HOST_IP:47800 --role copilot   # 2D: copilot / spotter / controller / boss / chief
+python -m skyrunner.seat --connect HOST_IP:47800 --role interceptor  # 3D: fly a police helicopter or interceptor
+python -m skyrunner.seat --connect HOST_IP:47800 --role copilot      # 3D: right-hand seat, crew keys
 ```
 
 The pilot's game is the authoritative server. It listens on TCP 47800, so open or forward that port
@@ -65,6 +101,26 @@ for internet play. Remote seats send commands, which are checked against a per-r
 and receive snapshots filtered for their side (fog of war). The controller never receives the runner's
 true position, only radar tracks, tips and direction-finding fixes. Any empty seat is filled by AI.
 A headless dedicated server for the task-force mode also exists: `python -m skyrunner.net.server`.
+
+**3D seats.** A remote seat builds the same procedural island from the same seed, so only entity state
+crosses the wire. Snapshots arrive at 20 Hz over the same TCP link. The seat renders 100 ms behind the
+newest one and interpolates, which hides jitter. The police pilot's stick goes up as fire-and-forget
+`input` messages at 30 Hz, where the latest one wins. It flies a kinematic model with exactly the AI
+unit's envelope (speed, turn and climb limits), so balance numbers measured with AI units still hold.
+A human adds judgement, not performance. A 230 kt interceptor at 36° of bank turns about 3.5°/s, so a
+slow twin really can out-turn it. The police pilot only receives another aircraft's position while
+their own unit has line of sight to it. Why TCP rather than UDP: at these rates, and on LAN or
+ordinary broadband, head-of-line blocking costs less than writing reliability for commands twice. The
+snapshot channel can move to UDP later without touching the game code.
+
+**Season (layer 5).** Each night: both HQs plan in secret (3 action points each). The operation starts
+when the pilot takes off with something hot. The plan turns into police aircraft and cutters on
+picket, the aerostat, a patrol zone, informant tips, bribed officials, and contract crews and decoys
+flying alongside you. When everyone is down, the night is scored: money, seizures (80% to the task
+force), evidence, heat and support. The organisation wins by laundering $60k clean. The task force
+wins at 100 evidence (indictment) or by bankrupting the organisation. After 10 nights a trial
+compares progress. With no human boss the pilot gives the orders; with no human chief a human
+controller does, otherwise the AI.
 
 ## Controls (pilot)
 
@@ -147,7 +203,7 @@ A 32 × 32 km island with a mountain ridge through the north:
 | COV | Smuggler's Cove | 320 × 18 m sand | Beach, shady jobs; the boats' home |
 | QRY | Old Quarry | 240 × 12 m dirt | Trench cut into the hillside, walls on both sides, shady jobs |
 
-An aerostat radar can be raised off the south coast. It covers 40 km with a very low floor.
+An aerostat radar can be raised off the south coast. It covers 22 km (the south coast and the sea lanes, not the northern mountains) with a very low floor.
 
 ## Architecture
 
@@ -170,9 +226,18 @@ skyrunner/
   campaign.py      chapters, objectives, unlocks (1979-1982 playable)
   game.py          Session: the authoritative match. Every action is Session.command(role, ...)
   net/             snapshot.py (fog of war) · server.py (listen/dedicated) · client.py (TCP + local link)
-  station.py       2D tactical client for co-pilot / spotter / controller
-  render/          Panda3D pilot client: procedural meshes, HUD, menus, cameras, input
-tests/             77 headless tests: physics, W&B, world, police, sensors, crew, campaign, loopback net
+  hq.py            the season: organisation vs task force rules, orders, night scoring, abstract resolver
+  nights.py        bridges a season and the live Session (plans -> units, tips, crews; flights -> results)
+  layers.py        rule layers 1-5 and seat plans by player count
+  bots/            pilot.py (flies JSBSim: approach/departure planning, short-field technique, airdrops)
+                   route.py (valley routing) · autorun.py (plays the career) · hq.py (boss/chief strategies)
+  sim/             feasibility.py · tactical.py · strategic.py · report.py (python -m skyrunner.sim)
+  station.py       2D tactical client for co-pilot / spotter / controller / boss / chief
+  seat.py          3D remote seat (co-pilot or police pilot)
+  render/          Panda3D: scene.py (shared world), quality.py (presets), textures.py (procedural),
+                   remote.py (3D seats), app.py (pilot), HUD, menus, cameras, input
+tests/             108 headless tests: physics, W&B, world, police, sensors, crew, campaign, net,
+                   bots (they fly real landings), HQ rules, layers, equilibrium solver
 ```
 
 `Session` never imports Panda3D, so the whole game runs headless: tests, bots and the dedicated server.
@@ -193,9 +258,23 @@ A frame costs about 0.5 ms with three pursuers, a cutter and a boat in play.
 - **Tuned against JSBSim**: the autopilot holds altitude within 10 m on all five aircraft when it has
   enough power. With too little power it gives up altitude rather than airspeed.
 
+## AI players and balance simulation
+
+| Tool | What it does | Cost |
+|---|---|---|
+| `bots.pilot.PilotBot` | Flies the real JSBSim aircraft from instruments only. It picks the runway direction and glide angle (3.5–9.5°) that clear terrain and tree lines, moves the aim point down the runway over obstacles, sets approach speed by weight, and forward-slips when steep. Departures are downhill with a Vx climb; it pushes the aircraft round on narrow strips. It follows terrain with a climb-performance-aware look-ahead, threads valley routes, kicks airdrops and evades police. | Real time ÷ ~230 |
+| `sim.feasibility` | Every aircraft × airfield × load: can you get in, can you get out? | ~3 min |
+| `sim.tactical` | Bot runs against the AI task force: 3 missions × 7 police postures × 3 tactics | ~10 min |
+| `sim.strategic` | HQ bots (7 organisation and 5 task-force strategies) play thousands of seasons. Outputs the win matrix, equilibrium mix, dominance, comebacks, action values and ablations. | ~10 s |
+| `bots.autorun` | The bot plays the career (`--watch`), doubling as a soak test | |
+
+What they found and what changed (terrain traps at two strips, radar that made flying under it
+impossible, cutters that never caught anyone, an HQ economy the law won 81% of the time) is in
+[docs/BALANCE.md](docs/BALANCE.md).
+
 ## Roadmap
 
-See [docs/DESIGN.md §9](docs/DESIGN.md#9-roadmap). The next phase covers remote 3D seats (co-pilot
-cockpit view, a human interceptor pilot flying a JSBSim `pc7`) over UDP with prediction, night and FLIR,
-wind, human-driven boats, and chapters 5–8 including the "Flip" ending on the law side. Also still to
-come: real 3D art (glTF), audio, and hardware-tested joystick mapping.
+See [docs/DESIGN.md §9](docs/DESIGN.md#9-roadmap). Next: UDP snapshots with client-side prediction
+for the police pilot, night and FLIR, wind, a human-driven go-fast boat seat, chapters 5–8 (including
+the "Flip" ending on the law side), smarter runner bots (reading the scanner, bluffing with decoys),
+real 3D art (glTF) and audio.

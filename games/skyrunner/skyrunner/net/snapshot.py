@@ -97,6 +97,7 @@ def _runner(sess, role: Role) -> dict:
             "pumping": sess.pumping, "kick_queue": sess.kick_queue, "auto_kick": sess.auto_kick,
             "copilot": sess.copilot, "wanted": sess.police.wanted, "suspicion": _r(sess.police.suspicion),
             "outcome": sess.last_outcome if sess.phase in ("crashed", "busted") else "",
+            "unloading_s": _r(sess.unload_t) if sess.unloading else 0.0,
         }
     out["loadout"] = _loadout(sess)
     out["jobs"] = [_job(sess, j) for j in sess.active_jobs]

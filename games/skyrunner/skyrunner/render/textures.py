@@ -80,7 +80,11 @@ def terrain_texture(world, colors: np.ndarray, size: int = 2048) -> Texture:
     sun = np.array([0.45, 0.35, 0.82])
     sun /= np.linalg.norm(sun)
     shade = np.clip(n @ sun, 0.0, 1.0)
-    col = _upsample(colors, size)
+    # the colour ramp carries per-cell jitter; blur it so 62 m cells don't show as squares up close
+    pad = np.pad(colors, ((1, 1), (1, 1), (0, 0)), mode="edge")
+    smooth = sum(pad[1 + dj:1 + dj + colors.shape[0], 1 + di:1 + di + colors.shape[1]]
+                 for dj in (-1, 0, 1) for di in (-1, 0, 1)) / 9.0
+    col = _upsample(smooth, size)
     sh = _upsample(shade, size)[..., 0]
     hh = _upsample(h, size)[..., 0]
     grain = fbm(size, base=64, octaves=4, seed=11)

@@ -14,7 +14,6 @@ wire) and draws aircraft, units and boats from role-filtered snapshots:
 """
 from __future__ import annotations
 
-import math
 import sys
 import time
 

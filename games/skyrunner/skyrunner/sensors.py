@@ -109,7 +109,7 @@ def default_sites(world: World) -> list[RadarSite]:
         if a.radar_km > 0
     ]
     # The tethered balloon ("Fat Albert" in the real Keys). Off until the task force raises it.
-    sites.append(RadarSite("AER", "Aerostat radar", *AEROSTAT_POS, mast_z=2500.0, range_m=40_000,
+    sites.append(RadarSite("AER", "Aerostat radar", *AEROSTAT_POS, mast_z=2500.0, range_m=22_000,
                            floor_base=20.0, floor_per_m=0.003, kind="aerostat", active=False))
     return sites
 

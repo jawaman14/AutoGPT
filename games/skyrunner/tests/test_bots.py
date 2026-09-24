@@ -114,3 +114,31 @@ def test_route_distance_sanity(world):
     pts = plan_route(world, (har.x, har.y), (isl.x, isl.y))
     length = sum(math.dist(a, b) for a, b in zip([(har.x, har.y)] + pts[:-1], pts))
     assert length < 2.0 * math.dist((har.x, har.y), (isl.x, isl.y))
+
+
+def test_hot_load_unloads_slowly_and_can_be_raided(jsbsim_root):
+    from skyrunner.police import Pursuer
+
+    def landed_at_quarry():
+        s = Session(seed=3, location="QRY", jsbsim_root=jsbsim_root, features=set(SANDBOX_FEATURES))
+        s.update(1 / 30)
+        job = next(j for j in s.boards["QRY"] if j.hot and not j.is_airdrop)
+        job.dest = "QRY"  # pretend we just flew it in
+        s.accept_job(job)
+        s.loadout.pending.clear()
+        s._arrive(s.airfield, s.state)
+        return s, job
+
+    s, job = landed_at_quarry()
+    assert s.unloading == [job] and job in s.active_jobs
+    money = s.money
+    for _ in range(int(62 * 10)):
+        s.update(0.1)
+    assert not s.unloading and job not in s.active_jobs and s.money > money
+    # same again, but a police helicopter turns up
+    s, job = landed_at_quarry()
+    af = AIRFIELD_BY_CODE["QRY"]
+    s.police.units.append(Pursuer("heli", af.x + 800, af.y, s.state.alt + 150, 0.0, (0, 0), id="Hawk-9"))
+    for _ in range(20):
+        s.update(0.1)
+    assert s.phase == "busted" and "raided" in s.last_outcome
