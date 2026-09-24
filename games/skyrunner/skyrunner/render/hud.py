@@ -9,7 +9,7 @@ from direct.gui.OnscreenText import OnscreenText
 from panda3d.core import LineSegs, TextNode
 
 from ..aircraft import ROSTER
-from ..game import FUEL_PRICE_PER_LB, LOADMASTER_FEE, Session
+from ..game import FUEL_PRICE_PER_LB, GEAR, LOADMASTER_FEE, Session
 from ..loadout import PILOT_LB
 from ..world import AIRFIELD_BY_CODE, HALF
 
@@ -68,6 +68,8 @@ class Hud:
             _text(base.a2dBottomCenter, (-0.09 + k * 0.06, 0.16), 0.09) for k in range(4)
         ]
         self.papi_label = _text(base.a2dBottomCenter, (0.0, 0.24), 0.035, align=TextNode.ACenter)
+        self.intel = _text(base.a2dBottomRight, (-0.05, 0.72), 0.034, fg=(1, 0.8, 0.5, 1), align=TextNode.ARight)
+        self.objectives = _text(base.a2dTopRight, (-0.05, -0.72), 0.036, fg=AMBER, align=TextNode.ARight)
         self.minimap = Minimap(base, session)
         self.throttle_bar = self._bar(base.a2dBottomLeft, (0.05, 0.06), GREEN)
         self.bust_bar = self._bar(base.aspect2d, (-0.3, 0.42), RED, width=0.6, vertical=False)
@@ -97,6 +99,8 @@ class Hud:
             return
         lo = s.loadout
         flaps = int(round(c.flaps * 3))
+        hours, range_km = s.range_estimate()
+        ferry = lo.ferry_fuel_lb()
         self.flight.setText(
             f"IAS  {st.ias_kts:5.0f} kt\n"
             f"GS   {st.gs_kts:5.0f} kt\n"
@@ -106,15 +110,21 @@ class Hud:
             f"HDG  {st.heading % 360:5.0f}\n"
             f"PWR  {c.throttle * 100:5.0f} %   RPM {st.rpm:4.0f}\n"
             f"FLAP {flaps}/3   TRIM {-c.pitch_trim:+.2f}\n"
-            f"FUEL {st.fuel_lb:5.0f} lb\n"
+            f"FUEL {st.fuel_lb:5.0f} lb" + (f" +{ferry:.0f} ferry{' PUMP' if s.pumping else ''}" if ferry or lo.ferry_tanks() else "") + "\n"
+            + (f"RNG  {range_km:5.0f} km  ({hours * 60:.0f} min)\n" if not st.on_ground else "RNG     -- (airborne only)\n") +
             f"WT   {st.weight_lb:5.0f} lb  CG {st.cg_in:.1f}in\n"
+            f"XPDR {'ON ' + s.squawk if s.transponder else 'OFF'}   AP {'ON' if s.autopilot.engaged else '--'}"
+            f"{'   KICKING' if s.kick_queue else ''}\n"
             f"{'BRAKE ' if c.brake > 0.5 else ''}{'YOKE:MOUSE ' if mouse_yoke else ''}CAM:{cam_mode}"
         )
         self._set_bar(self.throttle_bar, c.throttle)
         wanted = s.police.wanted
         stars = "*" * wanted + "." * (3 - wanted)
-        det = f"  RADAR:{s.police.detected_by}" if s.police.detected_by else ""
-        susp = f"  suspicion {s.police.suspicion:3.0f}%" if s.carrying_hot() and not wanted else ""
+        det = ""
+        if "detector" in s.gear:
+            level = s.police.detector()
+            det = {"LOCK": "  RADAR LOCK", "PAINT": "  radar paint"}.get(level, "  radar clear")
+        susp = f"  suspicion {s.police.suspicion:3.0f}%" if s.police.suspicion > 1 and not wanted else ""
         self.status.setText(
             f"${s.money:,}\n{s.spec.name}\n"
             f"WANTED [{stars}]{det}{susp}\n"
@@ -123,13 +133,23 @@ class Hud:
         self.status["fg"] = RED if wanted else WHITE
         job_lines = []
         for j in s.active_jobs[:6]:
-            dst = AIRFIELD_BY_CODE[j.dest]
-            d = math.hypot(dst.x - st.x, dst.y - st.y) / 1000
-            brg = bearing_to(st.x, st.y, dst.x, dst.y)
+            jx, jy = s.job_xy(j)
+            d = math.hypot(jx - st.x, jy - st.y) / 1000
+            brg = bearing_to(st.x, st.y, jx, jy)
             tl = j.time_left(s.time)
             tls = f" {int(tl // 60)}:{int(tl % 60):02d}" if tl is not None else ""
-            job_lines.append(f"{'!' if j.hot else ''}{j.dest} {d:4.1f}km brg {brg:03.0f}{tls}  ${j.payout:,}")
+            extra = ""
+            if j.is_airdrop:
+                boat = s.maritime.boat(j.boat_id) if j.boat_id else None
+                left = sum(1 for i in lo.items.values() if i.job_id == j.id)
+                extra = f" [{left} aboard, boat {boat.state if boat else '?'}]"
+            job_lines.append(f"{'!' if j.hot else ''}{j.dest_label()} {d:4.1f}km brg {brg:03.0f}{tls}  ${j.payout:,}{extra}")
         self.jobs.setText("\n".join(job_lines))
+        intel_lines = [f"SCAN {text[:52]}" for t, text in s.scanner_log[-3:] if s.time - t < 40]
+        self.intel.setText("\n".join(intel_lines))
+        camp = s.campaign
+        self.objectives.setText(
+            (f"{camp.chapter.year} - {camp.chapter.title}\n" + "\n".join(camp.objective_lines())) if camp else "")
         now = s.time
         self.msgs.setText("\n".join(m for t, m in s.messages if now - t < 12))
         warns = []
@@ -155,7 +175,8 @@ class Hud:
             wb = lo.compute()
             flag = "" if wb.ok else "   !! LOAD OUT OF LIMITS !!"
             self.center.setText("")
-            self.hint.setText(f"[J] Jobs  [L] Load & fuel  [H] Hangar  [F1] Help{flag}")
+            busy = f"   loading... {sum(lo.pending.values()):.0f} crew-s" if lo.pending else ""
+            self.hint.setText(f"[J] Jobs  [L] Load & fuel  [H] Hangar & gear  [F1] Help{flag}{busy}")
         else:
             self.center.setText("")
             self.hint.setText("")
@@ -164,7 +185,7 @@ class Hud:
 
     def _update_papi(self, st):
         s = self.s
-        dests = [AIRFIELD_BY_CODE[j.dest] for j in s.active_jobs]
+        dests = [AIRFIELD_BY_CODE[j.dest] for j in s.active_jobs if not j.is_airdrop]
         af, dist = None, 1e9
         for a in dests or s.world.airfields:
             for end in (0, 1):
@@ -247,23 +268,41 @@ class Minimap:
         st = self.s.state
         ls = LineSegs()
         ls.setThickness(3)
-        for j in self.s.active_jobs:
-            af = AIRFIELD_BY_CODE[j.dest]
-            ls.setColor(0.3, 1, 0.3, 1)
-            cx, _, cy = self._p(af.x, af.y)
+        s = self.s
+
+        def cross(x, y, color, r=0.006):
+            ls.setColor(*color)
+            cx, _, cy = self._p(x, y)
+            ls.moveTo(cx - r, 0, cy - r)
+            ls.drawTo(cx + r, 0, cy + r)
+            ls.moveTo(cx - r, 0, cy + r)
+            ls.drawTo(cx + r, 0, cy - r)
+
+        for j in s.active_jobs:
+            jx, jy = s.job_xy(j)
+            ls.setColor(*((0.3, 0.8, 1, 1) if j.is_airdrop else (0.3, 1, 0.3, 1)))
+            cx, _, cy = self._p(jx, jy)
             for k in range(13):
                 a = 2 * math.pi * k / 12
                 p = (cx + 0.012 * math.cos(a), 0, cy + 0.012 * math.sin(a))
                 ls.drawTo(*p) if k else ls.moveTo(*p)
-        for u in self.s.police.units:
-            if u.state == "crashed":
-                continue
-            ls.setColor(*((0.3, 0.5, 1, 1) if u.faction == "police" else (0.8, 0.3, 1, 1)))
-            cx, _, cy = self._p(u.x, u.y)
-            ls.moveTo(cx - 0.006, 0, cy - 0.006)
-            ls.drawTo(cx + 0.006, 0, cy + 0.006)
-            ls.moveTo(cx - 0.006, 0, cy + 0.006)
-            ls.drawTo(cx + 0.006, 0, cy - 0.006)
+        for b in s.maritime.boats:
+            if b.kind == "gofast" and b.state not in ("delivered",):
+                cross(b.x, b.y, (0.3, 0.9, 1, 1), 0.005)
+        for bl in s.maritime.bales:
+            if bl.state == "floating":
+                cross(bl.x, bl.y, (1, 0.9, 0.3, 1), 0.003)
+        # police: only what you know - eyeballs, scanner, spotters
+        known = {k: (v[1], v[2]) for k, v in s.intel.items() if v[0] <= s.time}
+        if st:
+            for u in s.police.units:
+                if u.state != "crashed" and math.dist((u.x, u.y, u.z), (st.x, st.y, st.alt)) < 4500:
+                    known[u.id] = (u.x, u.y)
+            for c in s.maritime.boats:
+                if c.kind == "cutter" and math.hypot(c.x - st.x, c.y - st.y) < 9000:
+                    known[c.id] = (c.x, c.y)
+        for uid, (x, y) in known.items():
+            cross(x, y, (0.8, 0.3, 1, 1) if uid.startswith("Rival") else (0.3, 0.5, 1, 1))
         if st:
             h = math.radians(st.heading)
             cx, _, cy = self._p(st.x, st.y)
@@ -349,15 +388,19 @@ class JobMenu(Menu):
                 lines.append("-- available --")
             if kind == "active" and (i == 0 or rows[i - 1][0] == "board"):
                 lines.append("-- on board (ENTER to drop) --")
-            dst = AIRFIELD_BY_CODE[j.dest]
-            dist = math.hypot(dst.x - af.x, dst.y - af.y) / 1000
-            roll = s.spec.est_landing_roll(est_w + (j.weight_lb if kind == "board" else 0), s.world.airfield_elev(dst))
+            jx, jy = s.job_xy(j)
+            dist = math.hypot(jx - af.x, jy - af.y) / 1000
             pax = sum(1 for it in j.items if it.kind == "passenger")
             cur = ">" if i == self.sel else " "
+            if j.is_airdrop:
+                where = f"drop at sea, {len(j.items)} bales, paid per bale at the cove"
+            else:
+                dst = AIRFIELD_BY_CODE[j.dest]
+                roll = s.spec.est_landing_roll(est_w + (j.weight_lb if kind == "board" else 0), s.world.airfield_elev(dst))
+                where = f"strip {dst.length:.0f} m (est. roll {roll:.0f} m)"
             lines.append(
                 f"{cur} {'[HOT] ' if j.hot else ''}{j.title}\n"
-                f"      ${j.payout:,}  {j.weight_lb:.0f} lb  {pax} pax  {dist:.1f} km  "
-                f"strip {dst.length:.0f} m (est. roll {roll:.0f} m)"
+                f"      ${j.payout:,}  {j.weight_lb:.0f} lb  {pax} pax  {dist:.1f} km  {where}"
                 + (f"  {int(j.deadline_s // 60)} min" if j.deadline_s else "")
                 + (f"\n      {j.notes}" if j.notes else "")
             )
@@ -379,6 +422,10 @@ class LoadMenu(Menu):
         elif k in ("+", "-"):
             cap = s.loadout.mass.fuel_capacity_lb
             s.set_fuel(s.fm.fuel_lb() + (0.1 if k == "+" else -0.1) * cap)
+        elif k == "f":
+            err = s.fill_ferry(10_000)
+            if err:
+                s.say(err)
         super().key(k)
 
     def refresh(self):
@@ -390,12 +437,14 @@ class LoadMenu(Menu):
         self.header.setText(f"LOAD PLANNER - {s.spec.name}")
         items = self.rows()
         self.sel = min(self.sel, max(0, len(items) - 1))
-        weights = lo.station_weights()
-        lines = ["Stations:"]
+        weights = lo.station_weights(planned=True)
+        lines = [f"Stations (crew loading: {s.crew_count()}):"]
         for i, st in enumerate(lo.spec.stations):
             who = [it.label for it in lo.items.values() if lo.assignment.get(it.id) == i]
             if st.kind == "pilot":
                 who = [f"You ({PILOT_LB:.0f} lb)"]
+            elif lo.copilot_aboard and i == lo.copilot_station():
+                who = [f"Co-pilot ({PILOT_LB:.0f} lb)"] + who
             over = "  OVER!" if weights[i] > st.max_lb else ""
             lines.append(f"  {st.name:<16} arm {st.x_in:6.1f}  {weights[i]:5.0f}/{st.max_lb:.0f} lb  {', '.join(who)}{over}")
         lines.append("")
@@ -404,8 +453,11 @@ class LoadMenu(Menu):
             st = lo.assignment.get(it.id)
             where = lo.spec.stations[st].name if st is not None else "** ON THE RAMP **"
             cur = ">" if i == self.sel else " "
-            flags = ("HOT " if it.hot else "") + ("FRAGILE " if it.fragile else "")
-            lines.append(f"{cur} {it.label:<16} {it.weight_lb:5.0f} lb  {flags}-> {where}")
+            flags = ("HOT " if it.hot else "") + ("FRAGILE " if it.fragile else "") + ("DROP " if it.droppable else "")
+            if it.kind == "tank":
+                flags += f"{it.fuel_lb:.0f}/{it.fuel_cap_lb:.0f} lb fuel "
+            pend = f"  (loading {lo.pending[it.id]:.0f}s)" if it.id in lo.pending else ""
+            lines.append(f"{cur} {it.label:<16} {it.weight_lb:5.0f} lb  {flags}-> {where}{pend}")
         self.body.setText("\n".join(lines))
         verdict = "OK" if wb.ok else "OUT OF LIMITS"
         details = []
@@ -421,7 +473,7 @@ class LoadMenu(Menu):
             f"TOW {wb.weight_lb:.0f}/{lo.spec.mtow_lb:.0f} lb   CG {wb.cg_in:.1f} in "
             f"(limits {wb.fwd_limit_in:.1f}-{wb.aft_limit_in:.1f})   fuel {lo.fuel_lb:.0f}/{lo.mass.fuel_capacity_lb:.0f} lb   "
             f"[{verdict}] {'; '.join(details)}\n"
-            f"+/- fuel (${FUEL_PRICE_PER_LB:.2f}/lb)   A hire loadmaster (${LOADMASTER_FEE})   UP/DOWN item   ESC close"
+            f"+/- fuel (${FUEL_PRICE_PER_LB:.2f}/lb)  F fill ferry tank  A loadmaster (${LOADMASTER_FEE})  UP/DOWN item  ESC close"
         )
         self._chart(wb, zfw)
 
@@ -471,34 +523,69 @@ class LoadMenu(Menu):
 
 
 class HangarMenu(Menu):
+    """Aircraft dealer, gear shop and services (spotters, crew)."""
+
     def rows(self):
-        return list(ROSTER.values())
+        s = self.s
+        rows = [("aircraft", a) for a in ROSTER.values()]
+        rows += [("gear", name) for name in GEAR if {"ferry_tank": "ferry"}.get(name, name) in s.features]
+        if "spotters" in s.features:
+            rows.append(("spotter", s.location))
+        if "copilot" in s.features:
+            rows.append(("copilot", None))
+        return rows
 
     def key(self, k):
         if k == "enter":
-            spec = self.rows()[self.sel]
-            err = self.s.buy_or_switch(spec.key)
+            rows = self.rows()
+            kind, what = rows[min(self.sel, len(rows) - 1)]
+            s = self.s
+            if kind == "aircraft":
+                err = s.buy_or_switch(what.key)
+            elif kind == "gear":
+                err = s.buy_gear(what)
+            elif kind == "spotter":
+                err = s.hire_spotter(what)
+            else:
+                if s.copilot == "human":
+                    err = "Your co-pilot is a real person - ask them."
+                else:
+                    s.set_copilot(None if s.copilot else "ai")
+                    err = None
+                    s.say("Co-pilot aboard." if s.copilot else "Co-pilot stays on the ground.")
             if err:
-                self.s.say(err)
+                s.say(err)
         super().key(k)
 
     def refresh(self):
         s = self.s
-        self.header.setText("HANGAR / DEALER")
+        self.header.setText("HANGAR, GEAR & SERVICES")
         lines = []
-        for i, a in enumerate(self.rows()):
-            owned = "OWNED" if a.key in s.owned else f"${a.price:,}"
+        rows = self.rows()
+        self.sel = min(self.sel, max(0, len(rows) - 1))
+        for i, (kind, what) in enumerate(rows):
             cur = ">" if i == self.sel else " "
-            flying = " (current)" if a.key == s.aircraft_key else ""
-            seats = sum(1 for st in a.stations if st.kind == "seat")
-            lines.append(
-                f"{cur} {a.name:<24} {owned:>10}{flying}\n"
-                f"      MTOW {a.mtow_lb:.0f} lb, {seats} pax seats, ground roll ~{a.ground_roll_m:.0f} m\n"
-                f"      {a.description}"
-            )
+            if kind == "aircraft":
+                a = what
+                owned = "OWNED" if a.key in s.owned else f"${a.price:,}"
+                flying = " (current)" if a.key == s.aircraft_key else ""
+                seats = sum(1 for st in a.stations if st.kind == "seat")
+                lines.append(f"{cur} {a.name:<24} {owned:>10}{flying}   MTOW {a.mtow_lb:.0f} lb, {seats} seats,"
+                             f" roll ~{a.ground_roll_m:.0f} m")
+            elif kind == "gear":
+                price, desc = GEAR[what]
+                have = what in s.gear or (what == "ferry_tank" and any(i.kind == "tank" for i in s.loadout.items.values()))
+                lines.append(f"{cur} {desc:<52} {'FITTED' if have else f'${price:,}':>8}")
+            elif kind == "spotter":
+                watching = ", ".join(sp.code for sp in s.spotters) or "none"
+                lines.append(f"{cur} Hire a spotter to watch this strip ($400)   [watching: {watching}]")
+            else:
+                who = {"human": "human (online)", "ai": "Rosa (AI)", None: "none"}[s.copilot]
+                lines.append(f"{cur} Co-pilot: {who}  - loads 2x faster, kicks bales, pumps ferry fuel. ENTER toggles.")
         self.body.setText("\n".join(lines))
         shop = s.airfield.shop if s.airfield else False
-        self.footer.setText(("ENTER buy / switch   " if shop else "No dealer at this field.   ") + "ESC close")
+        self.footer.setText(("ENTER buy / hire / toggle   " if shop else "No aircraft dealer here (gear and services OK).   ")
+                            + "ESC close")
 
 
 HELP_TEXT = """SKYRUNNER - controls
@@ -508,14 +595,15 @@ Flight   W/S or UP/DOWN pitch     A/D or LEFT/RIGHT roll     Q/E rudder / nosewh
          G flaps down   T flaps up   [ / ] pitch trim   B or SPACE brakes
          Y toggle mouse yoke (mouse position = stick)
 View     C cycle camera (chase / cockpit / tower)    M big map    P pause
-Ground   J job board   L load planner & fuel   H hangar (Harbor / Valley)
-         ENTER continue after crash/bust    ESC close menu / quit
+Ground   J job board   L load planner & fuel (F fills the ferry tank)   H hangar, gear, spotters, crew
+Crew     N transponder on/off   U autopilot (hold alt/hdg)   K kick a bale   O call the boat
+         V ferry fuel pump   ENTER continue after crash/bust    ESC close menu / quit
 
 Goal: haul passengers & cargo between strips for money. Balance the load:
 too heavy = long roll & weak climb, CG too far aft = pitch-up / stall,
 too far forward = can't flare. Short strips pay more.
-Contraband & fugitives pay big, but radars (red rings) flag you if you fly
-high. Stay low and behind terrain. If police close within 350 m for a few
-seconds you're forced down. Land far away from them - or lure them into a
-canyon wall. Rival smugglers will try to take your cargo.
+Hot jobs pay big. Squawking looks legit; flying dark (transponder off) is
+invisible only below the radar floor - and a squawk that vanishes on radar
+is a red flag. Airdrops: fly low and slow over the boat, K to kick
+(solo: autopilot first). Police within 350 m for a few seconds = busted.
 """

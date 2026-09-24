@@ -70,6 +70,9 @@ class FlightState:
     valid: bool
     vx: float = 0.0  # world velocity m/s
     vy: float = 0.0
+    p_dps: float = 0.0  # roll rate
+    q_dps: float = 0.0  # pitch rate
+    fuel_flow_pph: float = 0.0
 
 
 class FlightModel:
@@ -215,6 +218,33 @@ class FlightModel:
     def fuel_lb(self) -> float:
         return self.fdm["propulsion/total-fuel-lbs"]
 
+    def fuel_flow_pph(self) -> float:
+        total = 0.0
+        for i in range(self.n_engines):
+            prop = f"propulsion/engine[{i}]/fuel-flow-rate-pps"
+            if self.has(prop):
+                v = self.fdm[prop]
+                total += v if math.isfinite(v) else 0.0
+        return total * 3600.0
+
+    def add_fuel(self, lb: float) -> float:
+        """Pour fuel into the wing tanks (ferry transfer). Returns what fit."""
+        added = 0.0
+        caps = self.mass.tanks
+        for i, (_, cap) in enumerate(caps):
+            if lb - added <= 0:
+                break
+            prop = f"propulsion/tank[{i}]/contents-lbs"
+            cur = self.fdm[prop]
+            room = max(0.0, cap - cur)
+            share = min(room, (lb - added) if i == len(caps) - 1 else lb / len(caps))
+            self.fdm[prop] = cur + share
+            added += share
+        return added
+
+    def wing_fuel_room(self) -> float:
+        return sum(max(0.0, cap - self.fdm[f"propulsion/tank[{i}]/contents-lbs"]) for i, (_, cap) in enumerate(self.mass.tanks))
+
     def state(self) -> FlightState:
         f = self.fdm
         x, y = self.position_xy()
@@ -249,4 +279,7 @@ class FlightModel:
             valid=valid,
             vx=f["velocities/v-east-fps"] * FT,
             vy=f["velocities/v-north-fps"] * FT,
+            p_dps=math.degrees(f["velocities/p-rad_sec"]),
+            q_dps=math.degrees(f["velocities/q-rad_sec"]),
+            fuel_flow_pph=self.fuel_flow_pph(),
         )

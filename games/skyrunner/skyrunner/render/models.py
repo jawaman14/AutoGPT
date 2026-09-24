@@ -416,3 +416,70 @@ def build_pursuer(kind: str) -> tuple[NodePath, list[NodePath], list[NodePath]]:
         ln.setLightOff()
         lights.append(ln)
     return root, spinners, lights
+
+
+# ====================================================================== maritime
+def build_boat(kind: str) -> tuple[NodePath, list[NodePath]]:
+    """Go-fast (long, low, loud) or Coast Guard cutter. +Y forward, waterline at z=0."""
+    mb = MeshBuilder()
+    lights: list[NodePath] = []
+    if kind == "cutter":
+        hull, trim = (0.92, 0.92, 0.94), (0.8, 0.15, 0.1)
+        mb.frustum(-18, 14, (0, 0.8, 3.2, 1.6), (0, 1.2, 2.6, 1.8), hull)
+        mb.frustum(14, 22, (0, 1.2, 2.6, 1.8), (0, 2.0, 0.2, 0.9), hull)
+        mb.box(0, 8, 1.2, 5.3, 1.2, 1.5, trim)  # racing stripe
+        mb.box(0, -2, 4.4, 4.2, 10, 3.0, hull)  # superstructure
+        mb.box(0, 1, 7.0, 2.2, 3, 2.2, (0.3, 0.35, 0.4))
+        mb.box(0, -1, 9.5, 0.3, 0.3, 3.0, (0.2, 0.2, 0.2))  # mast
+        root = mb.node("cutter")
+        lm = MeshBuilder()
+        lm.box(0, 0, 0, 0.8, 0.8, 0.5, (0.2, 0.4, 1))
+        light = lm.node("beacon")
+        light.reparentTo(root)
+        light.setPos(0, -1, 11.2)
+        light.setLightOff()
+        lights.append(light)
+    else:
+        hull, deck = (0.95, 0.95, 0.95), (0.85, 0.1, 0.25)
+        mb.frustum(-5.5, 5, (0, 0.3, 1.2, 0.6), (0, 0.45, 1.0, 0.6), hull)
+        mb.frustum(5, 8, (0, 0.45, 1.0, 0.6), (0, 0.8, 0.1, 0.25), hull)
+        mb.box(0, 0, 1.0, 2.05, 9.5, 0.12, deck)
+        mb.box(0, 0.5, 1.4, 1.6, 1.4, 0.8, (0.15, 0.2, 0.25))  # windscreen
+        for side in (-0.45, 0.45):
+            mb.box(side, -5.9, 0.2, 0.35, 0.6, 1.0, (0.1, 0.1, 0.1))  # outboards
+        root = mb.node("gofast")
+    return root, lights
+
+
+def build_bale() -> NodePath:
+    mb = MeshBuilder()
+    mb.box(0, 0, 0.3, 0.9, 0.6, 0.6, (0.55, 0.45, 0.25))
+    mb.box(0, 0, 0.3, 0.92, 0.1, 0.62, (0.2, 0.2, 0.2))
+    return mb.node("bale")
+
+
+def build_aerostat() -> NodePath:
+    """Tethered radar balloon: a fat white ellipsoid with fins, radome underneath."""
+    mb = MeshBuilder()
+    segs, rings = 16, 10
+    L, R = 70.0, 13.0
+    pts = []
+    for r in range(rings + 1):
+        t = r / rings
+        y = -L / 2 + t * L
+        rad = R * math.sin(math.pi * t) ** 0.7
+        pts.append([(rad * math.cos(2 * math.pi * k / segs), y, rad * math.sin(2 * math.pi * k / segs))
+                    for k in range(segs)])
+    white = (0.95, 0.95, 0.93)
+    for r in range(rings):
+        for k in range(segs):
+            a, b = pts[r][k], pts[r][(k + 1) % segs]
+            c, d = pts[r + 1][(k + 1) % segs], pts[r + 1][k]
+            mb.quad(a, d, c, b, white)
+    for ang in (0, 120, 240):
+        a = math.radians(ang + 90)
+        tip = (math.cos(a) * R * 1.3, -L * 0.42, math.sin(a) * R * 1.3)
+        mb.tri((0, -L * 0.3, 0), (0, -L * 0.48, 0), tip, (0.85, 0.85, 0.85))
+        mb.tri((0, -L * 0.48, 0), (0, -L * 0.3, 0), tip, (0.85, 0.85, 0.85))
+    mb.box(0, 0, -R - 2.5, 7, 7, 5, (0.8, 0.8, 0.8))  # radome
+    return mb.node("aerostat")

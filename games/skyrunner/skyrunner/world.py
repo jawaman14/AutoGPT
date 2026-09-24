@@ -268,14 +268,26 @@ class World:
                         return True
         return False
 
+    def heights_many(self, xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
+        """Vectorised bilinear terrain height (sea floor included)."""
+        fx = np.clip((xs + HALF) / CELL, 0, GRID - 1.0001)
+        fy = np.clip((ys + HALF) / CELL, 0, GRID - 1.0001)
+        i = fx.astype(int)
+        j = fy.astype(int)
+        tx, ty = fx - i, fy - j
+        h = self.heights
+        return (
+            h[j, i] * (1 - tx) * (1 - ty)
+            + h[j, i + 1] * tx * (1 - ty)
+            + h[j + 1, i] * (1 - tx) * ty
+            + h[j + 1, i + 1] * tx * ty
+        )
+
     def line_of_sight(self, a: tuple[float, float, float], b: tuple[float, float, float], step: float = 200.0) -> bool:
         ax, ay, az = a
         bx, by, bz = b
         d = math.hypot(bx - ax, by - ay)
         n = max(2, int(d / step))
-        for k in range(1, n):
-            t = k / n
-            x, y, z = ax + (bx - ax) * t, ay + (by - ay) * t, az + (bz - az) * t
-            if self.ground(x, y) > z:
-                return False
-        return True
+        t = np.arange(1, n) / n
+        ground = np.maximum(self.heights_many(ax + (bx - ax) * t, ay + (by - ay) * t), 0.0)
+        return bool(np.all(ground <= az + (bz - az) * t))

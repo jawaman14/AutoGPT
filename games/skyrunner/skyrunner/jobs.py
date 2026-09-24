@@ -13,6 +13,11 @@ from .world import Airfield
 _ids = itertools.count(1)
 
 
+def new_id() -> int:
+    """Unique id shared by jobs and items (and ferry tanks)."""
+    return next(_ids)
+
+
 @dataclass
 class Job:
     id: int
@@ -26,6 +31,24 @@ class Job:
     accepted_at: float | None = None
     notes: str = ""
     comfort: bool = False  # passengers who hate steep banks / hard landings
+    drop_point: tuple[float, float] | None = None  # airdrop jobs: rendezvous at sea
+    boat_id: str | None = None
+    bales_total: int = 0
+    bales_delivered: int = 0
+    resolved: bool = False
+
+    @property
+    def is_airdrop(self) -> bool:
+        return self.drop_point is not None
+
+    def target_xy(self, airfields: dict) -> tuple[float, float]:
+        if self.drop_point is not None:
+            return self.drop_point
+        af = airfields[self.dest]
+        return af.x, af.y
+
+    def dest_label(self) -> str:
+        return "DROP" if self.drop_point is not None else self.dest
 
     @property
     def hot(self) -> bool:
@@ -81,16 +104,41 @@ CONTRABAND = [
 ]
 
 
-def generate_jobs(origin: Airfield, airfields: tuple[Airfield, ...], rng: random.Random, n: int = 6) -> list[Job]:
+def airdrop_job(origin: Airfield, drop_point: tuple[float, float], rng: random.Random, bales: int | None = None) -> Job:
+    jid = next(_ids)
+    n = bales or rng.randint(3, 6)
+    items = [_item("Bale", "cargo", rng.uniform(22, 32), jid, hot=True, droppable=True) for _ in range(n)]
+    dist = math.hypot(drop_point[0] - origin.x, drop_point[1] - origin.y) / 1000
+    pay = int(n * (700 + dist * 40))
+    return Job(jid, f"Kick {n} bales to the boat", "airdrop", origin.code, "SEA", items, pay,
+               notes="Fly to the rendezvous, kick the bales near the boat [K]. Paid per bale landed at the cove.",
+               drop_point=drop_point, bales_total=n)
+
+
+def generate_jobs(origin: Airfield, airfields: tuple[Airfield, ...], rng: random.Random, n: int = 6,
+                  features: set[str] | None = None, drop_point_fn=None) -> list[Job]:
+    features = features if features is not None else {"contraband", "airdrop"}
     jobs: list[Job] = []
     others = [a for a in airfields if a.code != origin.code]
-    for _ in range(n):
+    shady_origin = origin.kind in ("shady", "bush")
+    if "airdrop" in features and drop_point_fn is not None and shady_origin:
+        jobs.append(airdrop_job(origin, drop_point_fn(), rng))
+    if "ferry" in features and origin.kind in ("hub", "regional"):
+        dest = rng.choice([a for a in airfields if a.kind in ("shady", "bush")])
+        jid = next(_ids)
+        count = rng.randint(1, 3)
+        items = [_item("Fuel drum", "cargo", rng.uniform(75, 90), jid) for _ in range(count)]
+        w = sum(i.weight_lb for i in items)
+        jobs.append(Job(jid, f"Fuel cache x{count} -> {dest.name}", "cargo", origin.code, dest.code, items,
+                        int(150 + w * 0.8), notes="Stocks a fuel cache there for your own runs."))
+    while len(jobs) < n:
         dest = rng.choice(others)
         jid = next(_ids)
         dist = _dist_km(origin, dest)
         diff = _difficulty(dest)
         roll = rng.random()
-        shady_origin = origin.kind in ("shady", "bush")
+        if "contraband" not in features and roll < 0.45:
+            roll = 0.45 + roll  # no hot work offered yet
         if shady_origin and roll < 0.35:
             name, lo, hi = rng.choice(CONTRABAND)
             count = rng.randint(1, 4)

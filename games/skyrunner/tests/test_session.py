@@ -26,7 +26,11 @@ def test_accept_job_loads_items(sess):
     job = next(j for j in sess.boards["HAR"] if j.weight_lb < 250)
     before = sess.fm.state().weight_lb
     assert sess.accept_job(job) is None
+    assert sess.loadout.pending  # the crew has to carry it in
     idle(sess, 0.2)
+    assert sess.fm.state().weight_lb == pytest.approx(before, abs=5)
+    idle(sess, 30)
+    assert not sess.loadout.pending
     assert sess.fm.state().weight_lb == pytest.approx(before + job.weight_lb, abs=5)
 
 
@@ -34,9 +38,12 @@ def test_cannot_depart_with_cargo_on_ramp(sess):
     idle(sess, 0.5)
     job = next(j for j in sess.boards["HAR"] if j.weight_lb < 250)
     sess.accept_job(job)
+    idle(sess, 3, held=["throttle_up"])  # still loading
+    assert sess.state.gs_kts < 1
+    idle(sess, 30)
     for it in list(sess.loadout.items.values()):
         sess.loadout.assignment.pop(it.id, None)
-    idle(sess, 3, held=["throttle_up"])
+    idle(sess, 3, held=["throttle_up"])  # left on the ramp
     assert sess.state.gs_kts < 1
 
 
@@ -65,6 +72,7 @@ def test_delivery_pays_on_arrival(sess):
     job.dest = "VAL"
     job.items = [it for it in job.items if it.kind == "cargo"][:1] or job.items[:1]
     assert sess.accept_job(job) is None
+    idle(sess, 20)
     money = sess.money
     # teleport: rolling slowly down Valley's runway as if just landed
     sess.spawn_at("VAL")

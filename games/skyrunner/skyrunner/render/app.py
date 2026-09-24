@@ -23,6 +23,8 @@ from panda3d.core import (
 
 from ..controls import InputFrame
 from ..game import Session
+from ..roles import Role
+from ..sensors import AEROSTAT_POS
 from ..world import AIRFIELD_BY_CODE
 from . import models
 from .hud import HELP_TEXT, HangarMenu, Hud, JobMenu, LoadMenu
@@ -42,6 +44,13 @@ HELD_KEYS = {
     "brake": ("b", "space"),
     "trim_up": ("]",),
     "trim_down": ("[",),
+}
+CREW_KEYS = {  # one-shot crew commands issued from the pilot's seat
+    "n": ("transponder", {}),
+    "u": ("autopilot", {}),
+    "k": ("kick", {}),
+    "o": ("call_boat", {}),
+    "v": ("pump", {}),
 }
 PRESS_KEYS = {
     "g": "flaps_down",
@@ -66,13 +75,14 @@ def _button(name: str):
 
 
 class SkyrunnerApp(ShowBase):
-    def __init__(self, session: Session, offscreen: bool = False):
+    def __init__(self, session: Session, offscreen: bool = False, server=None):
         if offscreen:
             loadPrcFileData("", "window-type offscreen\naudio-library-name null\nwin-size 1280 720")
         else:
             loadPrcFileData("", "win-size 1280 720\nwindow-title Skyrunner\nframebuffer-multisample 1\nmultisamples 4\nsync-video 1")
         super().__init__()
         self.s = session
+        self.server = server
         self.disableMouse()
         self.setBackgroundColor(*SKY)
         self.render.setShaderAuto() if not offscreen else None
@@ -87,6 +97,9 @@ class SkyrunnerApp(ShowBase):
                                  fg=(1, 1, 1, 1), bg=(0, 0, 0, 0.8), align=TextNode.ALeft, mayChange=False)
         self.help.hide()
         self.glareshield = self._build_glareshield()
+        self.briefing = OnscreenText("", parent=self.aspect2d, pos=(-1.2, 0.55), scale=0.05, fg=(1, 0.85, 0.5, 1),
+                                     bg=(0, 0, 0, 0.85), align=TextNode.ALeft, mayChange=True)
+        self.briefing.hide()
 
         self.cam_mode = "chase"
         self.mouse_yoke = False
@@ -125,6 +138,12 @@ class SkyrunnerApp(ShowBase):
         self.beacons = []
         self._build_player()
         self.pursuer_nodes: dict[int, tuple] = {}
+        self.boat_nodes: dict[str, tuple] = {}
+        self.bale_nodes: dict[int, object] = {}
+        self.aerostat = models.build_aerostat()
+        self.aerostat.reparentTo(self.render)
+        self.aerostat.setPos(AEROSTAT_POS[0], AEROSTAT_POS[1], 2500)
+        self.aerostat.hide()
 
     def _build_player(self):
         if getattr(self, "player", None) is not None:
@@ -135,23 +154,30 @@ class SkyrunnerApp(ShowBase):
         self._player_key = spec.key
 
     def _sync_beacons(self):
-        want = sorted({j.dest for j in self.s.active_jobs})
+        want = sorted({(j.dest, j.drop_point) for j in self.s.active_jobs}, key=str)
         if want == [b[0] for b in self.beacons]:
             return
         for _, nodes in self.beacons:
             for n in nodes:
                 n.removeNode()
         self.beacons = []
-        for code in want:
-            af = AIRFIELD_BY_CODE[code]
+        for key in want:
+            code, drop = key
             nodes = []
-            for end in (0, 1):
-                x, y = af.threshold(end)
-                b = models.build_beacon()
+            if drop is not None:  # rendezvous at sea: one tall blue marker
+                b = models.build_beacon(height=400, radius=10, color=(0.3, 0.6, 1.0, 0.35))
                 b.reparentTo(self.render)
-                b.setPos(x, y, self.s.world.airfield_elev(af))
+                b.setPos(drop[0], drop[1], 0)
                 nodes.append(b)
-            self.beacons.append((code, nodes))
+            else:
+                af = AIRFIELD_BY_CODE[code]
+                for end in (0, 1):
+                    x, y = af.threshold(end)
+                    b = models.build_beacon()
+                    b.reparentTo(self.render)
+                    b.setPos(x, y, self.s.world.airfield_elev(af))
+                    nodes.append(b)
+            self.beacons.append((key, nodes))
 
     def _build_glareshield(self):
         """Cockpit view: a dark glareshield along the bottom and a waterline marker
@@ -177,6 +203,8 @@ class SkyrunnerApp(ShowBase):
     def _bind_keys(self):
         for key, action in PRESS_KEYS.items():
             self.accept(key, self._pressed.add, [action])
+        for key, (name, args) in CREW_KEYS.items():
+            self.accept(key, self._crew, [name, args])
         for k in ("j", "l", "h"):
             self.accept(k, self._toggle_menu, [k])
         self.accept("escape", self._escape)
@@ -187,9 +215,16 @@ class SkyrunnerApp(ShowBase):
         self.accept("f1", lambda: self.help.hide() if not self.help.isHidden() else self.help.show())
         for k, name in (("arrow_up", "up"), ("arrow_down", "down"), ("arrow_left", "left"),
                         ("arrow_right", "right"), ("enter", "enter"), ("a", "a"), ("+", "+"),
-                        ("=", "+"), ("-", "-")):
+                        ("=", "+"), ("-", "-"), ("f", "f")):
             self.accept(k, self._menu_key, [name])
             self.accept(k + "-repeat", self._menu_key, [name]) if k.startswith("arrow") else None
+
+    def _crew(self, name: str, args: dict):
+        if self._active_menu() is not None:
+            return
+        ok, msg = self.s.command(Role.PILOT, name, **args)
+        if not ok:
+            self.s.say(msg)
 
     def _active_menu(self):
         return next((m for m in self.menus.values() if m.visible), None)
@@ -302,10 +337,25 @@ class SkyrunnerApp(ShowBase):
     # ------------------------------------------------------------ loop
     def _tick(self, task):
         dt = min(ClockObject.getGlobalClock().getDt(), 0.1)
-        if not self.paused:
+        camp = self.s.campaign
+        if camp is not None and camp.show_briefing:
+            ch = camp.chapter
+            self.briefing.setText(f"CHAPTER {ch.num}  -  {ch.year}  -  {ch.title}\n\n{ch.briefing}\n\n"
+                                  + "\n".join(camp.objective_lines()) + "\n\nPress ENTER")
+            self.briefing.show()
+            if "confirm" in self._pressed:
+                camp.show_briefing = False
+                self._pressed.discard("confirm")
+                self.briefing.hide()
+            self._pressed.clear()
+        elif not self.paused:
             if self._player_key != self.s.aircraft_key:
                 self._build_player()
+            if self.server is not None:
+                self.server.pump(self.s)
             self.s.update(dt, self._gather_input())
+            if self.server is not None:
+                self.server.publish(self.s)
         self._sync_scene(dt)
         self.hud.update(self.cam_mode, self.mouse_yoke)
         m = self._active_menu()
@@ -328,7 +378,51 @@ class SkyrunnerApp(ShowBase):
             p.setR(p.getR() + spin)
         self._sync_beacons()
         self._sync_pursuers(dt)
+        self._sync_maritime(dt)
+        aer = self.s.police.sensors.site("AER")
+        self.aerostat.show() if aer and aer.active else self.aerostat.hide()
         self._update_camera(st, dt)
+
+    def _sync_maritime(self, dt):
+        mar = self.s.maritime
+        live = {b.id: b for b in mar.boats if b.state not in ("delivered",)}
+        for bid in list(self.boat_nodes):
+            if bid not in live:
+                self.boat_nodes.pop(bid)[0].removeNode()
+        blink = int(self.s.time * 3) % 2
+        for bid, b in live.items():
+            if bid not in self.boat_nodes:
+                node, lights = models.build_boat(b.kind)
+                node.reparentTo(self.render)
+                self.boat_nodes[bid] = (node, lights)
+            node, lights = self.boat_nodes[bid]
+            bob = math.sin(self.s.time * 2 + hash(bid) % 7) * 0.15
+            node.setPos(b.x, b.y, bob)
+            node.setHpr(-b.heading, min(8.0, b.speed * 0.25), 0)
+            for ln in lights:
+                ln.setColorScale((1, 1, 1, 1) if blink else (0.2, 0.2, 0.2, 1))
+            if b.state == "seized":
+                node.setColorScale(0.5, 0.5, 0.5, 1)
+        live_bales = {bl.id: bl for bl in mar.bales if bl.state in ("falling", "floating", "landed")}
+        for blid in list(self.bale_nodes):
+            if blid not in live_bales:
+                self.bale_nodes.pop(blid).removeNode()
+        for blid, bl in live_bales.items():
+            if blid not in self.bale_nodes:
+                n = models.build_bale()
+                n.reparentTo(self.render)
+                self.bale_nodes[blid] = n
+            self.bale_nodes[blid].setPos(bl.x, bl.y, bl.z)
+        # AI runs (police-vs-AI games watched from the pilot client, or versus later)
+        for a in self.s.smugglers:
+            key = f"ai:{a.id}"
+            if key not in self.boat_nodes and a.active:
+                node, spinners = models.build_aircraft(models.Visual("low", 2, 11.0, 12.5, (0.07, 0.07, 0.07), (0.6, 0.1, 0.6)), 1.2)
+                node.reparentTo(self.render)
+                self.boat_nodes[key] = (node, [])
+            if key in self.boat_nodes:
+                self.boat_nodes[key][0].setPos(a.x, a.y, a.z)
+                self.boat_nodes[key][0].setHpr(-a.heading, 0, 0)
 
     def _sync_pursuers(self, dt):
         live = {id(u): u for u in self.s.police.units}
@@ -389,8 +483,8 @@ class SkyrunnerApp(ShowBase):
         self.camera.lookAt(target + fwd * L * 1.5 + Vec3(0, 0, 0.5))
 
 
-def run(session: Session) -> None:
-    app = SkyrunnerApp(session)
+def run(session: Session, server=None) -> None:
+    app = SkyrunnerApp(session, server=server)
     props = WindowProperties()
     props.setTitle("Skyrunner - cargo, balance, and the long arm of the law")
     app.win.requestProperties(props)
