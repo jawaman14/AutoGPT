@@ -16,7 +16,8 @@ var env: Environment
 var sun: DirectionalLight3D
 var moon: DirectionalLight3D
 var sky_mat: ProceduralSkyMaterial
-var water: MeshInstance3D
+var water: Ocean
+var sky_shader: ShaderMaterial
 var field_lights: Array = []  ## emissive runway light meshes
 ## Hour of day, 0-24. Advanced by `time_scale` game-seconds per real second
 ## (60 = one game hour per real minute); 0 freezes it.
@@ -30,14 +31,17 @@ func setup(world_: World, q: Quality) -> WorldScene:
 	quality = q
 	name = "WorldScene"
 	_build_environment()
-	add_child(Models.build_terrain(world, q))
-	water = Models.build_water(q)
+	add_child(TerrainMesh.build(world, q))
+	water = Ocean.new().setup(world, q)
 	add_child(water)
-	add_child(Models.build_trees(world, q))
+	add_child(Vegetation.build(world, q))
 	for af in world.airfields:
 		var n := Models.build_airfield(world, af, q)
 		add_child(n)
 		field_lights.append(n.get_node("lights"))
+		add_child(Buildings.airfield_site(world, af))
+	for k in world.map.hqs:
+		add_child(Buildings.hq(world, world.map.hqs[k]))
 	var aer := Models.build_aerostat()
 	aer.name = "aerostat"
 	aer.position = MeshBuilder.to_godot([SensorNet.AEROSTAT_POS[0], SensorNet.AEROSTAT_POS[1], 2500.0])
@@ -50,11 +54,12 @@ func setup(world_: World, q: Quality) -> WorldScene:
 func _build_environment() -> void:
 	env = Environment.new()
 	if quality.sky:
-		sky_mat = ProceduralSkyMaterial.new()
-		sky_mat.sky_curve = 0.12
-		sky_mat.ground_curve = 0.05
+		sky_shader = ShaderMaterial.new()
+		sky_shader.shader = load("res://shaders/sky.gdshader")
+		sky_shader.set_shader_parameter("noise_pack", TexGen.noise_pack())
 		var sky := Sky.new()
-		sky.sky_material = sky_mat
+		sky.sky_material = sky_shader
+		sky.radiance_size = Sky.RADIANCE_SIZE_128
 		env.background_mode = Environment.BG_SKY
 		env.sky = sky
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
@@ -66,7 +71,10 @@ func _build_environment() -> void:
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 		env.ambient_light_color = Color(0.42, 0.45, 0.52)
 		env.ambient_light_energy = 1.0
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC if quality.shaded else Environment.TONE_MAPPER_LINEAR
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES if quality.shaded else Environment.TONE_MAPPER_LINEAR
+	env.tonemap_exposure = 1.0
+	if quality.ssao:
+		env.ssil_enabled = true  # Forward+: bounce light off the ground and walls
 	env.fog_enabled = true
 	env.fog_mode = Environment.FOG_MODE_DEPTH
 	env.fog_depth_begin = quality.fog_far * 0.2
@@ -127,12 +135,7 @@ func set_hour(h: float) -> void:
 	moon.light_energy = 0.3 * night
 	var sky_col := NIGHT_SKY.lerp(DAY_SKY, day).lerp(DUSK_SKY, dusk * 0.45)
 	env.fog_light_color = sky_col
-	if sky_mat != null:
-		sky_mat.sky_top_color = Color(0.18, 0.36, 0.7).lerp(Color(0.01, 0.015, 0.04), night)
-		sky_mat.sky_horizon_color = sky_col
-		sky_mat.ground_horizon_color = sky_col.darkened(0.2)
-		sky_mat.ground_bottom_color = Color(0.1, 0.14, 0.18).lerp(Color(0.01, 0.01, 0.02), night)
-		sky_mat.sun_angle_max = 30.0
+	if sky_shader != null:
 		env.ambient_light_energy = lerpf(0.45, 1.0, day)
 	else:
 		env.background_color = sky_col
@@ -140,8 +143,9 @@ func set_hour(h: float) -> void:
 	var lights_on := el < 4.0
 	for l in field_lights:
 		l.visible = lights_on
-	if water != null and water.material_override is ShaderMaterial:
-		water.material_override.set_shader_parameter("sky_tint", sky_col)
+	if water != null:
+		water.set_sky(sky_col)
+	Buildings.set_night(night)
 
 
 func _process(dt: float) -> void:

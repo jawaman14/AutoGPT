@@ -27,6 +27,10 @@ func _run() -> void:
 	var t0 := Time.get_ticks_msec()
 	for f in files:
 		var script: GDScript = load("res://tests/" + f)
+		if script == null or not script.can_instantiate():
+			printerr("FAIL %s: script failed to load (parse error above)" % f)
+			failed += 1
+			continue
 		var inst = script.new()
 		var names: Array[String] = []
 		for m in script.get_script_method_list():
@@ -37,7 +41,7 @@ func _run() -> void:
 			inst.current = "%s::%s" % [f.get_basename(), n]
 			inst.failures.clear()
 			inst.before_each()
-			inst.call(n)
+			await inst.call(n)
 			inst.after_each()
 			if inst.failures.is_empty():
 				passed += 1

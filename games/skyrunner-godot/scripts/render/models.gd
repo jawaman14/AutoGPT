@@ -253,19 +253,7 @@ static func build_airfield(world: World, af: Airfield, q: Quality) -> Node3D:
 			mb.box(e[0], e[1], z + 0.4, 1.2, 1.2, 0.8, orange)
 			# threshold lights: green facing in on both ends
 			lights.box(e[0], e[1], z + 0.9, 0.4, 0.4, 0.25, [0.2, 1.0, 0.3])
-	if af.kind in ["hub", "regional"]:
-		var specs := [[-L * 0.3, 30.0], [-L * 0.3 + 45, 22.0], [L * 0.1, 18.0]]
-		for k in specs.size():
-			var sz: float = specs[k][1]
-			var b: Array = p.call(specs[k][0], W + 40 + sz / 2)
-			mb.box(b[0], b[1], z + sz * 0.25, sz, sz * 0.8, sz * 0.5, [0.72, 0.72, 0.75] if k else [0.6, 0.62, 0.7])
-		var t: Array = p.call(L * 0.25, W + 55)
-		mb.box(t[0], t[1], z + 10, 5, 5, 20, [0.8, 0.8, 0.8])
-		mb.box(t[0], t[1], z + 21.5, 8, 8, 3, [0.25, 0.4, 0.5])
-		lights.box(t[0], t[1], z + 23.3, 0.8, 0.8, 0.6, [0.2, 1.0, 0.2])  # tower beacon
-	else:
-		var b: Array = p.call(-L * 0.6, W + 18)
-		mb.box(b[0], b[1], z + 2.5, 9, 7, 5, [0.45, 0.30, 0.18])
+	# the buildings are Buildings.airfield_site (walkable, with colliders)
 	var ws: Array = p.call(-L * 0.7, -W - 12)
 	mb.box(ws[0], ws[1], z + 3, 0.2, 0.2, 6, [0.6, 0.6, 0.6])
 	mb.box(ws[0] + 1.2, ws[1], z + 5.8, 2.4, 0.5, 0.5, orange)

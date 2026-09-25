@@ -233,7 +233,7 @@ static func site_hqs(w: World, l: MapLayout) -> Dictionary:
 		har.y + har.uy * har.length * 0.15 + har.ux * (har.width / 2 + 150)]
 	law = _pad(w, law, 0, 1200, 3.0)
 	# the organisation: a villa on the hill behind the cove
-	var org := _pad(w, [cov.x, cov.y], 450, 1600, 8.0)
+	var org := _pad(w, [cov.x, cov.y], 250, 900, 6.0)  # a short walk from the cove strip
 	# the cartel: a compound near its home strip (the lagoon, or the far coast on the classic island)
 	var home := l.airfield("LGN")
 	var rival_near: Array = [home.x, home.y] if home != null else [l.zone_centre["north"][0] + 6000, l.zone_centre["north"][1] - 9000]

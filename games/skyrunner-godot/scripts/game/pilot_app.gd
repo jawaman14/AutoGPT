@@ -33,6 +33,8 @@ Flight   W/S or UP/DOWN pitch     A/D or LEFT/RIGHT roll     Q/E rudder / nosewh
          G flaps down   T flaps up   [ / ] pitch trim   B or SPACE brakes
          Y toggle mouse yoke (mouse position = stick)   joystick / gamepad work too
 View     C cycle camera (chase / cockpit / tower)    M big map    P pause   F2 time of day
+On foot  TAB get out (parked) / back in    WASD walk  SHIFT run  SPACE jump  mouse look
+         E use (job board, fuel, hangar, the boss's desk)   F torch
 Ground   J job board   L load planner & fuel   H hangar, gear, spotters, crew
 Crew     N transponder on/off   U autopilot (hold alt/hdg)   K kick a bale   O call the boat
          V ferry fuel pump   I push aircraft round (stopped)   ENTER continue   ESC close menu / quit
@@ -72,6 +74,11 @@ var boat_nodes := {}
 var bale_nodes := {}
 var beacons: Array = []  ## [key, [nodes]]
 var _frame := 0
+var on_foot := false
+var walker: Walker = null
+var ground_body: StaticBody3D = null
+var foot_prompt: Label
+var aircraft_body: StaticBody3D = null
 
 
 func setup(sess: Session, graphics := "high", bot_ = null, server_ = null) -> PilotApp:
@@ -95,11 +102,21 @@ func setup(sess: Session, graphics := "high", bot_ = null, server_ = null) -> Pi
 	ui.add_child(glareshield)
 	hud = Hud.new().setup(sess)
 	ui.add_child(hud)
-	for k in [["j", JobMenu], ["l", LoadMenu], ["h", HangarMenu]]:
+	for k in [["j", JobMenu], ["l", LoadMenu], ["h", HangarMenu], ["hq", HQMenu], ["intel", HQMenu]]:
 		var m: GameMenu = k[1].new()
 		ui.add_child(m)
+		if k[0] == "intel":
+			m.intel = true
 		m.setup(sess)
+		m.closed.connect(_menu_closed)
 		menus[k[0]] = m
+	foot_prompt = UIStyle.label("", 20, UIStyle.WHITE)
+	foot_prompt.add_theme_stylebox_override("normal", UIStyle.panel_box(Color(0, 0, 0, 0.55)))
+	foot_prompt.set_anchors_preset(Control.PRESET_CENTER)
+	foot_prompt.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	foot_prompt.position += Vector2(0, 70)
+	foot_prompt.visible = false
+	ui.add_child(foot_prompt)
 	help = _overlay(HELP_TEXT, UIStyle.WHITE)
 	briefing = _overlay("", Color(1, 0.85, 0.5))
 	sess.say("F1 for controls. [J] to see the job board.")
@@ -211,6 +228,30 @@ func _unhandled_input(ev: InputEvent) -> void:
 			return
 		if ev.echo:
 			return
+		if k == KEY_TAB:
+			_toggle_on_foot()
+			get_viewport().set_input_as_handled()
+			return
+		if on_foot:
+			match k:
+				KEY_E:
+					walker.use()
+				KEY_F:
+					walker.toggle_torch()
+				KEY_ESCAPE:
+					if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+						Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+					else:
+						s.save()
+						get_tree().quit()
+				KEY_M:
+					hud.minimap.toggle()
+				KEY_F1:
+					help.visible = not help.visible
+				KEY_F2:
+					scene.set_hour(scene.hour + 3.0)
+			get_viewport().set_input_as_handled()
+			return
 		if PRESS_KEYS.has(k):
 			_pressed[PRESS_KEYS[k]] = true
 		elif CREW_KEYS.has(k):
@@ -240,6 +281,99 @@ func _unhandled_input(ev: InputEvent) -> void:
 		elif k == KEY_F2:
 			scene.set_hour(scene.hour + 3.0)
 			s.say("Time %02d:00" % int(scene.hour))
+
+
+func _unhandled_key_input(_ev: InputEvent) -> void:
+	pass
+
+
+func _input(ev: InputEvent) -> void:
+	# click to grab the mouse again while walking
+	if on_foot and ev is InputEventMouseButton and ev.pressed and _active_menu() == null:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+func _menu_closed() -> void:
+	if on_foot:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		walker.look_enabled = true
+
+
+# ------------------------------------------------------------ on foot
+func _toggle_on_foot() -> void:
+	_sync_scene(0.0)  # the aircraft node may not have been placed yet this frame
+	if on_foot:
+		var st: FlightModel.FlightState = s.state
+		var d := walker.global_position.distance_to(player.global_position)
+		if d > 9.0:
+			s.say("Walk back to the aircraft to climb in (%.0f m away)." % d)
+			return
+		on_foot = false
+		walker.queue_free()
+		walker = null
+		if aircraft_body != null:
+			aircraft_body.queue_free()
+			aircraft_body = null
+		cam.current = true
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		foot_prompt.visible = false
+		s.say("Back in the %s." % s.spec.name)
+		return
+	if not s.parked:
+		s.say("Stop at an airfield first.")
+		return
+	var st: FlightModel.FlightState = s.state
+	if ground_body == null:
+		ground_body = Walker.ground_body(s.world)
+		add_child(ground_body)
+	# the parked aircraft is solid
+	aircraft_body = StaticBody3D.new()
+	var cs := CollisionShape3D.new()
+	var bs := BoxShape3D.new()
+	var v := s.spec.visual
+	bs.size = Vector3(v.span_m * 0.9, 2.2, v.length_m * 0.8)
+	cs.shape = bs
+	aircraft_body.add_child(cs)
+	player.add_child(aircraft_body)
+	walker = Walker.new().setup(s.world)
+	add_child(walker)
+	walker.used.connect(_on_use)
+	# out of the left door, a couple of metres clear of the wing root
+	var h := deg_to_rad(st.heading)
+	var lx := -cos(h)
+	var ly := sin(h)
+	walker.place(st.x + lx * (v.span_m * 0.5 + 1.2), st.y + ly * (v.span_m * 0.5 + 1.2), st.heading)
+	walker.cam.current = true
+	on_foot = true
+	for m in menus.values():
+		m.visible = false
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	s.say("On foot. TAB to climb back in, E to use things, F for the torch.")
+
+
+func _on_use(action: String, area: Area3D) -> void:
+	match action:
+		"jobs", "load", "hangar":
+			var field: String = area.get_meta("field", s.location)
+			if field != s.location:
+				s.say("That's %s's %s - your aircraft is at %s." % [World.airfield(field).name, area.get_meta("label"), World.airfield(s.location).name])
+				return
+			_open({"jobs": "j", "load": "l", "hangar": "h"}[action])
+		"hq_org":
+			_open("hq")
+		"hq_rival":
+			_open("intel")
+		"hq_law":
+			s.say("Task Force HQ: restricted. (Play the task force from the lobby, or --police.)")
+
+
+func _open(key: String) -> void:
+	for other in menus.values():
+		other.visible = false
+	menus[key].open()
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if walker != null:
+		walker.look_enabled = false
 
 
 func _toggle_menu(k: String) -> void:
@@ -313,21 +447,46 @@ func _process(delta: float) -> void:
 			_build_player()
 		if server != null:
 			server.pump(s)
-		var inp := _gather_input()
-		s.update(dt, inp, bot.step(dt) if bot != null else null)
+		var inp := _gather_input() if not on_foot else _foot_input()
+		s.update(dt, inp, bot.step(dt) if bot != null and not on_foot else null)
 		if server != null:
 			server.publish(s)
 	_sync_scene(dt)
 	hud.cam_mode = cam_mode
 	hud.mouse_yoke = mouse_yoke
 	var m := _active_menu()
-	hud.visible = m == null
+	hud.visible = m == null and not on_foot
+	if on_foot:
+		_foot_hud()
 	if m == null:
 		hud.refresh()
 	elif not s.parked:
 		m.close()
 	elif _frame % 10 == 0:
 		m.refresh()
+
+
+## While walking the aircraft just sits: parking brake on, nothing else.
+func _foot_input() -> ControlMapper.InputFrame:
+	var inp := ControlMapper.InputFrame.new()
+	inp.held["brake"] = true
+	inp.pressed = _pressed
+	_pressed = {}
+	return inp
+
+
+func _foot_hud() -> void:
+	var lines := []
+	if walker.focus != null:
+		lines.append("[E] " + str(walker.focus.get_meta("label")))
+	if walker.global_position.distance_to(player.global_position) < 9.0:
+		lines.append("[TAB] Climb into the %s" % s.spec.name)
+	var ml := []
+	for msg in s.messages:
+		if s.time - msg[0] < 8:
+			ml.append(msg[1])
+	foot_prompt.text = "\n".join(lines + ml.slice(-2))
+	foot_prompt.visible = not foot_prompt.text.is_empty() and _active_menu() == null
 
 
 static func _basis(heading: float, pitch := 0.0, roll := 0.0) -> Basis:
@@ -360,7 +519,13 @@ func _sync_scene(dt: float) -> void:
 	_sync_maritime()
 	var aer = s.police.sensors.site("AER")
 	scene.show_aerostat(aer != null and aer.active)
-	_update_camera(st, dt)
+	if not on_foot:
+		_update_camera(st, dt)
+	else:
+		for c in player.get_children():
+			if c is MeshInstance3D:
+				c.visible = true
+		glareshield.visible = false
 
 
 func _sync_maritime() -> void:

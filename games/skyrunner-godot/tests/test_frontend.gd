@@ -13,8 +13,10 @@ func test_world_scene_builds_at_every_preset() -> void:
 	for q in ["low", "medium", "high"]:
 		var ws := WorldScene.new().setup(w, Quality.get_preset(q))
 		check(ws.get_node("terrain") != null, q + " terrain")
-		var trees: MultiMeshInstance3D = ws.get_node("trees").get_child(0)
-		check(trees.multimesh.instance_count > 1000, "%s trees %d" % [q, trees.multimesh.instance_count])
+		var n := 0
+		for mm in ws.get_node("trees").get_children():
+			n += mm.multimesh.instance_count
+		check(n > 1000, "%s trees %d" % [q, n])
 		ws.set_hour(21.0)
 		check(ws.night > 0.9, "night at 21:00")
 		check(ws.field_lights[0].visible, "runway lights on at night")
