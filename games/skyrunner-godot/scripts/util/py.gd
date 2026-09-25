@@ -218,3 +218,40 @@ static func truthy(x) -> bool:
 		TYPE_OBJECT:
 			return x != null
 	return true
+
+
+## Shortest decimal that parses back to the same double (Python's float repr;
+## JSON spellings for the non-finite ones, like json.dumps).
+static func float_repr(v: float) -> String:
+	if is_nan(v):
+		return "NaN"
+	if is_inf(v):
+		return "Infinity" if v > 0 else "-Infinity"
+	return PyMath.repr(v)
+
+
+## json.dumps with lossless floats (Godot 4.4's JSON.stringify keeps 15 significant
+## digits even with full_precision, and String.num isn't correctly rounded). Keys keep insertion order.
+static func json(v) -> String:
+	match typeof(v):
+		TYPE_NIL:
+			return "null"
+		TYPE_BOOL:
+			return "true" if v else "false"
+		TYPE_INT:
+			return str(v)
+		TYPE_FLOAT:
+			return float_repr(v)
+		TYPE_STRING, TYPE_STRING_NAME:
+			return JSON.stringify(str(v))
+		TYPE_DICTIONARY:
+			var parts := PackedStringArray()
+			for k in v:
+				parts.append(JSON.stringify(str(k)) + ": " + json(v[k]))
+			return "{" + ", ".join(parts) + "}"
+		TYPE_ARRAY, TYPE_PACKED_FLOAT64_ARRAY, TYPE_PACKED_INT32_ARRAY, TYPE_PACKED_STRING_ARRAY:
+			var parts := PackedStringArray()
+			for x in v:
+				parts.append(json(x))
+			return "[" + ", ".join(parts) + "]"
+	return JSON.stringify(v)

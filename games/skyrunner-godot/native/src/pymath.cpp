@@ -114,6 +114,26 @@ int64_t PyMath::round_int(double x) { return static_cast<int64_t>(std::nearbyint
 
 double PyMath::log1p(double x) { return std::log1p(x); }
 
+// Godot's String::num / to_float are not correctly rounded (about 40% of
+// doubles don't survive a 17-digit round trip), so lossless text goes via libc.
+String PyMath::repr(double x) {
+    if (std::isnan(x)) return "nan";
+    if (std::isinf(x)) return x > 0 ? "inf" : "-inf";
+    char buf[40];
+    for (int prec = 1; prec <= 17; prec++) {
+        std::snprintf(buf, sizeof buf, "%.*g", prec, x);
+        if (std::strtod(buf, nullptr) == x) break;
+    }
+    std::string s(buf);
+    if (s.find_first_of(".eE") == std::string::npos) s += ".0";  // 1 -> 1.0, like Python
+    return String(s.c_str());
+}
+
+double PyMath::parse(const String &s) {
+    CharString c = s.utf8();
+    return std::strtod(c.get_data(), nullptr);
+}
+
 String PyMath::fmt(double x, int decimals) {
     char buf[512];
     std::snprintf(buf, sizeof(buf), "%.*f", decimals, x);
@@ -134,4 +154,6 @@ void PyMath::_bind_methods() {
     ClassDB::bind_static_method("PyMath", D_METHOD("log1p", "x"), &PyMath::log1p);
     ClassDB::bind_static_method("PyMath", D_METHOD("fmt", "x", "decimals"), &PyMath::fmt);
     ClassDB::bind_static_method("PyMath", D_METHOD("fmt_thousands", "x", "decimals"), &PyMath::fmt_thousands);
+    ClassDB::bind_static_method("PyMath", D_METHOD("repr", "x"), &PyMath::repr);
+    ClassDB::bind_static_method("PyMath", D_METHOD("parse", "s"), &PyMath::parse);
 }

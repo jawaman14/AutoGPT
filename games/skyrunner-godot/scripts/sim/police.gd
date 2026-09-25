@@ -791,6 +791,8 @@ func _inbound_from_sea(sig: SensorNet.Signature) -> bool:
 # ---------------------------------------------------- landing
 ## Called once when the player comes to a stop. true -> police grab you.
 func landing_check(s, field_: Airfield, carrying_hot: bool, tid := "runner") -> bool:
+	if frozen:
+		return false
 	var c := case(tid)
 	for u in units:
 		if u.faction() == "police" and u.target_id == tid and u.state != "crashed" and u.dist_to(s) < LANDING_BUST_RANGE_M:

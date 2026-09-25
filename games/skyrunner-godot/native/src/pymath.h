@@ -20,6 +20,8 @@ public:
     static double log1p(double x);
     static String fmt(double x, int decimals);          // f"{x:.Nf}"
     static String fmt_thousands(double x, int decimals); // f"{x:,.Nf}"
+    static String repr(double x);                        // repr(x): shortest round-trip
+    static double parse(const String &s);                // float(s), correctly rounded (strtod)
 
 protected:
     static void _bind_methods();

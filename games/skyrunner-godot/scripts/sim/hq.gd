@@ -202,6 +202,7 @@ class Season:
 	var cartel_bonus := false
 	var plan := {}
 	var plan_hist: Array = []
+	var disabled := {}  ## ablations: orders that just answer "disabled" (Python monkeypatches them)
 
 	func _init(rng_: PyRandom = null, rules_ := {}) -> void:
 		if rng_ == null:
@@ -260,7 +261,7 @@ class Season:
 		var o := org
 		if not FREE_ACTIONS.has(name) and o.actions <= 0:
 			return "No more moves tonight."
-		var err = call("_r_" + name, a)
+		var err = "disabled" if disabled.has("_r_" + name) else call("_r_" + name, a)
 		if err == null and not FREE_ACTIONS.has(name):
 			o.actions -= 1
 		return err
@@ -274,7 +275,7 @@ class Season:
 		var free: bool = name in ["ready", "fund", "patrol"]
 		if not free and L.actions <= 0:
 			return "No more moves tonight."
-		var err = call("_l_" + name, a)
+		var err = "disabled" if disabled.has("_l_" + name) else call("_l_" + name, a)
 		if err == null and not free:
 			L.actions -= 1
 		return err
