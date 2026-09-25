@@ -19,6 +19,7 @@ var mouse_yoke := false
 
 var chips := {}
 var tiles := {}
+var zones := {}  ## name -> the anchored box of each HUD region (tests check they never overlap)
 var wanted: Label
 var susp_bar: ProgressBar
 var bust_bar: ProgressBar
@@ -49,7 +50,8 @@ func setup(sess: Session) -> Hud:
 	_build_status()
 	_build_flight()
 	toasts = ToastFeed.new()
-	_anchor(toasts, Vector4(0, 0.30, 0.42, 0.62), Vector4(14, 0, 0, 0))
+	_anchor(toasts, Vector4(0, 0.30, 0.42, 0.62), Vector4(14, 0, 0, -6))
+	zones["toasts"] = toasts
 	add_child(toasts)
 	intel = UIStyle.label("", 14, Color(1, 0.8, 0.5), UIStyle.mono())
 	intel.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -72,7 +74,8 @@ func setup(sess: Session) -> Hud:
 	add_child(papi_row)
 	hints = KeyHints.new()
 	hints.alignment = FlowContainer.ALIGNMENT_CENTER
-	_anchor(hints, Vector4(0.3, 1, 0.7, 1), Vector4(0, -40, 0, -12))
+	_anchor(hints, Vector4(0.38, 1, 0.8, 1), Vector4(0, -40, 0, -12))
+	zones["hints"] = hints
 	add_child(hints)
 	minimap = Minimap.new()
 	add_child(minimap)
@@ -113,6 +116,7 @@ func _build_chips() -> void:
 	row.add_theme_constant_override("v_separation", 6)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_anchor(row, Vector4(0, 0, 0.36, 0), Vector4(14, 12, 0, 70))
+	zones["chips"] = row
 	for n in ["xpdr", "ap", "crew", "kick", "pump", "radar", "wx", "pulse", "cam"]:
 		chips[n] = Chip.new().setup(n.to_upper())
 		row.add_child(chips[n])
@@ -124,6 +128,7 @@ func _build_wanted() -> void:
 	v.add_theme_constant_override("separation", 4)
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_anchor(v, Vector4(0.36, 0, 0.64, 0), Vector4(0, 8, 0, 110))
+	zones["wanted"] = v
 	wanted = UIStyle.label("", 26, UIStyle.RED)
 	wanted.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(wanted)
@@ -152,6 +157,7 @@ func _build_status() -> void:
 	v.add_theme_constant_override("separation", 6)
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_anchor(v, Vector4(0.66, 0, 1, 0.55), Vector4(0, 10, -14, 0))
+	zones["status"] = v
 	status = UIStyle.label("", 17)
 	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	v.add_child(status)
@@ -172,6 +178,7 @@ func _build_flight() -> void:
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	v.alignment = BoxContainer.ALIGNMENT_END
 	_anchor(v, Vector4(0, 0.62, 0.36, 1), Vector4(14, 0, 0, -12))
+	zones["flight"] = v
 	crew = _panel(Color(0.02, 0.1, 0.12, 0.7))
 	crew_lbl = UIStyle.label("", 14, UIStyle.CYAN)
 	crew_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

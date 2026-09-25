@@ -64,6 +64,37 @@ func test_copilot_joins_loads_and_gets_runner_snapshot() -> void:
 	check(_pump_until(func(): return sess.copilot == null), "co-pilot leaves")
 
 
+func test_copilot_works_the_flight_over_the_wire() -> void:
+	# a crewed airdrop run: the remote co-pilot pumps, kicks and radios the pilot
+	sess.features.erase("cutters")
+	sess.money = 20000
+	sess.buy_gear("ferry_tank")
+	for i in 60 * 20:
+		sess.update(1.0 / 60)
+	sess.fill_ferry(150)
+	var drop := Maritime.random_drop_point(sess.world, sess.rng, sess.maritime.cove)
+	var job := Jobs.airdrop_job(World.airfield("HAR"), drop, sess.rng, 2)
+	sess.boards["HAR"].append(job)
+	sess.accept_job(job)
+	for i in 60 * 30:
+		sess.update(1.0 / 60)
+	var cp := _client("Rosa", "copilot")
+	check(_pump_until(func(): return cp.latest != null and sess.copilot == "human"), "co-pilot aboard")
+	sess.spawn_airborne(drop[0] - 400, drop[1], 90, 150, 88)
+	sess.command(Roles.PILOT, "autopilot", {"on": true})
+	sess.fm.fdm.set_property("propulsion/tank[0]/contents-lbs", 50)
+	sess.fm.fdm.set_property("propulsion/tank[1]/contents-lbs", 50)
+	var seq := cp.send_command("pump", {"on": true})
+	check(_pump_until(func(): return cp.acks.has(seq)) and cp.acks[seq][0], "pump acked")
+	check(_pump_until(func(): return cp.latest.aircraft.pumping), "the snapshot shows the pump on")
+	seq = cp.send_command("kick", {"count": 2})
+	check(_pump_until(func(): return cp.acks.has(seq)) and cp.acks[seq][0], "kick acked: %s" % [cp.acks.get(seq)])
+	check(_pump_until(func(): return sess._droppables().is_empty(), 8.0), "both bales out, 2 s apiece")
+	seq = cp.send_command("chat", {"text": "bales away"})
+	check(_pump_until(func(): return cp.latest.messages.any(func(m): return m == "[copilot] bales away")), "the chat comes back in the runner snapshot")
+	check(sess.messages.any(func(m): return m[1] == "[copilot] bales away"), "and reaches the pilot's HUD feed")
+
+
 func test_controller_sees_tracks_not_truth() -> void:
 	var ctl := _client("Hart", "controller")
 	check(_pump_until(func(): return ctl.latest != null), "snapshot arrives")

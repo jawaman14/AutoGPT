@@ -60,6 +60,7 @@ class Pursuer:
 	var goal = null
 	var chatter_t := -1e9
 	var had_visual := false
+	var flank := false  ## surge unit: cut the runner off (long lead) instead of tailing it
 	var fuel_s := -1.0  ## seconds of flying left; set at launch
 	var pilot = null  ## a human flying it (role name); null = AI
 	var stick := [0.0, 0.0, 0.6]  ## roll, pitch (+ = climb), throttle
@@ -108,7 +109,9 @@ class Pursuer:
 		var want_speed: float
 		if target != null and state != "return":
 			var d := PyMath.hypot(target.x - x, target.y - y)
-			var lead := minf(8.0, d / maxf(vmax, 1.0))
+			# a flanker aims where the runner will be when it gets there (up to 90 s
+			# ahead) and only tucks in behind once it's close: a pincer, not a queue
+			var lead := minf(90.0 if flank and d > 1500.0 else 8.0, d / maxf(vmax, 1.0))
 			tx = target.x + target.vx * lead
 			ty = target.y + target.vy * lead
 			tz = PoliceSystem._z(target)
@@ -380,7 +383,7 @@ func police_bases() -> Array:
 
 
 ## Queue a unit launch. Returns an error string or null.
-func launch(kind: String, base_code = null, target_id = null, goal = null, near = null):
+func launch(kind: String, base_code = null, target_id = null, goal = null, near = null, flank := false):
 	if kind == "interceptor" and not features.has("interceptors"):
 		return "No interceptors assigned to this task force yet."
 	if kind == "cutter":
@@ -398,16 +401,16 @@ func launch(kind: String, base_code = null, target_id = null, goal = null, near 
 		base = Py.min_by(bases, func(a): return (a.x - ref[0]) ** 2 + (a.y - ref[1]) ** 2)
 	stock[kind] -= 1
 	var delay := LAUNCH_DELAY_S + (ENCRYPTION_DELAY_S if radio.encrypted else 0.0)
-	_launches.append([now + delay, kind, base.code, target_id, goal])
+	_launches.append([now + delay, kind, base.code, target_id, goal] + ([true] if flank else []))
 	return null
 
 
-func _spawn_now(kind: String, base_code: String, target_id, goal) -> Pursuer:
+func _spawn_now(kind: String, base_code: String, target_id, goal, flank := false) -> Pursuer:
 	var base: Airfield = Py.first(world.airfields, func(a): return a.code == base_code)
 	_serial += 1
 	var u := Pursuer.new(kind, base.x, base.y, world.airfield_elev(base) + 60, base.heading, [base.x, base.y], {
 		"speed": UNIT_TYPES[kind][0] * KT * 0.5, "id": "%s-%d" % [CALLSIGNS[kind], _serial],
-		"target_id": target_id, "goal": goal, "state": "pursuit" if target_id else "goto"})
+		"target_id": target_id, "goal": goal, "state": "pursuit" if target_id else "goto", "flank": flank})
 	units.append(u)
 	for role in pending_claim.keys():
 		if pending_claim[role] == kind:
@@ -521,9 +524,10 @@ func _ai_escalate(c: Case, level: int, sig: SensorNet.Signature) -> void:
 					u.target_id = c.target_id
 					u.state = "pursuit"
 					u.goal = null
-					_say(u.id, "joining the pursuit of %s" % alias(c.target_id), [u.x, u.y])
+					u.flank = true
+					_say(u.id, "joining the pursuit of %s, cutting them off" % alias(c.target_id), [u.x, u.y])
 			while stock.get("heli", 0) > 0:
-				launch("heli", null, c.target_id, null, [sig.x, sig.y])
+				launch("heli", null, c.target_id, null, [sig.x, sig.y], true)
 				law_events.append("Surge: spare helicopter joins the chase")
 	elif level < c.wanted:
 		events.append("Wanted level down" if level else "You lost them. Heat is off.")
@@ -589,7 +593,7 @@ func tick(dt: float, now_: float, targets: Array) -> Dictionary:
 	# launches
 	for item in _launches.filter(func(l): return l[0] <= now):
 		_launches.erase(item)
-		_spawn_now(item[1], item[2], item[3], item[4])
+		_spawn_now(item[1], item[2], item[3], item[4], item.size() > 5)
 
 	# radar sweep (1 Hz, like a rotating antenna)
 	_sweep_acc += dt

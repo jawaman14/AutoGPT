@@ -120,3 +120,46 @@ func test_remote_seat_interpolates_snapshots() -> void:
 	check_near(RemoteSeat._lerp_angle(350, 10, 0.5), 360.0, 1e-9, "angles wrap the short way")
 	seat.free()
 	s.dispose()
+
+
+func test_data_table_keyboard_skips_sections() -> void:
+	var t := DataTable.new().setup([{"title": "A", "expand": true}, {"title": "B", "align": "right", "mono": true}])
+	_tree().root.add_child(t)
+	t.section("group one")
+	t.add_row(["x", "1"])
+	t.add_row(["y", "2"])
+	t.section("group two")
+	t.add_row(["z", "3"])
+	t.select_near(0)
+	check_eq(t.selected_row(), 1, "first selectable row")
+	t.move(1)
+	t.move(1)
+	check_eq(t.selected_row(), 4, "skips the section heading")
+	t.move(1)
+	check_eq(t.selected_row(), 1, "wraps round, skipping the top heading")
+	var hit := [-1]
+	t.row_activated.connect(func(i): hit[0] = i)
+	t.item_activated.emit()
+	check_eq(hit[0], 1, "activation reports the row")
+	t.free()
+
+
+func test_hud_regions_never_overlap_at_any_size() -> void:
+	var s := Session.new({"seed": 4})
+	s.update(1.0 / 30)
+	var hud := Hud.new()
+	_tree().root.add_child(hud)
+	hud.setup(s)
+	for sz in [Vector2(1024, 768), Vector2(1280, 720), Vector2(1920, 1080), Vector2(2560, 1080)]:
+		hud.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		hud.size = sz
+		var names: Array = hud.zones.keys()
+		for i in names.size():
+			var a: Rect2 = hud.zones[names[i]].get_rect()
+			check(a.position.x >= 0 and a.end.x <= sz.x + 0.5 and a.position.y >= 0 and a.end.y <= sz.y + 0.5,
+				"%s on screen at %s: %s" % [names[i], sz, a])
+			for j in range(i + 1, names.size()):
+				var b: Rect2 = hud.zones[names[j]].get_rect()
+				check(not a.intersects(b), "%s and %s overlap at %s" % [names[i], names[j], sz])
+	hud.free()
+	s.dispose()

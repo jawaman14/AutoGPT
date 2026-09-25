@@ -201,6 +201,7 @@ func test_heavy_police_surge_every_helicopter_into_the_chase() -> void:
 	var c := ps.case("runner")
 	ps._ai_escalate(c, 1, _quarry_track(s))
 	check_eq(_launched_for(ps, "heli", "runner"), 2, "both helicopters are sent after the track")
+	check_eq(ps._launches.filter(func(l): return l.size() > 5).size(), 1, "the spare one flies as a flanker")
 	check_eq(ps.stock["heli"], 0, "nothing left in the hangar")
 	check(ps.law_events.any(func(e): return "Surge" in e), "the desk hears about it")
 	s.dispose()
@@ -230,7 +231,8 @@ func test_an_idle_helicopter_joins_the_pursuit() -> void:
 	var c := ps.case("runner")
 	ps._ai_escalate(c, 1, sig)
 	check_eq(u.target_id, "runner", "the patrol helicopter is re-tasked")
-	check_eq(u.state, "pursuit", "and chases")
+	check_eq(u.state, "pursuit", "and chases, as the primary")
+	check_eq(ps._launches.filter(func(l): return l.size() > 5).size(), 1, "the one left in the hangar flies out to cut them off")
 	s.dispose()
 
 
@@ -251,6 +253,24 @@ func _bust_rate(n_units: int, surge: bool) -> float:
 	var m := c.bust_meter
 	s.dispose()
 	return m
+
+
+func test_a_flanker_aims_ahead_of_the_runner() -> void:
+	var s := Session.new({"seed": 2, "location": "FRM", "features": ["contraband"]})
+	var sig := _quarry_track(s)
+	sig.x = 0.0
+	sig.y = 0.0
+	sig.vx = 60.0
+	sig.vy = 0.0
+	var headings := {}
+	for flank in [false, true]:
+		# 6 km south of a runner heading east
+		var u := PoliceSystem.Pursuer.new("heli", 0.0, -6000.0, 400.0, 0.0, [0.0, -6000.0], {"target_id": "runner", "flank": flank, "speed": 40.0})
+		for i in 12:
+			u.update(0.5, sig, s.world)
+		headings[flank] = u.heading
+	check(headings[true] > headings[false] + 5, "the flanker turns further east to cut them off (%.1f vs %.1f)" % [headings[true], headings[false]])
+	s.dispose()
 
 
 func test_two_aircraft_on_your_tail_box_you_in() -> void:

@@ -139,3 +139,140 @@ func test_the_pilot_is_calmer_with_a_copilot() -> void:
 	var crewed := Nerves.target(s)
 	check(crewed < alone, "stress %.2f -> %.2f" % [alone, crewed])
 	check_near(crewed / alone, 0.75, 0.01, "a co-pilot takes a quarter off")
+
+
+# ------------------------------------------------------------ the co-pilot's screens
+## A crewed flight over the rendezvous: ferry fuel aboard, three bales, boat out.
+static func _crewed_flight() -> Session:
+	var s := T.sess(5, {"mode": Roles.COOP})
+	s.features.erase("cutters")
+	s.set_copilot("human")
+	T.idle(s, 0.3)
+	s.money = 20000
+	s.command(Roles.PILOT, "buy_gear", {"name": "ferry_tank"})
+	T.idle(s, 20)
+	s.command(Roles.PILOT, "fill_ferry", {"lb": 150})
+	var job := _airdrop(s, 3)
+	s.spawn_airborne(job.drop_point[0] - 900, job.drop_point[1], 90, 150, 88)
+	s.fm.fdm.set_property("propulsion/tank[0]/contents-lbs", 50)
+	s.fm.fdm.set_property("propulsion/tank[1]/contents-lbs", 50)
+	s.command(Roles.PILOT, "autopilot", {"on": true})
+	T.idle(s, 0.5)
+	return s
+
+
+func _desk(s: Session) -> StationApp:
+	var st := StationApp.new()
+	(Engine.get_main_loop() as SceneTree).root.add_child(st)
+	st.setup(LocalLink.new(s, Roles.COPILOT), Roles.COPILOT, s.world)
+	st._process(1.0 / 30)
+	return st
+
+
+func test_the_desk_flight_tab_shows_and_drives_the_crew_jobs() -> void:
+	var s := _crewed_flight()
+	var st := _desk(s)
+	check_eq(st.tabs.current_tab, 0, "the desk opens on the Flight tab")
+	check_eq(st.list.row_count(), StationApp.FLIGHT_ACTIONS.size(), "one row per crew job")
+	st._key("v")
+	check(s.pumping, "V starts the ferry pump")
+	st._process(1.0 / 30)
+	var pump_row := StationApp.FLIGHT_ACTIONS.map(func(f): return f[0]).find("pump")
+	check(st.list.cell(pump_row, 2).begins_with("ON"), "the table says so: " + st.list.cell(pump_row, 2))
+	check_eq(st.tiles["ferry"].sub.text, "PUMPING", "and the ferry tile")
+	# ENTER on a row does that job
+	st.list.select(StationApp.FLIGHT_ACTIONS.map(func(f): return f[0]).find("kick"))
+	st._key("enter")
+	check(s.kick_queue > 0 or s._droppables().size() < 3, "ENTER on 'Kick the bales' kicks")
+	st._process(1.0 / 30)
+	check("aboard" in st.tiles["kick"].value.text, st.tiles["kick"].value.text)
+	st.free()
+	s.dispose()
+
+
+func test_the_desk_key_caps_click_like_the_keys() -> void:
+	var s := _crewed_flight()
+	var st := _desk(s)
+	var ak := s.auto_kick
+	st.hints.press("t")
+	check(s.auto_kick != ak, "clicking the T cap toggles auto-kick")
+	st.hints.press("o")
+	check(Py.any(s.law_log, func(e): return "DF" in e[1]), "clicking O calls the boat")
+	check(st.hints.actions().has("esc"), "ESC is on the footer too")
+	st.free()
+	s.dispose()
+
+
+func test_a_map_click_hires_a_spotter_at_that_strip() -> void:
+	var s := _crewed_flight()
+	var st := _desk(s)
+	var af := World.airfield("VAL")
+	st._on_map_click(MOUSE_BUTTON_LEFT, Vector2(af.x + 300, af.y - 200))
+	check(s.spotters.any(func(sp): return sp.code == "VAL"), "spotter at VAL")
+	st._on_map_click(MOUSE_BUTTON_LEFT, Vector2(af.x + 8000, af.y))
+	check_eq(s.spotters.size(), 1, "a click in the open hires nobody")
+	st.free()
+	s.dispose()
+
+
+func test_the_chat_line_radios_the_pilot() -> void:
+	var s := _crewed_flight()
+	var st := _desk(s)
+	st.chat.text = "kicking on the next pass"
+	st.chat.text_submitted.emit(st.chat.text)
+	check(s.messages.back()[1] == "[copilot] kicking on the next pass", str(s.messages.back()))
+	check_eq(st.chat.text, "", "the line clears")
+	st.free()
+	s.dispose()
+
+
+func test_escape_asks_before_leaving_the_seat() -> void:
+	var s := _crewed_flight()
+	var st := _desk(s)
+	st._key("esc")
+	check(st.confirm.visible, "ESC opens the confirm")
+	st.confirm.key("esc")
+	check(not st.confirm.visible and st.is_inside_tree(), "ESC again stays in the seat")
+	st.free()
+	s.dispose()
+
+
+func test_the_pilot_hud_crew_strip_follows_the_copilot() -> void:
+	var s := _crewed_flight()
+	var hud := Hud.new()
+	(Engine.get_main_loop() as SceneTree).root.add_child(hud)
+	hud.setup(s)
+	hud.refresh()
+	check(not ("pumping" in hud.crew_lbl.text), "not pumping yet")
+	s.command(Roles.COPILOT, "pump", {"on": true})
+	s.command(Roles.COPILOT, "chat", {"text": "boat in sight"})
+	hud.refresh()
+	check(hud.crew.visible, "the strip appears")
+	check("pumping ferry fuel" in hud.crew_lbl.text, hud.crew_lbl.text)
+	check("boat in sight" in hud.crew_lbl.text, "and the co-pilot's last word")
+	check(hud.chips["crew"].is_on() and "CO-PILOT" in hud.chips["crew"].text(), "crew chip lit")
+	check(hud.chips["pump"].visible, "pump chip shown")
+	check(hud.toasts.lines().any(func(l): return "[copilot] boat in sight" in l), "the chat shows as a toast")
+	hud.free()
+	s.dispose()
+
+
+func test_the_remote_seat_crew_keys_and_escape() -> void:
+	var s := _crewed_flight()
+	var seat := RemoteSeat.new()
+	(Engine.get_main_loop() as SceneTree).root.add_child(seat)
+	seat.setup(LocalLink.new(s, Roles.COPILOT), Roles.COPILOT, "low", s.world)
+	seat._process(1.0 / 30)
+	var ev := InputEventKey.new()
+	ev.pressed = true
+	ev.physical_keycode = KEY_V
+	seat._unhandled_input(ev)
+	check(s.pumping, "V on the remote seat pumps")
+	var ak := s.auto_kick
+	seat.hints.press("auto_kick")
+	check(s.auto_kick != ak, "the key cap does it too")
+	ev.physical_keycode = KEY_ESCAPE
+	seat._unhandled_input(ev)
+	check(seat.confirm.visible and seat.is_inside_tree(), "ESC asks first")
+	seat.free()
+	s.dispose()
