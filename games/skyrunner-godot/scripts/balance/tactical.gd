@@ -210,7 +210,17 @@ static func rates(results: Array, where := {}) -> Dictionary:
 
 ## Fit HQ.Calibration to flown results. The abstract resolver's 'detected'
 ## means the task force has decided it's a smuggler, i.e. our 'flagged'.
-static func calibrate(results: Array) -> HQ.Calibration:
+## Intercept hazard of one posture's flagged flights (null with fewer than six).
+static func posture_hazard(results: Array, law: String):
+	var flagged := results.filter(func(r): return r["law"] == law and Py.truthy(r["flagged"]))
+	if flagged.size() < 6:
+		return null
+	var p := Py.sum_by(flagged, func(r): return _b(r["intercepted"])) / flagged.size()
+	return minf(3.0, -log(maxf(0.05, 1 - p)) / 0.8)
+
+
+## `postures` ["standard"] reproduces Python's fit exactly.
+static func calibrate(results: Array, postures := ["standard", "heavy"]) -> HQ.Calibration:
 	var cal := HQ.Calibration.new()
 	for z in MISSIONS:
 		var base := rates(results, {"zone": z, "law": "standard"})
@@ -221,13 +231,21 @@ static func calibrate(results: Array) -> HQ.Calibration:
 			cal.crash[z] = Py.round_n(minf(BOT_CRASH_CAP, maxf(0.01, base["crashed"])), 3)
 		if aer.get("n", 0) >= 4 and base.get("n", 0) >= 4:
 			cal.aerostat_detect[z] = Py.round_n(maxf(0.0, aer["flagged"] - base["flagged"]), 3)
-	var flagged := results.filter(func(r): return r["law"] == "standard" and Py.truthy(r["flagged"]))
-	if flagged.size() >= 6:
-		var p := Py.sum_by(flagged, func(r): return _b(r["intercepted"])) / flagged.size()
-		# standard posture: 1 heli + 1 interceptor, patrol elsewhere (match 0.8)
-		var haz := minf(3.0, -log(maxf(0.05, 1 - p)) / 0.8)
-		var w: float = cal.intercept_per_unit["heli"] + cal.intercept_per_unit["interceptor"]
-		cal.intercept_k = Py.round_n(haz / PyMath.log1p(w), 3)
+	# intercept hazard per posture: k * ln(1 + weighted units) * patrol match (0.8 elsewhere).
+	# Standard and heavy fly the same routes with 1+1 and 2+2 units, so a least-squares
+	# fit through both tests the diminishing-returns curve instead of assuming it.
+	var num := 0.0
+	var den := 0.0
+	for law in postures:
+		var h = posture_hazard(results, law)
+		if h == null:
+			continue
+		var cfg: Array = LAW_CONFIGS[law]
+		var l := PyMath.log1p(cfg[0] * cal.intercept_per_unit["heli"] + cfg[1] * cal.intercept_per_unit["interceptor"])
+		num += h * l
+		den += l * l
+	if den > 0:
+		cal.intercept_k = Py.round_n(num / den, 3)
 	var inter := results.filter(func(r): return Py.truthy(r["intercepted"]))
 	if inter.size() >= 6:
 		cal.bust_given_intercept = Py.round_n(minf(0.9, Py.sum_by(inter, func(r): return _b(r["busted"])) / inter.size()), 3)

@@ -223,7 +223,6 @@ class Case:
 	var tipped := false
 	var drop_alerted := false
 	var odd_destination := {}  ## strips a squawking "legit" flight let down into
-	var staked = null  ## airfield code a spare unit is staking out for this track
 	var first_known = null  ## [x, y] at first radar contact: the course made good starts here
 	var last_contact = null  ## [x, y, agl, vx, vy, squawking] at the last radar contact
 
@@ -277,6 +276,7 @@ var _alias := {}
 var _unalias := {}
 var pending_claim := {}  ## role -> unit kind waiting to launch
 var frozen := false  ## tests: stand the task force down (Python monkeypatches tick)
+var surge := true  ## spare helicopters join the chase and close units box the runner in (Godot-only)
 
 
 func _init(world_: World, rng_: PyRandom = null, radio_: RadioNet = null, controller_ := "ai", features_ = null) -> void:
@@ -512,14 +512,19 @@ func _ai_escalate(c: Case, level: int, sig: SensorNet.Signature) -> void:
 				idle.goal = null
 			elif not (k == "interceptor" and not features.has("interceptors")):
 				launch(k, null, c.target_id, null, [sig.x, sig.y])
-		# spare helicopters don't chase: they stake out where the track is going
-		# (predictive dispatch; a real task force covers the likely strip)
-		if level >= 2 and c.staked == null and stock.get("heli", 0) > 0:
-			var af = predict_destination(sig, c.first_known)
-			if af != null:
-				c.staked = af.code
-				launch("heli", null, null, [af.x, af.y])
-				law_events.append("Stake-out: spare helicopter to %s" % af.code)
+		# the surge: every spare helicopter joins the chase (more eyes, and a box
+		# the runner can't turn out of - see the bust meter in tick)
+		if surge:
+			for u in units:
+				if u.kind == "heli" and u.faction() == "police" and u.target_id == null \
+						and u.state in ["goto", "return", "search"]:
+					u.target_id = c.target_id
+					u.state = "pursuit"
+					u.goal = null
+					_say(u.id, "joining the pursuit of %s" % alias(c.target_id), [u.x, u.y])
+			while stock.get("heli", 0) > 0:
+				launch("heli", null, c.target_id, null, [sig.x, sig.y])
+				law_events.append("Surge: spare helicopter joins the chase")
 	elif level < c.wanted:
 		events.append("Wanted level down" if level else "You lost them. Heat is off.")
 		if level == 0:
@@ -692,8 +697,10 @@ func tick(dt: float, now_: float, targets: Array) -> Dictionary:
 						c.wanted -= 1
 					if c.wanted == 0:
 						c.suspicion = 0.0
-		var close := Py.any(seen_by.get(tid, []), func(u): return u.dist_to(t.sig) < BUST_RANGE_M)
-		c.bust_meter = minf(100.0, c.bust_meter + 22 * dt) if close else maxf(0.0, c.bust_meter - 12 * dt)
+		var n_close: int = seen_by.get(tid, []).filter(func(u): return u.dist_to(t.sig) < BUST_RANGE_M).size()
+		# boxed in: every extra aircraft on your tail closes an escape (+50% each)
+		var box := 1.0 + 0.5 * (n_close - 1) if surge and n_close > 1 else 1.0
+		c.bust_meter = minf(100.0, c.bust_meter + 22 * dt * box) if n_close > 0 else maxf(0.0, c.bust_meter - 12 * dt)
 		if c.bust_meter >= 100:
 			c.bust_meter = 0.0
 			outcomes[tid] = "busted" if t.hot else "clean"

@@ -183,39 +183,96 @@ func test_grudgers_never_forgive() -> void:
 	check(ss.rival.revealed, "their nature is now known")
 
 
-func test_heavy_police_stake_out_the_destination() -> void:
+func _quarry_track(s: Session, dist := 2000.0) -> SensorNet.Signature:
+	var q := World.airfield("QRY")
+	var f := World.airfield("FRM")
+	var d := Vector2(q.x - f.x, q.y - f.y).normalized()
+	return SensorNet.Signature.new("runner", f.x + d.x * dist, f.y + d.y * dist, 200.0, 60.0, d.x * 60, d.y * 60)
+
+
+func _launched_for(ps: PoliceSystem, kind: String, tid: String) -> int:
+	return ps._launches.filter(func(l): return l[1] == kind and l[3] == tid).size()
+
+
+func test_heavy_police_surge_every_helicopter_into_the_chase() -> void:
 	var s := Session.new({"seed": 2, "location": "FRM", "features": ["contraband", "interceptors"]})
 	var ps := s.police
 	ps.stock = {"heli": 2, "interceptor": 2, "cutter": 0}
+	var c := ps.case("runner")
+	ps._ai_escalate(c, 1, _quarry_track(s))
+	check_eq(_launched_for(ps, "heli", "runner"), 2, "both helicopters are sent after the track")
+	check_eq(ps.stock["heli"], 0, "nothing left in the hangar")
+	check(ps.law_events.any(func(e): return "Surge" in e), "the desk hears about it")
+	s.dispose()
+
+
+func test_standard_police_launch_as_before() -> void:
+	var s := Session.new({"seed": 2, "location": "FRM", "features": ["contraband", "interceptors"]})
+	var ps := s.police
+	ps.stock = {"heli": 1, "interceptor": 1, "cutter": 0}
+	var c := ps.case("runner")
+	var sig := _quarry_track(s)
+	ps._ai_escalate(c, 1, sig)
+	ps._ai_escalate(c, 2, sig)
+	check_eq(_launched_for(ps, "heli", "runner"), 1, "one helicopter")
+	check_eq(_launched_for(ps, "interceptor", "runner"), 1, "one interceptor")
+	check(not ps.law_events.any(func(e): return "Surge" in e), "no spare, no surge")
+	s.dispose()
+
+
+func test_an_idle_helicopter_joins_the_pursuit() -> void:
+	var s := Session.new({"seed": 2, "location": "FRM", "features": ["contraband", "interceptors"]})
+	var ps := s.police
+	ps.stock = {"heli": 2, "interceptor": 0, "cutter": 0}
+	var sig := _quarry_track(s)
+	var u := ps._spawn_now("heli", ps.police_bases()[0].code, null, [sig.x, sig.y])  # on patrol
+	ps.stock["heli"] -= 1
+	var c := ps.case("runner")
+	ps._ai_escalate(c, 1, sig)
+	check_eq(u.target_id, "runner", "the patrol helicopter is re-tasked")
+	check_eq(u.state, "pursuit", "and chases")
+	s.dispose()
+
+
+func _bust_rate(n_units: int, surge: bool) -> float:
+	var s := Session.new({"seed": 2, "location": "FRM", "features": ["contraband"]})
+	var ps := s.police
+	ps.surge = surge
+	var sig := _quarry_track(s)
+	sig.z = s.world.ground(sig.x, sig.y) + 300.0
+	for i in n_units:
+		var u := ps._spawn_now("heli", ps.police_bases()[0].code, "runner", null)
+		u.x = sig.x + 100.0 * (i + 1)
+		u.y = sig.y
+		u.z = sig.z
+	var c := ps.case("runner")
+	c.wanted = 1
+	ps.tick(0.1, 100.0, [PoliceSystem.Target.new(sig, true)])
+	var m := c.bust_meter
+	s.dispose()
+	return m
+
+
+func test_two_aircraft_on_your_tail_box_you_in() -> void:
+	var one := _bust_rate(1, true)
+	var two := _bust_rate(2, true)
+	check(one > 0.0, "one close unit starts the bust (%.2f)" % one)
+	check_near(two / one, 1.5, 1e-6, "two close units bust 1.5x faster")
+	check_near(_bust_rate(2, false), one, 1e-9, "surge off: Python's rule, any number of units counts once")
+
+
+func test_course_made_good_beats_the_heading() -> void:
+	var s := Session.new({"seed": 2, "location": "FRM", "features": ["contraband"]})
+	var ps := s.police
 	var q := World.airfield("QRY")
 	var f := World.airfield("FRM")
 	check(q.kind in ["bush", "shady"], "QRY is off the books")
-	# a track leaving FRM straight for the quarry
 	var d := Vector2(q.x - f.x, q.y - f.y).normalized()
-	var sig := SensorNet.Signature.new("runner", f.x + d.x * 2000, f.y + d.y * 2000, 200.0, 60.0, d.x * 60, d.y * 60)
-	check_eq(ps.predict_destination(sig).code, "QRY", "predicted destination")
-	var c := ps.case("runner")
-	ps._ai_escalate(c, 2, sig)
-	check_eq(c.staked, "QRY", "a spare helicopter covers the strip")
-	check(ps.law_events.any(func(e): return "Stake-out" in e), "the desk hears about it")
+	check_eq(ps.predict_destination(_quarry_track(s)).code, "QRY", "predicted destination")
 	# mid dog-leg the heading points east, but the course made good since first contact is the quarry
 	var mid := SensorNet.Signature.new("runner", f.x + d.x * 5000, f.y + d.y * 5000, 60.0, 60.0, 60.0, 0.0)
 	check(ps.predict_destination(mid) == null or ps.predict_destination(mid).code != "QRY", "heading alone misleads")
 	check_eq(ps.predict_destination(mid, [f.x, f.y]).code, "QRY", "course made good finds the quarry")
-	s.dispose()
-
-
-func test_standard_police_have_no_spare_to_stake_out() -> void:
-	var s := Session.new({"seed": 2, "location": "FRM", "features": ["contraband", "interceptors"]})
-	var ps := s.police
-	ps.stock = {"heli": 1, "interceptor": 1, "cutter": 0}
-	var q := World.airfield("QRY")
-	var f := World.airfield("FRM")
-	var d := Vector2(q.x - f.x, q.y - f.y).normalized()
-	var sig := SensorNet.Signature.new("runner", f.x + d.x * 2000, f.y + d.y * 2000, 200.0, 60.0, d.x * 60, d.y * 60)
-	var c := ps.case("runner")
-	ps._ai_escalate(c, 2, sig)
-	check(c.staked == null, "one helicopter chases, none left over")
 	s.dispose()
 
 
