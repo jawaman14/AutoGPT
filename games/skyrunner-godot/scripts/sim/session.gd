@@ -183,6 +183,18 @@ func _init(opts := {}) -> void:
 			police.set_encryption(true)
 
 
+## Break the reference cycles (night director, campaign, bus subscribers) so a
+## finished Session is freed; batch simulators build thousands of them.
+func dispose() -> void:
+	if nights != null:
+		nights.sess = null
+	nights = null
+	if campaign != null:
+		campaign.sess = null
+	campaign = null
+	bus._subs.clear()
+
+
 static func _rng(s: int) -> PyRandom:
 	var r := PyRandom.new()
 	r.seed(s)
@@ -337,17 +349,30 @@ func command(role: String, name: String, args := {}) -> Array:
 	return [true, "ok"]
 
 
+## A numeric command argument, or null when missing or not a number. GDScript has
+## no try/except, so commands from the network are validated here instead.
 static func _num(args: Dictionary, k: String, default = null):
-	return args[k] if args.has(k) and args[k] != null else default
+	var v = args.get(k)
+	if v is int or v is float:
+		return float(v)
+	if v is String and v.is_valid_float():
+		return v.to_float()
+	return default
+
+
+static func _point(args: Dictionary):
+	var x = _num(args, "x")
+	var y = _num(args, "y")
+	return [x, y] if x != null and y != null else null
 
 
 func _cmd_accept_job(role: String, a: Dictionary):
-	var job := find_job(int(a.get("job_id", -1)))
+	var job := find_job(int(_num(a, "job_id", -1)))
 	return accept_job(job) if job else "No such job."
 
 
 func _cmd_drop_job(role: String, a: Dictionary):
-	var job := find_job(int(a.get("job_id", -1)))
+	var job := find_job(int(_num(a, "job_id", -1)))
 	if job == null:
 		return "No such job."
 	drop_job(job)
@@ -357,10 +382,10 @@ func _cmd_drop_job(role: String, a: Dictionary):
 func _cmd_move_item(role: String, a: Dictionary):
 	if not parked:
 		return "Loading happens on the ground, stopped."
-	var iid := int(a.get("item_id", -1))
+	var iid := int(_num(a, "item_id", -1))
 	if not loadout.items.has(iid):
 		return "No such item."
-	cycle_item(iid, int(a.get("direction", 1)))
+	cycle_item(iid, int(_num(a, "direction", 1)))
 	return null
 
 
@@ -371,18 +396,18 @@ func _cmd_loadmaster(role: String, a: Dictionary):
 func _cmd_set_fuel(role: String, a: Dictionary):
 	if not parked:
 		return "Refuel on the ground."
-	set_fuel(float(a.get("lb", 0.0)))
+	set_fuel(float(_num(a, "lb", 0.0)))
 	return null
 
 
 func _cmd_fill_ferry(role: String, a: Dictionary):
-	return fill_ferry(float(a.get("lb", 0.0)))
+	return fill_ferry(float(_num(a, "lb", 0.0)))
 
 
 func _cmd_buy_aircraft(role: String, a: Dictionary):
 	if not Aircraft.ROSTER.has(str(a.get("key", ""))):
 		return "Bad arguments for buy_aircraft: unknown aircraft"
-	return buy_or_switch(str(a.key))
+	return buy_or_switch(str(a["key"]))
 
 
 func _cmd_buy_gear(role: String, a: Dictionary):
@@ -398,7 +423,7 @@ func _cmd_spotter_move(role: String, a: Dictionary):
 	var code = a.get("code")
 	if not World.AIRFIELD_BY_CODE.has(code) or spotters.is_empty():
 		return "No spotter / unknown field."
-	var sp: Spotter = spotters[mini(int(a.get("index", 0)), spotters.size() - 1)]
+	var sp: Spotter = spotters[mini(int(_num(a, "index", 0)), spotters.size() - 1)]
 	sp.moving_to = code
 	sp.move_t = SPOTTER_MOVE_S
 	say("Spotter heading to %s (60 s)" % World.airfield(code).name)
@@ -432,7 +457,7 @@ func _cmd_autopilot(role: String, a: Dictionary):
 
 
 func _cmd_kick(role: String, a: Dictionary):
-	return request_kick(role, int(a.get("count", 1)))
+	return request_kick(role, int(_num(a, "count", 1)))
 
 
 func _cmd_auto_kick(role: String, a: Dictionary):
@@ -458,7 +483,10 @@ func _cmd_boat_goto(role: String, a: Dictionary):
 	var boats := maritime.boats.filter(func(b): return b.kind == "gofast" and not (b.state in ["seized", "delivered"]))
 	if boats.is_empty():
 		return "No boat at sea."
-	boats[0].goal = [float(a.x), float(a.y)]
+	var p = _point(a)
+	if p == null:
+		return "Bad arguments for boat_goto: need x and y"
+	boats[0].goal = p
 	boats[0].state = "to_rendezvous"
 	return null
 
@@ -494,7 +522,7 @@ func _cmd_chat(role: String, a: Dictionary):
 # law side
 func _cmd_launch(role: String, a: Dictionary):
 	var kind := str(a.get("kind", ""))
-	var goal = [float(a.x), float(a.y)] if a.get("x") != null and a.get("y") != null else null
+	var goal = _point(a)
 	if kind == "cutter":
 		if not features.has("cutters"):
 			return "No cutter assigned."
@@ -508,7 +536,7 @@ func _cmd_launch(role: String, a: Dictionary):
 
 
 func _cmd_dispatch(role: String, a: Dictionary):
-	var point = [float(a.x), float(a.y)] if a.get("x") != null and a.get("y") != null else null
+	var point = _point(a)
 	var target = police.resolve(a.get("target"))
 	var b := maritime.boat(a.get("unit"))
 	if b != null and b.kind == "cutter":
