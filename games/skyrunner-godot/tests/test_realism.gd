@@ -198,6 +198,10 @@ func test_heavy_police_stake_out_the_destination() -> void:
 	ps._ai_escalate(c, 2, sig)
 	check_eq(c.staked, "QRY", "a spare helicopter covers the strip")
 	check(ps.law_events.any(func(e): return "Stake-out" in e), "the desk hears about it")
+	# mid dog-leg the heading points east, but the course made good since first contact is the quarry
+	var mid := SensorNet.Signature.new("runner", f.x + d.x * 5000, f.y + d.y * 5000, 60.0, 60.0, 60.0, 0.0)
+	check(ps.predict_destination(mid) == null or ps.predict_destination(mid).code != "QRY", "heading alone misleads")
+	check_eq(ps.predict_destination(mid, [f.x, f.y]).code, "QRY", "course made good finds the quarry")
 	s.dispose()
 
 

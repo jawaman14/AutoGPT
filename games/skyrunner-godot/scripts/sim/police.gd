@@ -224,6 +224,7 @@ class Case:
 	var drop_alerted := false
 	var odd_destination := {}  ## strips a squawking "legit" flight let down into
 	var staked = null  ## airfield code a spare unit is staking out for this track
+	var first_known = null  ## [x, y] at first radar contact: the course made good starts here
 	var last_contact = null  ## [x, y, agl, vx, vy, squawking] at the last radar contact
 
 	func _init(tid: String, opts := {}) -> void:
@@ -514,7 +515,7 @@ func _ai_escalate(c: Case, level: int, sig: SensorNet.Signature) -> void:
 		# spare helicopters don't chase: they stake out where the track is going
 		# (predictive dispatch; a real task force covers the likely strip)
 		if level >= 2 and c.staked == null and stock.get("heli", 0) > 0:
-			var af = predict_destination(sig)
+			var af = predict_destination(sig, c.first_known)
 			if af != null:
 				c.staked = af.code
 				launch("heli", null, null, [af.x, af.y])
@@ -531,8 +532,18 @@ func _ai_escalate(c: Case, level: int, sig: SensorNet.Signature) -> void:
 
 ## The strip a track is most likely heading for: bush and shady strips within
 ## 45 degrees of its course, nearest first (null when it's heading nowhere useful).
-func predict_destination(sig: SensorNet.Signature):
-	var sp := sqrt(sig.vx * sig.vx + sig.vy * sig.vy)
+## Smugglers dog-leg around radar cover, so the course is the one made good since
+## first contact (`origin`) once that is 3 km long, not the heading of the moment.
+func predict_destination(sig: SensorNet.Signature, origin = null):
+	var cx := sig.vx
+	var cy := sig.vy
+	if origin != null:
+		var ox: float = sig.x - origin[0]
+		var oy: float = sig.y - origin[1]
+		if ox * ox + oy * oy >= 3000.0 * 3000.0:
+			cx = ox
+			cy = oy
+	var sp := sqrt(cx * cx + cy * cy)
 	if sp < 10.0:
 		return null
 	var best = null
@@ -545,7 +556,7 @@ func predict_destination(sig: SensorNet.Signature):
 		var d := sqrt(dx * dx + dy * dy)
 		if d < 1500.0 or d > 30000.0:
 			continue
-		if (dx * sig.vx + dy * sig.vy) / (d * sp) < cos(deg_to_rad(45.0)):
+		if (dx * cx + dy * cy) / (d * sp) < cos(deg_to_rad(45.0)):
 			continue
 		if d < best_d:
 			best_d = d
@@ -742,6 +753,8 @@ func _classify(t: Target, dt: float) -> void:
 	c.detected_by = site_code
 	if site_code:
 		c.last_known = [sig.x, sig.y, now]
+		if c.first_known == null:
+			c.first_known = [sig.x, sig.y]
 		if sig.transponder:
 			c.identified_t = now
 			c.squawk = sig.squawk
