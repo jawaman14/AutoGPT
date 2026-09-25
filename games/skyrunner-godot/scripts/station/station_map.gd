@@ -26,25 +26,36 @@ func side() -> float:
 	return minf(size.x, size.y)
 
 
+## The square map is centred in whatever rectangle the desk gives it.
+func origin() -> Vector2:
+	return (size - Vector2(side(), side())) / 2
+
+
 func w2m(x: float, y: float) -> Vector2:
 	var s := side()
-	return Vector2((x + World.HALF) / (2 * World.HALF) * s, s - (y + World.HALF) / (2 * World.HALF) * s)
+	return origin() + Vector2((x + World.HALF) / (2 * World.HALF) * s, s - (y + World.HALF) / (2 * World.HALF) * s)
 
 
 func m2w(p: Vector2) -> Vector2:
 	var s := side()
+	p -= origin()
 	return Vector2(p.x / s * 2 * World.HALF - World.HALF, (s - p.y) / s * 2 * World.HALF - World.HALF)
 
 
+func _on_map(p: Vector2) -> bool:
+	var q := p - origin()
+	return q.x >= 0 and q.y >= 0 and q.x <= side() and q.y <= side()
+
+
 func _gui_input(ev: InputEvent) -> void:
-	if ev is InputEventMouseButton and ev.pressed and ev.position.x <= side() and ev.position.y <= side():
+	if ev is InputEventMouseButton and ev.pressed and _on_map(ev.position):
 		clicked.emit(ev.button_index, m2w(ev.position))
 		accept_event()
 
 
 func mouse_world():
 	var p := get_local_mouse_position()
-	if p.x < 0 or p.y < 0 or p.x > side() or p.y > side():
+	if not _on_map(p):
 		return null
 	return m2w(p)
 
@@ -78,7 +89,8 @@ func _text(x: float, y: float, t: String, col: Color) -> void:
 
 func _draw() -> void:
 	var s := side()
-	draw_texture_rect(tex, Rect2(0, 0, s, s), false)
+	draw_rect(Rect2(Vector2.ZERO, size), Color(0.12, 0.25, 0.42))  # open sea round the square chart
+	draw_texture_rect(tex, Rect2(origin(), Vector2(s, s)), false)
 	for af in World.AIRFIELDS:
 		var a: Array = af.threshold(0)
 		var b: Array = af.threshold(1)

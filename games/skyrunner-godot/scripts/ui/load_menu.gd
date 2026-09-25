@@ -114,6 +114,7 @@ func _build() -> void:
 	crew.add_child(lm)
 	right.add_child(crew)
 	chart = CGChart.new()
+	chart.custom_minimum_size = Vector2(300, 150)  # it grows into whatever the column has left
 	chart.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	right.add_child(chart)
 	readout = UIStyle.label("", 14, UIStyle.RED)

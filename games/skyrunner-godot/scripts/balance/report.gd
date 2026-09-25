@@ -47,7 +47,7 @@ const CHANGELOG := [
 		"A 12-point grid over the cartel's market bite, its hijack chance and the retirement target. Retire at $38k (was $45k), market loss 30% at full rival control, hijack chance 20% + 30% x strength when you meet on the same route. Equilibrium 48.8% over 40,000 seasons, every ending between 13% and 27%, comebacks 21%. The cartel hijacks at least one load in a third of seasons, and recruit's ablation swing fell from +20 to +8 points: the cartel gives the task force a second target and the organisation a second enemy."],
 	["Heavy police flew exactly like standard police",
 		"Tactical sweep, 90 flights per posture: 'heavy' (2 helicopters, 2 interceptors) and 'standard' (1 + 1) gave identical rows, flight for flight. The AI sends a fixed response per wanted level (1 helicopter, then +1 interceptor, then +1 more), so a second helicopter never left the ground: the chief's extra money bought nothing.",
-		"Added predictive dispatch: at wanted level 2, a spare helicopter flies to the strip the track is making for (the bush or shady strip within 45 degrees of its course since first contact) and waits there. Re-flown, the 90 heavy flights still end exactly as the standard ones. The stake-out launches, but in 3 of 4 traced flights it picked the wrong strip or none, because the bots dog-leg around radar cover. Where it does guess right, the first helicopter already has the runner in sight and settles the chase. Kept as a live-game threat that players can read and outfly. In bot-vs-bot play the chief's extra helicopter still buys nothing."],
+		"First try, a stake-out: a spare helicopter flew to the strip the track seemed to be making for. It guessed wrong against routes that dog-leg round radar cover, and changed no flight. Second, the surge (asked for: the spare joins the chase): every spare helicopter launches after a wanted track as a flanker, aiming up to 90 s ahead of the runner to cut it off, and two aircraft within bust range fill the bust meter 50% faster (boxed in). Re-flown, heavy still matches standard flight for flight, and the reason is now clear: of the 38 flights standard police flag, one helicopter busts 29, 6 end in the bot's own hard landing or ditching, and 3 get away over the sea. There is nothing left for a second chaser to win. Extra helicopters pay before the chase, not in it: the patrol posture (one helicopter already over the zone) busts 40 of 90 against 29. The season model credits extra units with ln(1 + units), 1.49x the hazard for heavy; flown, it's 1.00x (see section 2). Kept as is: human controllers do use spare aircraft, and the surge makes the AI's spares fly rather than sit in the hangar.""],
 	["Weather and the moon",
 		"Requested: realism. Each night now has a forecast both HQs see while planning (clear 55%, cloud 30%, storm 15%, right 75% of the time) and a moon on a 29.5-day cycle. Cloud, rain and a dark moon cut how far crews see; storms ground most helicopters and the aerostat (TARS balloons are winched down for lightning), make the sea too rough for cutters, and more than double crash risk. Live: JSBSim wind and Dryden turbulence, rain, lightning, a storm deck, the moon's phase. The first version handed the organisation 69% (weather was a flat -16% on detection). Centring the factors on 1.0 (clear x1.1, cloud x0.9, storm x0.7; moon x0.8-1.2; crashes x0.8/1.1/2.2) still left it at 62%: attribution runs (one storm effect off at a time) put ~5 points on visibility, 1 or less each on grounded helicopters, balloon and cutters, the rest on interactions (the law bots learn less from fewer sightings). That matches history: smugglers picked bad weather and dark nights.",
 		"Kept the realism and moved the economy instead: retire target $38k -> $48k (with the pattern rule below at 0.45). Equilibrium 51.2% over 40,000 seasons, endings 14-28%, comebacks 22%. Weather is now worth about 13 points to the organisation on ablation - the biggest single lever in the game - so reading the forecast is part of playing well."],
@@ -166,6 +166,11 @@ static func write_report(results_dir: String, out_path: String) -> String:
 			var cells := laws.map(func(law): return _pct(Tactical.rates(tac, {"tactic": t, "law": law}).get("delivered")))
 			lines.append("| %s | " % t + " | ".join(cells) + " |")
 		lines += ["", "Calibration fed to the season simulator: `%s`" % cal_repr(Tactical.calibrate(tac)), ""]
+		var ur := Tactical.unit_returns(tac)
+		if not ur.is_empty():
+			lines += ["Returns on extra units: heavy (2 helicopters + 2 interceptors) vs standard (1 + 1) intercept hazard, flown "
+				+ "%sx, season model %sx. Where they differ, the flown number says a second chaser adds nothing the first "
+				% [Py.f(ur["flown"], 2), Py.f(ur["model"], 2)] + "doesn't already get (entry 14).", ""]
 
 	var strat = _load(results_dir, "strategic")
 	if strat:
@@ -245,6 +250,20 @@ static func write_report(results_dir: String, out_path: String) -> String:
 		for pol in rz["route_entropy_by_runner"]:
 			lines.append("| %s | %s | %s |" % [pol, Py.f(rz["route_entropy_by_runner"][pol], 2), _pct(rz["main_run_detected_by_runner"][pol])])
 		lines.append("")
+	var crew = _load(results_dir, "crew")
+	if crew is Dictionary and not crew.is_empty():
+		lines += ["## 6. What a co-pilot is worth", "",
+			"The sea mission (airdrop to the go-fast, standard police) flown three ways: solo (autopilot on, the pilot "
+			+ "goes aft and kicks, 4 s a bale), the AI co-pilot's habits (auto-kick over the mark, 2 s a bale) and a "
+			+ "scripted human co-pilot through the command gate (calls the boat on the way in, kicks the load in one go). "
+			+ "%d flights per crew." % int(crew["table"][0]["n"]), "",
+			"| crew | bales kicked | bales delivered | s over the drop | flagged | busted | crashed | minutes |",
+			"|---|---|---|---|---|---|---|---|"]
+		for row in crew["table"]:
+			lines.append("| %s | %s | %s | %s | %s | %s | %s | %s |" % [row["crew"], _pct(row["kicked"]), _pct(row["delivered"]),
+				Py.f(row["over_drop_s"], 0), _pct(row["flagged"]), _pct(row["busted"]), _pct(row["crashed"]), Py.f(row["minutes"], 1)])
+		var ld: Dictionary = crew["loading_s"]
+		lines += ["", "Ramp loading at a bush strip (no ground crew): %s s solo, %s s with a co-pilot." % [Py.f(ld["solo"], 1), Py.f(ld["copilot"], 1)], ""]
 	var abl = _load(results_dir, "ablation")
 	if abl:
 		var base: float = abl["base"]

@@ -78,7 +78,7 @@ func test_matrix_equilibrium_and_summary_match_python() -> void:
 
 func test_calibration_from_python_flights() -> void:
 	var tac = JSON.parse_string(FileAccess.get_file_as_string("res://tests/fixtures/tactical_sample.json"))
-	_same(Tactical.calibrate(tac, ["standard"]).to_dict(), ref.calibrate_tactical, "calibration")
+	_same(Tactical.calibrate(tac).to_dict(), ref.calibrate_tactical, "calibration")
 
 
 # ---- ported from tests/test_hq.py (the sim-matrix half)

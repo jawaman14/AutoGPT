@@ -210,6 +210,18 @@ static func rates(results: Array, where := {}) -> Dictionary:
 
 ## Fit HQ.Calibration to flown results. The abstract resolver's 'detected'
 ## means the task force has decided it's a smuggler, i.e. our 'flagged'.
+## Heavy vs standard intercept hazard, flown and as the season model assumes it:
+## {"flown": h_heavy / h_standard, "model": ln(1 + w_heavy) / ln(1 + w_standard)}, or {}.
+static func unit_returns(results: Array) -> Dictionary:
+	var hs = posture_hazard(results, "standard")
+	var hh = posture_hazard(results, "heavy")
+	if hs == null or hh == null or hs <= 0:
+		return {}
+	var cal := HQ.Calibration.new()
+	var w := func(law): return LAW_CONFIGS[law][0] * cal.intercept_per_unit["heli"] + LAW_CONFIGS[law][1] * cal.intercept_per_unit["interceptor"]
+	return {"flown": Py.round_n(hh / hs, 3), "model": Py.round_n(PyMath.log1p(w.call("heavy")) / PyMath.log1p(w.call("standard")), 3)}
+
+
 ## Intercept hazard of one posture's flagged flights (null with fewer than six).
 static func posture_hazard(results: Array, law: String):
 	var flagged := results.filter(func(r): return r["law"] == law and Py.truthy(r["flagged"]))
@@ -220,7 +232,7 @@ static func posture_hazard(results: Array, law: String):
 
 
 ## `postures` ["standard"] reproduces Python's fit exactly.
-static func calibrate(results: Array, postures := ["standard", "heavy"]) -> HQ.Calibration:
+static func calibrate(results: Array, postures := ["standard"]) -> HQ.Calibration:
 	var cal := HQ.Calibration.new()
 	for z in MISSIONS:
 		var base := rates(results, {"zone": z, "law": "standard"})
@@ -232,8 +244,9 @@ static func calibrate(results: Array, postures := ["standard", "heavy"]) -> HQ.C
 		if aer.get("n", 0) >= 4 and base.get("n", 0) >= 4:
 			cal.aerostat_detect[z] = Py.round_n(maxf(0.0, aer["flagged"] - base["flagged"]), 3)
 	# intercept hazard per posture: k * ln(1 + weighted units) * patrol match (0.8 elsewhere).
-	# Standard and heavy fly the same routes with 1+1 and 2+2 units, so a least-squares
-	# fit through both tests the diminishing-returns curve instead of assuming it.
+	# Fitted on the standard posture. `unit_returns` checks the ln curve against the
+	# heavy posture; fitting through both only makes sense where it holds (it didn't
+	# for the bots: one helicopter already catches every flagged flight it can reach).
 	var num := 0.0
 	var den := 0.0
 	for law in postures:

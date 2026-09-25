@@ -45,10 +45,18 @@ New in the Godot build:
     arrested, so a leak is never ground truth.
   - *Rival tempers.* Los Cuervos are tit-for-tat, grudge-holders or opportunists, and you learn which
     from how they behave. Truces unravel as the season runs out (backward induction).
-  - *Stake-outs.* Spare police helicopters don't chase: they cover the strip your track points at.
+  - *The surge.* Every spare police helicopter joins the chase as a flanker, aiming ahead to cut you
+    off, and two aircraft on your tail box you in (the bust meter fills 50% faster).
   - *Nerves.* Stress follows what real smuggling pilots feared. Past the Yerkes-Dodson hump the screen
     tunnels, you hear your heartbeat and your hands shake (8-12 Hz, human hands only). A co-pilot
     steadies you.
+- **One UI, redesigned.** A single theme across every screen; real tables with titled columns (the job
+  board colours the landing roll against the strip length); key caps in every footer that you can
+  also click; readouts as tiles; a HUD laid out by what you need when (status chips, wanted stars,
+  flight tiles, job cards, fading radio toasts, and a crew strip saying what the co-pilot is doing).
+  The co-pilot's desk opens on a Flight tab of crew jobs with live tiles, has a chat line to the pilot,
+  and hires a spotter wherever you click a strip. ESC asks before leaving a seat. The UI scales with
+  the window (tested 1024x768 to 2560x1080).
 - **Graphics overhaul:**
   - chunked, LOD'd terrain with a biome splat shader (sand, grass, forest floor, dry grass, rock
     triplanar on steep faces, normal-mapped); a depth-aware sea with shoreline foam; a procedural sky
@@ -73,6 +81,8 @@ New in the Godot build:
 | ![foot](docs/img/on-foot-hangar.png) | ![villa](docs/img/villa-desk.png) | ![org](docs/img/hq-org.png) |
 | **A storm night** | **Full moon** | **Generated island #7** |
 | ![storm](docs/img/storm.png) | ![moon](docs/img/full-moon.png) | ![map7](docs/img/map-seed7.png) |
+| **The HUD, crewed airdrop** | **Co-pilot's desk** | **Lobby** |
+| ![hud](docs/img/ui-hud.png) | ![copilot](docs/img/ui-copilot.png) | ![lobby](docs/img/ui-lobby.png) |
 
 *(Rendered on a GPU-less box: Mesa llvmpipe with Godot's compatibility renderer under Xvfb. SSAO and
 volumetric fog need Forward+ on a real GPU.)*
@@ -122,6 +132,7 @@ Demo videos: [docs/video/](docs/video/) (`tools/tour.gd` records the on-foot and
 ```bash
 $GODOT --headless --path . --script res://scripts/balance/cli.gd -- all --workers 4   # feasibility, tactical, strategic, report
 $GODOT --headless --path . --script res://scripts/balance/cli.gd -- strategic --n 1000
+$GODOT --headless --path . --script res://scripts/balance/cli.gd -- crew --seeds 10     # solo vs AI vs human co-pilot
 $GODOT --headless --path . --script res://scripts/balance/cli.gd -- tune --n 100 --grid '{"rival_market": [0.3, 0.4]}'
 $GODOT --headless --path . --script res://tools/equilibrium.gd -- 500 '{"weather": false}'   # one rule set's equilibrium
 ```
