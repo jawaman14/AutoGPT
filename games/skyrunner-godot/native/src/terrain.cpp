@@ -158,6 +158,15 @@ void Terrain::generate(int64_t seed, const Array &airfields) {
             h[k] = hv;
         }
     }
+    shape_fields(h);
+    plant_trees(seed);
+}
+
+void Terrain::shape_fields(std::vector<double> &h) {
+    const size_t NN = static_cast<size_t>(G) * G;
+    std::vector<double> cv(G);
+    for (int k = 0; k < G; ++k) cv[k] = linspace_endpoint(k);
+    cv[G - 1] = HALF;
     // guarantee land for offshore strips
     for (const Field &af : fields_) {
         const double amp = af.has_elev ? std::min(30.0, af.elev + 3.0) : 30.0;
@@ -213,7 +222,9 @@ void Terrain::generate(int64_t seed, const Array &airfields) {
     h_.resize(NN);
     for (size_t k = 0; k < NN; ++k) h_[k] = static_cast<float>(h[k]);
 
-    // ---------------------------------------------------------------- trees
+}
+
+void Terrain::plant_trees(int64_t seed) {
     Ref<NpRandom> trng;
     trng.instantiate();
     trng->seed(seed + 1);
@@ -254,6 +265,84 @@ void Terrain::generate(int64_t seed, const Array &airfields) {
     }
     trees_ = std::move(pts);
     bucket_trees();
+}
+
+// Generative islands: the same noise stack as the classic island, but the land
+// is a union of elliptical lobes, the mountains are polyline ridges and small
+// islets can be scattered offshore. params:
+//   lobes:  [[cx, cy, rx, ry], ...]
+//   ridges: [[x0, y0, x1, y1, width, height], ...]
+//   islets: [[x, y, radius, height], ...]
+//   base:   float (lowland relief, default 1.0)
+void Terrain::generate_custom(int64_t seed, const Dictionary &params, const Array &airfields) {
+    parse_fields(airfields);
+    field_elev_.clear();
+    const size_t NN = static_cast<size_t>(G) * G;
+    std::vector<double> cv(G);
+    for (int k = 0; k < G; ++k) cv[k] = linspace_endpoint(k);
+    cv[G - 1] = HALF;
+    Ref<NpRandom> rng;
+    rng.instantiate();
+    rng->seed(seed);
+    std::vector<double> noise, detail;
+    fbm(**rng, G, 4, 7, noise);
+    normalise(noise);
+    fbm(**rng, G, 16, 4, detail);
+    normalise(detail);
+    const Array lobes = params.get("lobes", Array());
+    const Array ridges = params.get("ridges", Array());
+    const Array islets = params.get("islets", Array());
+    const double base = params.get("base", 1.0);
+    std::vector<h_lobe> L;
+    for (int i = 0; i < lobes.size(); ++i) {
+        Array a = lobes[i];
+        L.push_back({a[0], a[1], a[2], a[3]});
+    }
+    std::vector<h_ridge> R;
+    for (int i = 0; i < ridges.size(); ++i) {
+        Array a = ridges[i];
+        R.push_back({a[0], a[1], a[2], a[3], a[4], a[5]});
+    }
+    std::vector<h_islet> I;
+    for (int i = 0; i < islets.size(); ++i) {
+        Array a = islets[i];
+        I.push_back({a[0], a[1], a[2], a[3]});
+    }
+    std::vector<double> h(NN);
+    for (int r = 0; r < G; ++r) {
+        const double Y = cv[r];
+        for (int c = 0; c < G; ++c) {
+            const double X = cv[c];
+            const size_t k = static_cast<size_t>(r) * G + c;
+            const double nz = noise[k], dt = detail[k];
+            double land = 0.0;
+            for (const h_lobe &lb : L) {
+                const double rr = std::hypot((X - lb.cx) / lb.rx, (Y - lb.cy) / lb.ry) + (nz - 0.5) * 0.35;
+                land = std::max(land, smoothstep(1.02, 0.72, rr));
+            }
+            double mount = 0.0;
+            for (const h_ridge &rg : R) {
+                const double vx = rg.x1 - rg.x0, vy = rg.y1 - rg.y0;
+                const double len2 = std::max(1.0, vx * vx + vy * vy);
+                const double t = clip(((X - rg.x0) * vx + (Y - rg.y0) * vy) / len2, 0.0, 1.0);
+                const double d = std::hypot(X - (rg.x0 + t * vx), Y - (rg.y0 + t * vy));
+                const double q = d / rg.width;
+                // taper at the ends so ridges don't stop in a wall
+                const double taper = smoothstep(0.0, 0.15, t) * smoothstep(1.0, 0.85, t);
+                mount = std::max(mount, std::exp(-(q * q)) * taper * rg.height);
+            }
+            double hv = land * base * (35 + 260 * nz + 120 * dt) + land * mount * (0.25 + 0.75 * nz + 0.5 * dt);
+            hv = hv - (1 - land) * 60;
+            for (const h_islet &is : I) {
+                const double dx = X - is.x, dy = Y - is.y;
+                const double bump = std::exp(-((dx * dx + dy * dy) / (is.r * is.r)));
+                hv = std::max(hv, bump * is.h * (0.7 + 0.6 * dt) - (1 - bump) * 60);
+            }
+            h[k] = hv;
+        }
+    }
+    shape_fields(h);
+    plant_trees(seed);
 }
 
 void Terrain::set_data(const PackedFloat32Array &heights, const PackedFloat32Array &trees, const Array &airfields) {
@@ -373,6 +462,7 @@ double Terrain::tree_top(double x, double y, double radius, double floor) const 
 
 void Terrain::_bind_methods() {
     ClassDB::bind_method(D_METHOD("generate", "seed", "airfields"), &Terrain::generate);
+    ClassDB::bind_method(D_METHOD("generate_custom", "seed", "params", "airfields"), &Terrain::generate_custom);
     ClassDB::bind_method(D_METHOD("set_data", "heights", "trees", "airfields"), &Terrain::set_data);
     ClassDB::bind_method(D_METHOD("get_heights"), &Terrain::get_heights);
     ClassDB::bind_method(D_METHOD("get_trees"), &Terrain::get_trees);

@@ -121,6 +121,7 @@ var unloading: Array = []
 var unload_t := 0.0
 var pilot_input := {}  ## police pilots' sticks
 var _scanner_seen := 0.0
+var map_seed := 0  ## the island this session is on (0 = classic)
 var nights = null  ## NightDirector when the Organisation layer is on
 
 
@@ -128,7 +129,9 @@ var nights = null  ## NightDirector when the Organisation layer is on
 func _init(opts := {}) -> void:
 	world = opts.get("world", null)
 	if world == null:
+		World.use_map(int(opts.get("map_seed", World.layout.map_seed)))  # 0 = the classic island
 		world = World.new()
+	map_seed = world.map.map_seed
 	seed = opts.get("seed", 1)
 	money = opts.get("money", START_MONEY)
 	owned = set_of(opts.get("owned", ["c172p"]))
@@ -1426,6 +1429,7 @@ func save() -> void:
 		"aircraft": aircraft_key,
 		"location": location if parked else (log.departed_from if log.departed_from else START_FIELD),
 		"gear": g,
+		"map_seed": map_seed,
 	}
 	if campaign != null:
 		data["campaign"] = campaign.to_dict()
@@ -1445,6 +1449,10 @@ static func load_or_new(path: String, opts := {}) -> Session:
 	var data := read_save(path)
 	var o := {}
 	o.merge(opts)
+	# the save's island wins unless the caller asked for a specific one
+	if not opts.has("map_seed"):
+		o["map_seed"] = int(data.get("map_seed", 0))
+	World.use_map(int(o["map_seed"]))
 	o["money"] = int(data.get("money", START_MONEY))
 	var owned_list := (data.get("owned", ["c172p"]) as Array).filter(func(k): return Aircraft.ROSTER.has(k))
 	o["owned"] = owned_list if not owned_list.is_empty() else ["c172p"]

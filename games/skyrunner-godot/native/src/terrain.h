@@ -39,6 +39,7 @@ public:
 
     // airfields: Array of Dictionary {code,x,y,heading,length,width,elev(null|float),setting,tree_lines,haul_road(null|int)}
     void generate(int64_t seed, const Array &airfields);
+    void generate_custom(int64_t seed, const Dictionary &params, const Array &airfields);
     void set_data(const PackedFloat32Array &heights, const PackedFloat32Array &trees, const Array &airfields);
 
     PackedFloat32Array get_heights() const;
@@ -63,7 +64,12 @@ private:
     Dictionary field_elev_;
     std::unordered_map<int64_t, std::vector<int>> buckets_;
 
+    struct h_lobe { double cx, cy, rx, ry; };
+    struct h_ridge { double x0, y0, x1, y1, width, height; };
+    struct h_islet { double x, y, r, h; };
     void parse_fields(const Array &airfields);
+    void shape_fields(std::vector<double> &h);
+    void plant_trees(int64_t seed);
     void bucket_trees();
     double sample64(const std::vector<double> &h, double x, double y) const;
     double heights_many_one(double x, double y) const;

@@ -61,8 +61,8 @@ const RULES := {
 const PYTHON_RULES := {"rivals": false, "retire_target": 45000}
 
 const ZONES := ["west", "north", "sea"]
-const ZONE_CENTRE := {"west": [-9000.0, 3000.0], "north": [2000.0, 8000.0], "sea": [13000.0, -11000.0]}
-const ZONE_FIELDS := {"west": ["QRY", "FRM"], "north": ["EGL", "PNR", "ISL"], "sea": ["COV"]}
+static var ZONE_CENTRE := {"west": [-9000.0, 3000.0], "north": [2000.0, 8000.0], "sea": [13000.0, -11000.0]}  ## per map (World.use_layout)
+static var ZONE_FIELDS := {"west": ["QRY", "FRM"], "north": ["EGL", "PNR", "ISL"], "sea": ["COV"]}
 const ZONE_PAY := {"west": 1.0, "north": 1.15, "sea": 1.3}
 
 const AIRCRAFT_TIERS := [  # [key, price, payout multiplier, heat on purchase]

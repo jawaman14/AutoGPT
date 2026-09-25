@@ -9,7 +9,7 @@ extends RefCounted
 ## see you above its clutter floor or through your transponder).
 
 const TRACK_TIMEOUT := 45.0
-const AEROSTAT_POS := [1500.0, -14800.0]
+static var AEROSTAT_POS := [1500.0, -14800.0]  ## per map (World.use_layout)
 
 
 class Signature:

@@ -9,6 +9,7 @@ var mode_ob: OptionButton
 var players: SpinBox
 var graphics_ob: OptionButton
 var seed_box: SpinBox
+var map_box: SpinBox
 var new_cb: CheckBox
 var watch_cb: CheckBox
 var host_cb: CheckBox
@@ -64,6 +65,18 @@ func _ready() -> void:
 	seed_box.max_value = 99999
 	seed_box.value = 1
 	_row(g, "Job board seed", seed_box)
+	map_box = SpinBox.new()
+	map_box.min_value = 0
+	map_box.max_value = 999999
+	map_box.value = 0
+	map_box.tooltip_text = "0 = the classic island; any other number grows a new one"
+	var mrow := HBoxContainer.new()
+	mrow.add_child(map_box)
+	var roll := Button.new()
+	roll.text = "New island"
+	roll.pressed.connect(func(): map_box.value = randi_range(1, 999999))
+	mrow.add_child(roll)
+	_row(g, "Island (0 = classic)", mrow)
 	var flags := HBoxContainer.new()
 	new_cb = CheckBox.new()
 	new_cb.text = "New game (ignore save)"
@@ -121,7 +134,7 @@ func _go() -> void:
 	start.emit({"mode": MODES[mode_ob.selected][1] if MODES[mode_ob.selected][1] != "police" else "solo",
 		"police": MODES[mode_ob.selected][1] == "police", "players": int(players.value) if players.value > 1 else 0,
 		"graphics": graphics_ob.get_item_text(graphics_ob.selected), "seed": int(seed_box.value), "new": new_cb.button_pressed,
-		"watch": watch_cb.button_pressed, "host": host_cb.button_pressed})
+		"watch": watch_cb.button_pressed, "host": host_cb.button_pressed, "map": int(map_box.value)})
 
 
 func _join() -> void:

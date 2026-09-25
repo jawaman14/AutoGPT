@@ -12,7 +12,8 @@ const GRID := 513
 const CELL := SIZE_M / (GRID - 1)
 const HALF := SIZE_M / 2
 
-static var AIRFIELDS: Array = _make_airfields()
+static var layout: MapLayout = MapLayout.classic()
+static var AIRFIELDS: Array = layout.airfields
 static var AIRFIELD_BY_CODE: Dictionary = _by_code()
 static var _terrain_cache := {}
 
@@ -20,22 +21,26 @@ var seed: int
 var airfields: Array = AIRFIELDS
 var terrain: Terrain
 var field_elev: Dictionary
+var map: MapLayout
 
 
-static func _make_airfields() -> Array:
-	return [
-		Airfield.new("HAR", "Port Harbor Intl", -9000, -9500, 70, 1800, 45, 8.0, "asphalt", "hub",
-			{"shop": true, "police": true, "radar_km": 22.0}),
-		Airfield.new("VAL", "Valley Regional", 2500, -3000, 20, 1000, 30, null, "asphalt", "regional",
-			{"shop": true, "police": true, "radar_km": 12.0}),
-		Airfield.new("FRM", "Miller's Farm", -6500, -1500, 110, 480, 20, null, "grass", "bush"),
-		Airfield.new("PNR", "Pine Ridge", 10000, 8500, 225, 380, 15, null, "gravel", "bush", {"tree_lines": true}),
-		Airfield.new("EGL", "Eagle's Nest", 1000, 9000, 250, 280, 14, 1150.0, "dirt", "bush", {"setting": "plateau"}),
-		Airfield.new("COV", "Smuggler's Cove", 11500, -8000, 10, 320, 18, 3.0, "sand", "shady", {"setting": "beach"}),
-		Airfield.new("QRY", "Old Quarry", -10000, 5500, 160, 240, 12, null, "dirt", "shady",
-			{"setting": "pit", "haul_road": 0}),
-		Airfield.new("ISL", "Isla Verde", 12800, 11500, 300, 550, 20, 12.0, "grass", "regional"),
-	]
+## Make a map current: airfields, HQ zones, aerostat and HQ sites all follow it.
+## One island per process (the balance workers and tests use the classic one).
+static func use_layout(l: MapLayout) -> void:
+	layout = l
+	AIRFIELDS = l.airfields
+	AIRFIELD_BY_CODE = _by_code()
+	HQ.ZONE_CENTRE = l.zone_centre
+	HQ.ZONE_FIELDS = l.zone_fields
+	SensorNet.AEROSTAT_POS = l.aerostat_pos
+
+
+## The map for a seed: 0 = the classic island, anything else is generated.
+static func use_map(map_seed: int) -> MapLayout:
+	if map_seed == layout.map_seed:
+		return layout
+	use_layout(MapLayout.classic() if map_seed == 0 else MapGen.generate(map_seed))
+	return layout
 
 
 static func _by_code() -> Dictionary:
@@ -50,16 +55,25 @@ static func airfield(code: String) -> Airfield:
 
 
 func _init(p_seed := 7) -> void:
-	seed = p_seed
-	if not _terrain_cache.has(seed):
+	map = layout
+	airfields = AIRFIELDS
+	var generated: bool = map.params != null
+	seed = map.terrain_seed if generated else p_seed
+	var key := "%s/%d" % [map.id, seed]
+	if not _terrain_cache.has(key):
 		var t := Terrain.new()
 		var dicts := []
 		for a in AIRFIELDS:
 			dicts.append(a.to_dict())
-		t.generate(seed, dicts)
-		_terrain_cache[seed] = t
-	terrain = _terrain_cache[seed]
+		if generated:
+			t.generate_custom(seed, map.params, dicts)
+		else:
+			t.generate(seed, dicts)
+		_terrain_cache[key] = t
+	terrain = _terrain_cache[key]
 	field_elev = terrain.get_field_elev()
+	if map.hqs.is_empty():
+		map.hqs = MapGen.site_hqs(self, map)
 
 
 ## Terrain height (may be negative: sea floor).

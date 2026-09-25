@@ -8,6 +8,7 @@ extends Node
 ##   godot -- --police                       # play the task force against AI runners
 ##   godot -- --players 6                    # seats and rule layers for a table of six
 ##   godot -- --watch --graphics low         # the AI flies the career; you watch
+##   godot -- --map 42                       # a generated island (0 = the classic one)
 ##   godot -- --shot out.png --frames 90     # render N frames, save a screenshot, quit
 ##
 ## With no arguments the lobby opens, which sets the same options with menus.
@@ -16,7 +17,7 @@ const SAVE_DIR := "user://"
 
 var args := {"mode": "solo", "police": false, "host": false, "port": 47800, "bind": "*", "new": false, "seed": 1,
 	"players": 0, "layer": 0, "graphics": "high", "watch": false, "shot": "", "frames": 90, "hour": -1.0,
-	"connect": "", "role": "copilot", "name": "player", "seat3d": false, "lobby": true}
+	"map": -1, "connect": "", "role": "copilot", "name": "player", "seat3d": false, "lobby": true}
 
 
 func _ready() -> void:
@@ -71,6 +72,8 @@ func start() -> void:
 	if args["new"] and FileAccess.file_exists(save):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(save))
 	var opts := {"seed": args["seed"], "mode": mode}
+	if args["map"] >= 0:  # --map 0 = classic island, --map N = generated island N
+		opts["map_seed"] = args["map"]
 	if features != null:
 		opts["features"] = features
 	var sess := Session.load_or_new(save, opts)
