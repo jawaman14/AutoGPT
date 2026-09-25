@@ -214,7 +214,12 @@ def write_report(results_dir: Path, out: Path) -> Path:
               "- The season simulator rolls nights from calibrated probabilities. It captures the economy and "
               "the information war, not flying skill.",
               "- Sample sizes: tactical cells have 3-9 flights each. Anything under about 15 points of "
-              "difference is noise."]
+              "difference is noise.",
+              "- Recruit is nearly worthless to a random bot (+2 pts) but the single biggest ablation at "
+              "equilibrium (+20.2 pts): it only pays off as an every-night opener, so skilled play finds it "
+              "and less-skilled play doesn't. Next candidate fix if this shows up in playtests: a diminishing "
+              "recruit success rate after the first informant, so stacking to the cap costs more than the "
+              "first one did."]
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(lines) + "\n")
     return out
