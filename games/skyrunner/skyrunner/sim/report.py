@@ -72,6 +72,24 @@ CHANGELOG = [
      "automatically whenever the feature is on.",
      "Fixed in the rig (the aerostat is available but only raised by the posture). Lesson: check that "
      "configurations which should differ actually do, before believing the numbers."),
+    ("Recruiting an informant was the single best move in the game",
+     "At 8000 seasons the equilibrium (organisation win 45.5%) looked fair, but the ablation table told a "
+     "different story: removing 'recruit' alone swung it to 60% (+14.5, the biggest number on the board). "
+     "Reading the code found why: an informant gave three stacked, always-on bonuses (a flat +45% detection "
+     "chance on tip nights, a 1.2x intercept-hazard multiplier on top of that, and 2.5 evidence/night per "
+     "head, up to 3 heads) for $3k plus $1k/night upkeep, and a whole computed 'informant_mult' field was "
+     "dead code that never reached the resolver. Worse, 'cautious' - the equilibrium runner strategy - never "
+     "called 'counterintel' at all, so the one built-in counter to informants was never used by the side that "
+     "was actually winning.",
+     "Informant cap 3 -> 2; recruiting cost $3k -> $5k; evidence/informant 2.5 -> 1.8; the tip's detection "
+     "bonus +45% -> +30% and its intercept-match multiplier 1.2x -> 1.1x; counterintel cheaper ($5k -> $4k) "
+     "and burns 75% of informants instead of 60%. Removed the dead 'informant_mult' field instead of wiring "
+     "it in on top of the tip bonus, which would have doubled up the same effect. Gave 'runner_cautious' a "
+     "counterintel response whenever it already reaches for opsec (serious evidence rumour or heat > 70), "
+     "matching what 'adaptive' and 'smart' already did. Equilibrium: 0.455 -> 0.450 at 40000 seasons; the "
+     "investigation trio (recruit/audit/wiretap) still swings the most on ablation (+15 to +20 points each), "
+     "which tracks with evidence being the task force's only win condition, but it is now measured, not "
+     "accidentally doubled by dead code."),
 ]
 
 

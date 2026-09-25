@@ -64,6 +64,8 @@ def runner_cautious(ss: Season, rng: random.Random, mem: dict) -> None:
     view = ss.view("runner")
     if view["evidence_rumor"] in ("serious", "closing in") or o.heat > 70:
         ss.runner_cmd("opsec")
+        if not o.counterintel:
+            ss.runner_cmd("counterintel")
         if o.heat > 70:
             ss.runner_cmd("lie_low")
     else:

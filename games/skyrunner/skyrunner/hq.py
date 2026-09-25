@@ -59,13 +59,13 @@ RULES: dict[str, float] = {
     "evidence_crew_bust": 2.0,
     "bust_fine": 3_000,
     "evidence_flip": 10.0,
-    "evidence_informant": 2.5,  # per informant per night
+    "evidence_informant": 1.8,  # per informant per night
     "evidence_wiretap": 3.0,
-    "evidence_audit_k": 6.0,  # per point of laundering exposure
+    "evidence_audit_k": 8.0,  # per point of laundering exposure
     "evidence_bribe": 12.0,
     "evidence_decay": 1.5,
     "flip_base": 0.55,
-    "tip_base": 0.30,  # chance an informant hears about tonight's route
+    "tip_base": 0.20,  # chance an informant hears about tonight's route
     "comeback_gap": 0.25,
     "fed_bonus_k": 10.0,
     "cartel_bonus": 0.30,
@@ -96,9 +96,10 @@ BRIBES = {  # name: (cost per night, what it does)
 
 LAW_COSTS_K = {  # $k per night unless noted
     "heli": 4.0, "interceptor": 7.0, "cutter": 4.0, "aerostat": 6.0,
-    "informant": 3.0, "informant_upkeep": 1.0, "wiretap": 7.0, "audit": 4.0,
+    "informant": 5.0, "informant_upkeep": 1.0, "wiretap": 7.0, "audit": 3.0,
     "ia_sweep": 4.0, "encryption": 5.0,  # one-off
 }
+INFORMANT_CAP = 2  # was 3: stacked tip+intercept+evidence made it the dominant lever (see docs/BALANCE.md)
 
 RUNNER_ACTIONS = ("launder", "buy_front", "bribe", "drop_bribe", "loyalty", "lawyer", "opsec",
                   "counterintel", "crews", "decoys", "route", "lie_low", "upgrade", "gear", "ready")
@@ -319,9 +320,9 @@ class Season:
 
     def _r_counterintel(self) -> str | None:
         o = self.org
-        if o.dirty < 5_000:
+        if o.dirty < 4_000:
             return "Not enough cash."
-        o.dirty -= 5_000
+        o.dirty -= 4_000
         o.counterintel = True
         return None
 
@@ -415,7 +416,7 @@ class Season:
         return err
 
     def _l_recruit(self) -> str | None:
-        if self.law.informants >= 3:
+        if self.law.informants >= INFORMANT_CAP:
             return "Enough informants to handle."
         err = self._spend(LAW_COSTS_K["informant"])
         if not err:
@@ -491,7 +492,6 @@ class Season:
             "leak_patrol": L.patrol if leak_patrol else None,
             "leak_aerostat": L.aerostat if leak_patrol else False,
             "no_customs": "tower" in o.bribes,
-            "informant_mult": 1.0 + L.informants * (1.0 - o.loyalty),
         }
         self.plan = plan
         self.plan_hist.append(plan)
@@ -537,7 +537,7 @@ class Season:
                     o.dirty -= int(R["bust_fine"])
                 flip = R["flip_base"] * (1 - o.loyalty) * (0.35 if o.lawyer else 1.0) if r.kind == "main" else 0.0
                 if self.rng.random() < flip:
-                    L.informants = min(3, L.informants + 1)
+                    L.informants = min(INFORMANT_CAP, L.informants + 1)
                     L.evidence += R["evidence_flip"]
                     rep.law_lines.append("The arrested pilot is talking.")
             if r.boat_seized:
@@ -572,7 +572,7 @@ class Season:
             L.support += 2
             rep.lines.append(f"Corrupt {b} official arrested.")
         if o.counterintel and L.informants:
-            burned = sum(1 for _ in range(L.informants) if self.rng.random() < 0.6)
+            burned = sum(1 for _ in range(L.informants) if self.rng.random() < 0.75)
             L.informants -= burned
             if burned:
                 rep.runner_lines.append(f"Counter-intel found {burned} rat(s). Handled.")
@@ -707,13 +707,13 @@ def resolve_abstract(season: Season, plan: dict, rng: random.Random, cal: Calibr
         r = RunResult(kind, zone)
         p_det = cal.detect[zone] + (cal.aerostat_detect[zone] if plan["aerostat"] else 0.0)
         if kind == "main" and plan["tip"]:
-            p_det += 0.45
+            p_det += 0.30
         if kind == "decoy":
             p_det += 0.25  # decoys want to be seen
         p_det = min(0.97, p_det)
         r.detected = rng.random() < p_det
         if r.detected:
-            match = 1.6 if plan["patrol"] == zone else (1.2 if kind == "main" and plan["tip"] else 0.8)
+            match = 1.6 if plan["patrol"] == zone else (1.1 if kind == "main" and plan["tip"] else 0.8)
             weighted = (units["heli"] * cal.intercept_per_unit["heli"]
                         + units["interceptor"] * cal.intercept_per_unit["interceptor"])
             haz = cal.intercept_k * math.log1p(weighted) * match
