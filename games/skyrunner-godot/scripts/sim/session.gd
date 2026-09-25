@@ -1,0 +1,1398 @@
+class_name Session
+extends RefCounted
+## Game session: the authoritative simulation for one match.
+##
+## It holds the runner crew's aircraft (JSBSim), the task force, boats, AI
+## runs, jobs and economy. Every action goes through command(role, name, args)
+## so local menus, network clients and AI crew obey the same rules. No
+## rendering in here: the whole game loop runs headless (tests, bots,
+## dedicated servers).
+
+const FT := 0.3048
+const FUEL_PRICE_PER_LB := 1.1
+const LOADMASTER_FEE := 150
+const START_MONEY := 3000
+const START_FIELD := "HAR"
+const OFF_FIELD_MAX_GS_KTS := 15.0
+const KICK_MAX_KTS := 130.0
+const KICK_TIME := {"copilot": 2.0, "pilot": 4.0}
+const PUMP_RATE_LB_MIN := {"copilot": 60.0, "pilot": 25.0}
+const TURNAROUND_S := {"solo": 20.0, "crew": 10.0}  ## push the aircraft round by hand
+const UNLOAD_HOT_S := 60.0  ## the buyers count the goods on the strip
+const RAID_RANGE_M := 2000.0
+const SPOTTER_FEE := 400
+const SPOTTER_RANGE_M := 5000.0
+const SPOTTER_DELAY_S := 5.0
+const SPOTTER_MOVE_S := 60.0
+const INFORMANT_BASE := 0.30
+const SPOTTER_LEAK := 0.15
+const FERRY_FUEL_TIP := 0.25
+const GEAR := {
+	"scanner": [1800, "Radio scanner: hear police dispatch (unless encrypted)"],
+	"detector": [2500, "Radar detector: warns when a radar paints you"],
+	"ferry_tank": [3000, "Ferry bladder tank: extra fuel in the cabin"],
+}
+const RUNNER_FEATURES := ["contraband", "airdrop", "ferry", "scanner", "detector", "spotters", "copilot"]
+const SANDBOX_FEATURES := ["contraband", "airdrop", "ferry", "scanner", "detector", "spotters", "copilot",
+	"interceptors", "rivals", "informants", "cutters", "df"]
+
+
+class FlightLog:
+	var departed_from = null
+	var airborne := false
+	var max_bank := 0.0
+	var max_touchdown_fpm := 0.0
+	var last_touchdown_fpm := 0.0
+	var touchdowns_seen := 0
+
+	func _init(touchdowns_seen_ := 0) -> void:
+		touchdowns_seen = touchdowns_seen_
+
+
+class Spotter:
+	var code: String
+	var moving_to = null
+	var move_t := 0.0
+	var last_report_t := -1e9
+
+	func _init(code_: String) -> void:
+		code = code_
+
+
+static func set_of(items) -> Dictionary:
+	if items is Dictionary:
+		return items.duplicate()
+	var d := {}
+	for i in items:
+		d[i] = true
+	return d
+
+
+var world: World
+var seed := 1
+var money := START_MONEY
+var owned := {"c172p": true}
+var aircraft_key := "c172p"
+var phase := "parked"  ## parked | flying | crashed | busted
+var location = START_FIELD
+var messages: Array = []  ## [[t, text]]
+var active_jobs: Array = []
+var boards := {}
+var jsbsim_root := ""
+var save_path := ""
+var mode := Roles.SOLO
+var features := {}
+var humans := {}  ## role -> name
+var gear := {}
+
+var rng: PyRandom
+var _mass := {}
+var bus: EventBus
+var radio: RadioNet
+var police: PoliceSystem
+var maritime: Maritime
+var smugglers: Array = []
+var director: AISmuggler.Director
+var mapper: ControlMapper
+var autopilot: Autopilot
+var log: FlightLog
+var time := 0.0
+var fm: FlightModel
+var loadout: Loadout
+var state: FlightModel.FlightState
+var last_outcome := ""
+var law_log: Array = []
+var scanner_log: Array = []
+var intel := {}  ## unit -> [t, x, y, source]
+var spotters: Array = []
+var transponder := true
+var squawk := ""
+var kick_queue := 0
+var kick_t := 0.0
+var kicker = null
+var auto_kick := true
+var pumping := false
+var copilot = null  ## "human" | "ai" | null
+var campaign = null  ## set by Campaign.attach
+var runner_score := {"bales_delivered": 0, "escapes": 0}
+var fuel_caches := {}  ## shady strips: fuel you flew in yourself
+var turnaround_t := 0.0
+var unloading: Array = []
+var unload_t := 0.0
+var pilot_input := {}  ## police pilots' sticks
+var _scanner_seen := 0.0
+var nights = null  ## NightDirector when the Organisation layer is on
+
+
+## opts: world, seed, money, owned, aircraft_key, location, jsbsim_root, save_path, mode, features, humans, gear
+func _init(opts := {}) -> void:
+	world = opts.get("world", null)
+	if world == null:
+		world = World.new()
+	seed = opts.get("seed", 1)
+	money = opts.get("money", START_MONEY)
+	owned = set_of(opts.get("owned", ["c172p"]))
+	aircraft_key = opts.get("aircraft_key", "c172p")
+	location = opts.get("location", START_FIELD)
+	save_path = opts.get("save_path", "")
+	mode = opts.get("mode", Roles.SOLO)
+	humans = opts.get("humans", {}).duplicate()
+	gear = set_of(opts.get("gear", []))
+	if opts.get("features") == null:
+		features = set_of(PoliceSystem.LAW_FEATURES if mode == Roles.POLICE else SANDBOX_FEATURES)
+	else:
+		features = set_of(opts.features)
+	rng = PyRandom.new()
+	rng.seed(seed)
+	jsbsim_root = opts.get("jsbsim_root", "")
+	if jsbsim_root == "":
+		jsbsim_root = MassData.patched_root()
+	for k in Aircraft.ROSTER:
+		_mass[k] = MassData.read(Aircraft.ROSTER[k].jsbsim_model)
+	bus = EventBus.new()
+	radio = RadioNet.new(_rng(seed + 7))
+	var law := {}
+	for f in features:
+		if PoliceSystem.LAW_FEATURES.has(f):
+			law[f] = true
+	police = PoliceSystem.new(world, _rng(seed + 99), radio, "human" if humans.has(Roles.CONTROLLER) else "ai", law)
+	radio.df_stations = []
+	for a in world.airfields:
+		if a.police:
+			radio.df_stations.append([a.code, a.x, a.y])
+	radio.df_enabled = features.has("df")
+	maritime = Maritime.new(world, _rng(seed + 13))
+	director = AISmuggler.Director.new(_rng(seed + 21))
+	mapper = ControlMapper.new()
+	autopilot = Autopilot.new()
+	log = FlightLog.new()
+	squawk = "N%d%s" % [rng.randint(100, 999), rng.choice(Array("ABCDEFGHJK".split("")))]
+	copilot = "human" if humans.has(Roles.COPILOT) else null
+	if features.has("hq"):
+		# no human boss: the pilot runs the organisation (AI only when nobody flies);
+		# no human chief: a human controller runs the budget, else the AI chief does
+		var runner_ai = "adaptive" if mode == Roles.POLICE and not humans.has(Roles.BOSS) else null
+		var law_ai = null if (humans.has(Roles.CHIEF) or humans.has(Roles.CONTROLLER)) else "adaptive"
+		nights = NightDirector.new(self, runner_ai, law_ai)
+	_switch_aircraft(aircraft_key, 0.6)
+	spawn_at(location if location != null else START_FIELD)
+	if police.controller == "ai":
+		if features.has("aerostat"):
+			police.set_aerostat(true)
+		if features.has("encryption"):
+			police.set_encryption(true)
+
+
+static func _rng(s: int) -> PyRandom:
+	var r := PyRandom.new()
+	r.seed(s)
+	return r
+
+
+# ================================================================ helpers
+func runner_active() -> bool:
+	return mode != Roles.POLICE
+
+
+var spec: Aircraft.Spec:
+	get:
+		return Aircraft.ROSTER[aircraft_key]
+
+
+var airfield: Airfield:
+	get:
+		return World.AIRFIELD_BY_CODE.get(location) if location else null
+
+
+func say(text: String) -> void:
+	messages.append([time, text])
+	Py.keep_last(messages, 8)
+
+
+func law_say(text: String) -> void:
+	law_log.append([time, text])
+	Py.keep_last(law_log, 40)
+
+
+func carrying_hot() -> bool:
+	for i in loadout.items.values():
+		if i.hot:
+			return true
+	return false
+
+
+func hot_value() -> int:
+	var s := 0
+	for j in active_jobs:
+		if j.hot():
+			s += j.payout
+	return s
+
+
+func job_xy(job: Jobs.Job) -> Array:
+	return job.target_xy()
+
+
+func find_job(job_id: int) -> Jobs.Job:
+	for j in active_jobs:
+		if j.id == job_id:
+			return j
+	for board in boards.values():
+		for j in board:
+			if j.id == job_id:
+				return j
+	return null
+
+
+var parked: bool:
+	get:
+		var s := state
+		return (runner_active() and phase == "parked" and s != null and s.on_ground and s.gs_kts < 1.5
+			and location != null)
+
+
+func crew_count() -> int:
+	var n := 1 + (1 if copilot else 0)
+	var af := airfield
+	if af and af.kind in ["hub", "regional"]:
+		n += 2  # ramp crew
+	return n
+
+
+## [endurance hours, still-air range km] from live fuel flow incl. ferry fuel.
+func range_estimate() -> Array:
+	var s := state
+	if s == null or s.fuel_flow_pph < 1.0:
+		return [0.0, 0.0]
+	var fuel: float = s.fuel_lb + loadout.ferry_fuel_lb()
+	var hours := fuel / s.fuel_flow_pph
+	return [hours, hours * maxf(s.gs_kts, 1.0) * 1.852]
+
+
+# ================================================================ aircraft
+func _switch_aircraft(key: String, fuel_frac = null) -> void:
+	var sp: Aircraft.Spec = Aircraft.ROSTER[key]
+	var mass: MassData = _mass[key]
+	var fuel: float = mass.fuel_capacity_lb() * (fuel_frac if fuel_frac != null else 0.5)
+	aircraft_key = key
+	loadout = Loadout.new(sp, mass, fuel, Py.truthy(copilot))
+	fm = FlightModel.new(sp, jsbsim_root, mass)
+
+
+func spawn_at(code: String) -> void:
+	var af := World.airfield(code)
+	var back := af.length / 2 - 25  # line up 25 m in from the threshold of end 0
+	var x := af.x - af.ux * back
+	var y := af.y - af.uy * back
+	fm.spawn(x, y, af.heading, world.airfield_elev(af), loadout)
+	fm.controls.brake = 1.0
+	fm.step(0.5, world.ground)  # settle onto the gear
+	_after_spawn()
+	location = code
+	phase = "parked"
+	if not boards.has(code):
+		refresh_board(code)
+
+
+## Start in the air (offshore entry for long runs).
+func spawn_airborne(x: float, y: float, heading: float, alt_agl: float, speed_kts: float) -> void:
+	fm.spawn(x, y, heading, 0.0, loadout, world.ground(x, y) + alt_agl, speed_kts)
+	_after_spawn()
+	mapper.controls.throttle = 0.75
+	fm.controls.brake = 0.0
+	location = null
+	phase = "flying"
+	log.airborne = true
+
+
+func _after_spawn() -> void:
+	mapper.reset()
+	autopilot.disengage()
+	kick_queue = 0
+	pumping = false
+	log = FlightLog.new(fm.touchdowns)
+	state = fm.state()
+	fm.controls.brake = 1.0
+
+
+func refresh_board(code: String) -> void:
+	var af := World.airfield(code)
+	boards[code] = Jobs.generate(af, world.airfields, rng, 6, features,
+		func(): return Maritime.random_drop_point(world, rng, maritime.cove))
+
+
+# ================================================================ commands
+## The single entry point for every non-flight action: [ok, message].
+func command(role: String, name: String, args := {}) -> Array:
+	if not Roles.valid(role):
+		return [false, "Unknown role %s." % role]
+	if not Roles.allowed(role, name):
+		return [false, "%s can't do '%s'." % [role, name]]
+	var handler := "_cmd_" + name
+	if not has_method(handler):
+		return [false, "Unknown command %s." % name]
+	var err = call(handler, role, args)
+	if err:
+		return [false, err]
+	return [true, "ok"]
+
+
+static func _num(args: Dictionary, k: String, default = null):
+	return args[k] if args.has(k) and args[k] != null else default
+
+
+func _cmd_accept_job(role: String, a: Dictionary):
+	var job := find_job(int(a.get("job_id", -1)))
+	return accept_job(job) if job else "No such job."
+
+
+func _cmd_drop_job(role: String, a: Dictionary):
+	var job := find_job(int(a.get("job_id", -1)))
+	if job == null:
+		return "No such job."
+	drop_job(job)
+	return null
+
+
+func _cmd_move_item(role: String, a: Dictionary):
+	if not parked:
+		return "Loading happens on the ground, stopped."
+	var iid := int(a.get("item_id", -1))
+	if not loadout.items.has(iid):
+		return "No such item."
+	cycle_item(iid, int(a.get("direction", 1)))
+	return null
+
+
+func _cmd_loadmaster(role: String, a: Dictionary):
+	return null if hire_loadmaster() else "Loadmaster couldn't fit everything."
+
+
+func _cmd_set_fuel(role: String, a: Dictionary):
+	if not parked:
+		return "Refuel on the ground."
+	set_fuel(float(a.get("lb", 0.0)))
+	return null
+
+
+func _cmd_fill_ferry(role: String, a: Dictionary):
+	return fill_ferry(float(a.get("lb", 0.0)))
+
+
+func _cmd_buy_aircraft(role: String, a: Dictionary):
+	if not Aircraft.ROSTER.has(str(a.get("key", ""))):
+		return "Bad arguments for buy_aircraft: unknown aircraft"
+	return buy_or_switch(str(a.key))
+
+
+func _cmd_buy_gear(role: String, a: Dictionary):
+	return buy_gear(str(a.get("name", "")))
+
+
+func _cmd_hire_spotter(role: String, a: Dictionary):
+	var code = a.get("code")
+	return hire_spotter(code if code else location)
+
+
+func _cmd_spotter_move(role: String, a: Dictionary):
+	var code = a.get("code")
+	if not World.AIRFIELD_BY_CODE.has(code) or spotters.is_empty():
+		return "No spotter / unknown field."
+	var sp: Spotter = spotters[mini(int(a.get("index", 0)), spotters.size() - 1)]
+	sp.moving_to = code
+	sp.move_t = SPOTTER_MOVE_S
+	say("Spotter heading to %s (60 s)" % World.airfield(code).name)
+	return null
+
+
+func _cmd_transponder(role: String, a: Dictionary):
+	var on = a.get("on")
+	transponder = (not transponder) if on == null else Py.truthy(on)
+	say("Transponder %s" % [("ON, squawking " + squawk) if transponder else "OFF"])
+	return null
+
+
+func _cmd_turn_around(role: String, a: Dictionary):
+	return turn_around()
+
+
+func _cmd_autopilot(role: String, a: Dictionary):
+	var on = a.get("on")
+	on = (not autopilot.engaged) if on == null else Py.truthy(on)
+	if on:
+		if state == null or state.on_ground:
+			return "Autopilot needs to be airborne."
+		autopilot.engage(state, fm.controls.elevator)
+		autopilot.min_ias_kts = spec.approach_kts * 1.05
+		say("Autopilot ON: holding %s ft, heading %s" % [Py.f(state.alt / FT, 0), Py.f(state.heading, 0)])
+	else:
+		autopilot.disengage()
+		say("Autopilot OFF")
+	return null
+
+
+func _cmd_kick(role: String, a: Dictionary):
+	return request_kick(role, int(a.get("count", 1)))
+
+
+func _cmd_auto_kick(role: String, a: Dictionary):
+	var on = a.get("on")
+	auto_kick = (not auto_kick) if on == null else Py.truthy(on)
+	return null
+
+
+func _cmd_pump(role: String, a: Dictionary):
+	if loadout.ferry_tanks().is_empty():
+		return "No ferry tank aboard."
+	var on = a.get("on")
+	pumping = (not pumping) if on == null else Py.truthy(on)
+	say("Ferry pump %s" % ("ON" if pumping else "OFF"))
+	return null
+
+
+func _cmd_call_boat(role: String, a: Dictionary):
+	return call_boat()
+
+
+func _cmd_boat_goto(role: String, a: Dictionary):
+	var boats := maritime.boats.filter(func(b): return b.kind == "gofast" and not (b.state in ["seized", "delivered"]))
+	if boats.is_empty():
+		return "No boat at sea."
+	boats[0].goal = [float(a.x), float(a.y)]
+	boats[0].state = "to_rendezvous"
+	return null
+
+
+func _cmd_confirm(role: String, a: Dictionary):
+	if phase in ["crashed", "busted"]:
+		respawn()
+	return null
+
+
+func _cmd_hq(role: String, a: Dictionary):
+	if nights == null:
+		return "No HQ in this game (needs layer 5)."
+	if role == Roles.PILOT and humans.has(Roles.BOSS):
+		return "%s is the boss - ask them." % humans[Roles.BOSS]
+	if role == Roles.CONTROLLER and humans.has(Roles.CHIEF):
+		return "%s holds the budget - ask them." % humans[Roles.CHIEF]
+	var args := a.duplicate()
+	var order := str(args.get("order", ""))
+	args.erase("order")
+	return nights.order(Roles.side(role), order, args)
+
+
+func _cmd_chat(role: String, a: Dictionary):
+	var text := str(a.get("text", "")).substr(0, 200)
+	if Roles.side(role) == "runner":
+		say("[%s] %s" % [role, text])
+	else:
+		law_say("[%s] %s" % [role, text])
+	return null
+
+
+# law side
+func _cmd_launch(role: String, a: Dictionary):
+	var kind := str(a.get("kind", ""))
+	var goal = [float(a.x), float(a.y)] if a.get("x") != null and a.get("y") != null else null
+	if kind == "cutter":
+		if not features.has("cutters"):
+			return "No cutter assigned."
+		if police.stock.get("cutter", 0) <= 0:
+			return "No cutter available."
+		police.stock["cutter"] -= 1
+		var c := maritime.new_cutter(goal)
+		radio.transmit(time, "police", c.id, "underway from the harbor", [c.x, c.y])
+		return null
+	return police.launch(kind, a.get("base"), null, goal)
+
+
+func _cmd_dispatch(role: String, a: Dictionary):
+	var point = [float(a.x), float(a.y)] if a.get("x") != null and a.get("y") != null else null
+	var target = police.resolve(a.get("target"))
+	var b := maritime.boat(a.get("unit"))
+	if b != null and b.kind == "cutter":
+		if point == null and target:
+			var tr: SensorNet.Track = police.sensors.tracks.get(target)
+			point = [tr.x, tr.y] if tr else null
+		if point == null:
+			return "Cutters need a point."
+		b.goal = point
+		b.state = "patrol"
+		return null
+	return police.dispatch(str(a.get("unit", "")), target, point)
+
+
+func _cmd_recall(role: String, a: Dictionary):
+	var b := maritime.boat(a.get("unit"))
+	if b != null and b.kind == "cutter":
+		b.state = "return"
+		b.goal = null
+		return null
+	return police.recall(str(a.get("unit", "")))
+
+
+## Police pilot seat: take the controls of an airborne unit, or launch one.
+func _cmd_claim_unit(role: String, a: Dictionary):
+	var ps := police
+	if Py.any(ps.units, func(u): return u.pilot == role):
+		return "You're already flying one."
+	var unit = a.get("unit")
+	if unit:
+		var u = Py.first(ps.units, func(u): return u.id == unit and u.faction() == "police" and u.state != "crashed")
+		if u == null or u.pilot:
+			return "Can't take that one."
+		u.pilot = role
+		law_say("%s has the controls of %s" % [humans.get(role, role), u.id])
+		return null
+	var kind := str(a.get("kind", "interceptor"))
+	if not (kind in ["heli", "interceptor"]):
+		return "Helicopter or interceptor."
+	var err = ps.launch(kind)
+	if err:
+		return err
+	ps.pending_claim[role] = kind
+	law_say("%s launching for %s" % [kind, humans.get(role, role)])
+	return null
+
+
+func _cmd_release_unit(role: String, a: Dictionary):
+	for u in police.units:
+		if u.pilot == role:
+			u.pilot = null
+			return null
+	return "Not flying anything."
+
+
+func set_pilot_input(role: String, roll: float, pitch: float, throttle: float) -> void:
+	pilot_input[role] = [roll, pitch, throttle]
+
+
+func _cmd_encrypt(role: String, a: Dictionary):
+	return police.set_encryption(Py.truthy(a.get("on", true)))
+
+
+func _cmd_aerostat(role: String, a: Dictionary):
+	return police.set_aerostat(Py.truthy(a.get("on", true)))
+
+
+# ================================================================ ground ops
+## Returns an error string, or null on success.
+func accept_job(job: Jobs.Job):
+	if not parked or location != job.origin:
+		return "You need to be parked at the job's origin."
+	if job.hot() and not features.has("contraband"):
+		return "Not that kind of pilot. Yet."
+	var seats := spec.seat_count() - (1 if copilot else 0)
+	var pax_now := Py.count(loadout.items.values(), func(i): return i.kind == "passenger")
+	var pax_new := Py.count(job.items, func(i): return i.kind == "passenger")
+	if pax_now + pax_new > seats:
+		return "Not enough seats (%d free in a %s)." % [seats, spec.name]
+	job.accepted_at = time
+	if job.kind == "fugitive":
+		police.suspicion = maxf(police.suspicion, 60.0)  # already being looked for
+	active_jobs.append(job)
+	boards[job.origin].erase(job)
+	for item in job.items:
+		loadout.add(item)
+	_ramp_load(job)
+	fm.apply_loadout(loadout)
+	if job.is_airdrop():
+		var boat := maritime.new_gofast(job.drop_point, job.id)
+		job.boat_id = boat.id
+		say("%s is heading out to the rendezvous." % boat.id)
+	if job.hot():
+		_informant_roll(job)
+	bus.emit("job_accepted", time, "", ["runner"], {"job_id": job.id, "hot": job.hot()})
+	return null
+
+
+func _informant_roll(job: Jobs.Job) -> void:
+	if not features.has("informants") or nights != null:
+		return  # with HQs, informants are the Task Force's to recruit
+	var chance := 1 - (1 - INFORMANT_BASE) * (1 - SPOTTER_LEAK) ** spotters.size()
+	if rng.random() < chance:
+		var p := job_xy(job)
+		var x: float = p[0] + rng.uniform(-1500, 1500)
+		var y: float = p[1] + rng.uniform(-1500, 1500)
+		var where := "a drop at sea" if job.is_airdrop() else World.airfield(job.dest).name
+		police.add_tip(x, y, 3000, "informant: load moving tonight, %s, aircraft %s" % [where, squawk], squawk, "runner")
+
+
+## The ramp crew's idea of loading: first free spot from the front.
+## Rarely what you want for the CG.
+func _ramp_load(job: Jobs.Job) -> void:
+	var lo := loadout
+	var weights := lo.station_weights(true)
+	for item in job.items:
+		for s in Py.sorted_by(lo.valid_stations(item), func(i): return lo.spec.stations[i].x_in):
+			if lo.can_place(item, s) and weights[s] + item.weight_lb <= lo.spec.stations[s].max_lb:
+				lo.assignment[item.id] = s
+				lo.queue_move(item)
+				weights[s] += item.weight_lb
+				break
+
+
+func drop_job(job: Jobs.Job) -> void:
+	if not parked or not active_jobs.has(job):
+		return
+	active_jobs.erase(job)
+	loadout.remove_job(job.id)
+	if job.boat_id:
+		var b := maritime.boat(job.boat_id)
+		if b:
+			maritime.boats.erase(b)
+	if location == job.origin:
+		job.accepted_at = null
+		job.boat_id = null
+		if not boards.has(job.origin):
+			boards[job.origin] = []
+		boards[job.origin].append(job)
+	else:
+		say("Dumped '%s' at %s. No pay." % [job.title, location])
+	fm.apply_loadout(loadout)
+
+
+func hire_loadmaster() -> bool:
+	if not parked:
+		return false
+	money -= LOADMASTER_FEE
+	var before := loadout.assignment.duplicate()
+	var ok := loadout.auto_balance()
+	loadout.requeue_changed(before)
+	fm.apply_loadout(loadout)
+	say("Loadmaster re-planned the load (-$%d)" % LOADMASTER_FEE + ("" if ok else " but some items don't fit!"))
+	return ok
+
+
+func cycle_item(item_id: int, direction := 1) -> void:
+	if not parked:
+		return
+	loadout.cycle(loadout.items[item_id], direction)
+	fm.apply_loadout(loadout)
+
+
+## [price per lb, lb available] at the current field.
+func fuel_source() -> Array:
+	var af := airfield
+	if af == null:
+		return [FUEL_PRICE_PER_LB, 0.0]
+	var cache: float = fuel_caches.get(af.code, 0.0)
+	if af.kind in ["hub", "regional"]:
+		return [FUEL_PRICE_PER_LB, 1e9]
+	if af.kind == "bush":
+		return [FUEL_PRICE_PER_LB * 2, 1e9 if cache <= 0 else cache]  # farmer's drums, or your cache
+	return [0.0, cache] if cache > 0 else [0.0, 0.0]  # shady strips: only what you flew in
+
+
+## Take fuel from the field's supply; returns what you got (and charges for it).
+func _draw_fuel(want_lb: float) -> float:
+	var src := fuel_source()
+	var price: float = src[0]
+	var code: String = location
+	var cache: float = fuel_caches.get(code, 0.0)
+	var got := minf(want_lb, src[1])
+	if cache > 0:
+		fuel_caches[code] = cache - minf(got, cache)
+		price = 0.0
+	money -= int(Py.round_int(got * price))
+	return got
+
+
+func set_fuel(target_lb: float) -> void:
+	if not parked:
+		return
+	var lo := loadout
+	var cur := fm.fuel_lb()
+	var target := maxf(10.0, minf(lo.mass.fuel_capacity_lb(), target_lb))
+	if target > cur:
+		target = cur + _draw_fuel(target - cur)
+		if target <= cur + 0.5:
+			say("No fuel for sale here - fly drums in to build a cache.")
+	lo.fuel_lb = target
+	fm.apply_loadout(lo)
+
+
+func fill_ferry(lb: float):
+	if not parked:
+		return "Refuel on the ground."
+	var tanks := loadout.ferry_tanks()
+	if tanks.is_empty():
+		return "No ferry tank installed."
+	var t: Loadout.Item = tanks[0]
+	var before := t.fuel_lb
+	var want := maxf(0.0, minf(t.fuel_cap_lb, lb) - before)
+	var got := _draw_fuel(want) if want > 0 else 0.0
+	t.set_fuel(before + got if want > 0 else lb)
+	if want > 0 and got <= 0.5:
+		return "No fuel for sale here."
+	if t.fuel_lb > before:
+		var af := airfield
+		if af and af.police and features.has("informants") and rng.random() < FERRY_FUEL_TIP:
+			police.add_tip(af.x, af.y, 20000, "fuel desk: %s bought ferry fuel at %s" % [squawk, af.name], squawk, "runner")
+	fm.apply_loadout(loadout)
+	return null
+
+
+func buy_gear(name: String):
+	if not GEAR.has(name):
+		return "Unknown gear."
+	var price: int = GEAR[name][0]
+	var feature: String = {"ferry_tank": "ferry"}.get(name, name)
+	if not features.has(feature):
+		return "Nobody on the island sells that yet."
+	if not parked:
+		return "Buy gear on the ground."
+	if name == "ferry_tank":
+		if Py.any(loadout.items.values(), func(i): return i.kind == "tank"):
+			return "Already have a ferry tank."
+		var tank := Loadout.ferry_tank(Jobs.new_id(), loadout.ferry_capacity())
+		loadout.add(tank)
+		var spot = Py.first(Py.sorted_by(loadout.valid_stations(tank), func(i): return -spec.stations[i].x_in),
+			func(s): return loadout.can_place(tank, s))
+		if spot != null:
+			loadout.assignment[tank.id] = spot
+			loadout.queue_move(tank)
+	elif gear.has(name):
+		return "Already fitted."
+	else:
+		gear[name] = true
+	money -= price
+	say("Fitted: %s (-$%s)" % [GEAR[name][1], Py.money(price)])
+	fm.apply_loadout(loadout)
+	return null
+
+
+func hire_spotter(code):
+	if not features.has("spotters"):
+		return "Nobody to hire yet."
+	if not World.AIRFIELD_BY_CODE.has(code):
+		return "Unknown field."
+	if Py.any(spotters, func(s): return s.code == code):
+		return "Already watching that strip."
+	money -= SPOTTER_FEE
+	spotters.append(Spotter.new(code))
+	say("Spotter watching %s (-$%d)" % [World.airfield(code).name, SPOTTER_FEE])
+	return null
+
+
+## "human", "ai" or null. Changes the weight in the right seat.
+func set_copilot(who) -> void:
+	copilot = who
+	loadout.copilot_aboard = Py.truthy(who)
+	fm.apply_loadout(loadout)
+
+
+func buy_or_switch(key: String):
+	if not parked or not airfield or not airfield.shop:
+		return "Aircraft dealers are only at Harbor Intl and Valley Regional."
+	if not active_jobs.is_empty():
+		return "Deliver or drop your current jobs first."
+	var sp: Aircraft.Spec = Aircraft.ROSTER[key]
+	if not owned.has(key):
+		if money < sp.price:
+			return "Need $%s." % Py.money(sp.price)
+		money -= sp.price
+		owned[key] = true
+		say("Bought a %s!" % sp.name)
+	_switch_aircraft(key)
+	spawn_at(location)
+	return null
+
+
+## After a crash or bust.
+func respawn() -> void:
+	var code = log.departed_from if log.departed_from else START_FIELD
+	if phase == "busted":
+		code = START_FIELD
+	for j in active_jobs:
+		if j.boat_id:
+			var b := maritime.boat(j.boat_id)
+			if b:
+				b.state = "running"
+	active_jobs.clear()
+	loadout = Loadout.new(spec, loadout.mass, loadout.mass.fuel_capacity_lb() * 0.5, Py.truthy(copilot))
+	police.reset()
+	spawn_at(code)
+
+
+## Get out and swing the tail round: the bush pilot's answer to a runway too
+## narrow to turn on. Engine off, takes a while.
+func turn_around():
+	var s := state
+	if s == null or not s.on_ground or s.gs_kts > 1.5 or not (phase in ["parked", "flying"]):
+		return "Stop on the ground first."
+	if turnaround_t > 0:
+		return "Already pushing her round."
+	turnaround_t = TURNAROUND_S["crew" if crew_count() > 1 else "solo"]
+	say("Pushing the aircraft round (%s s)..." % Py.f(turnaround_t, 0))
+	return null
+
+
+func _finish_turnaround() -> void:
+	var s := state
+	fm.spawn(s.x, s.y, fposmod(s.heading + 180.0, 360.0), world.ground(s.x, s.y), loadout)
+	fm.controls.brake = 1.0
+	fm.step(0.3, world.ground)
+	state = fm.state()
+	mapper.reset()
+	say("Turned round.")
+
+
+# ================================================================ in-flight crew work
+func request_kick(role: String, count := 1):
+	var s := state
+	if s == null or s.on_ground:
+		return "Kick them out in the air, not on the ramp."
+	if s.ias_kts > KICK_MAX_KTS:
+		return "Too fast to open the door (max %s kt)." % Py.f(KICK_MAX_KTS, 0)
+	if _droppables().is_empty():
+		return "Nothing to kick."
+	if role == Roles.PILOT and not copilot:
+		if not autopilot.engaged:
+			return "Engage the autopilot [U] before you leave the controls."
+		kicker = "pilot"
+	else:
+		kicker = "copilot"
+	kick_queue = mini(_droppables().size(), kick_queue + maxi(1, count))
+	return null
+
+
+func _droppables() -> Array:
+	var lo := loadout
+	return lo.items.values().filter(func(i): return i.droppable and lo.assignment.has(i.id) and not lo.pending.has(i.id))
+
+
+func _crew_work(dt: float, s: FlightModel.FlightState) -> void:
+	var lo := loadout
+	# loading on the ground
+	if s.on_ground and s.gs_kts < 1.0 and not lo.pending.is_empty():
+		if not lo.work(dt, crew_count()).is_empty():
+			fm.apply_loadout(lo)
+			if lo.pending.is_empty():
+				say("Loading complete.")
+	# AI co-pilot habits
+	if copilot == "ai" and not s.on_ground:
+		if not lo.ferry_tanks().is_empty() and lo.ferry_fuel_lb() > 0 and fm.wing_fuel_room() > 0.3 * lo.mass.fuel_capacity_lb():
+			pumping = true
+		if auto_kick and kick_queue == 0 and not _droppables().is_empty():
+			for j in active_jobs:
+				if j.is_airdrop() and Py.dist2([s.x, s.y], j.drop_point) < 450 and s.ias_kts <= KICK_MAX_KTS:
+					request_kick(Roles.COPILOT, _droppables().size())
+					break
+	# kicking
+	if kick_queue > 0:
+		if s.on_ground or s.ias_kts > KICK_MAX_KTS + 5:
+			kick_queue = 0
+			say("Door closed: too fast / on the ground.")
+		else:
+			kick_t += dt
+			if kick_t >= KICK_TIME[kicker if kicker else "copilot"]:
+				kick_t = 0.0
+				_kick_one(s)
+	# ferry pump
+	if pumping:
+		var tanks := lo.ferry_tanks()
+		if tanks.is_empty() or lo.ferry_fuel_lb() <= 0.1 or fm.wing_fuel_room() < 0.5:
+			pumping = false
+			say("Ferry pump OFF (tank dry or wings full).")
+		else:
+			var rate: float = PUMP_RATE_LB_MIN["copilot" if copilot else "pilot"] / 60.0
+			var t: Loadout.Item = tanks[0]
+			var move := minf(rate * dt, t.fuel_lb)
+			var added := fm.add_fuel(move)
+			t.set_fuel(t.fuel_lb - added)
+			fm.apply_loadout(lo)
+
+
+func _kick_one(s: FlightModel.FlightState) -> void:
+	var items := _droppables()
+	if items.is_empty():
+		kick_queue = 0
+		return
+	var item: Loadout.Item = Py.max_by(items, func(i): return spec.stations[loadout.assignment[i.id]].x_in)  # nearest the door
+	loadout.remove_item(item.id)
+	fm.apply_loadout(loadout)
+	var vz := s.vs_fpm * 0.00508
+	maritime.drop_bale(item.job_id, s.x, s.y, s.alt - 1.5, s.vx, s.vy, vz, item.weight_lb)
+	kick_queue -= 1
+	var left := _droppables().size()
+	bus.emit("bale_kicked", time, "", ["runner"], {"job_id": item.job_id})
+	say("Bale away! (%d left)" % left)
+
+
+func call_boat():
+	var s := state
+	var boats := maritime.boats.filter(func(b): return b.kind == "gofast" and not (b.state in ["seized", "delivered"]))
+	if boats.is_empty():
+		return "No boat is out."
+	var b: Maritime.Boat = boats[0]
+	var pos = [s.x, s.y] if s else null
+	var msg := radio.transmit(time, "runner", squawk, "%s, come to me" % b.id, pos)
+	var over_water := s != null and world.is_water(s.x, s.y)
+	if over_water:
+		b.goal = [s.x, s.y]
+		b.state = "to_rendezvous"
+	say("Called %s." % b.id + ("" if over_water else " (Over land: boat holds position.)"))
+	var df = radio.direction_find(msg) if features.has("df") else null
+	if df and not df.bearings.is_empty():
+		law_say("DF: %d bearing(s) on a runner transmission" % df.bearings.size())
+		if df.fix:
+			police.sensors.add_fix("runner", df.fix[0], df.fix[1], time, "DF")
+			police.tips.append(PoliceSystem.Tip.new(time, df.fix[0], df.fix[1], 800, "DF fix"))
+			police.case("runner").last_known = [df.fix[0], df.fix[1], time]
+			police.case("runner").suspicion = minf(100.0, police.case("runner").suspicion + 30)
+	return null
+
+
+# ================================================================ tick
+## Advance one frame. `bot_controls` (from a bot) replaces the pilot's input and autopilot.
+func update(dt: float, inp: ControlMapper.InputFrame = null, bot_controls: FlightModel.Controls = null) -> void:
+	time += dt
+	if inp == null:
+		inp = ControlMapper.InputFrame.new()
+	if runner_active():
+		_update_runner(dt, inp, bot_controls)
+	_update_world(dt)
+	if campaign != null:
+		campaign.tick(self)
+	if nights != null:
+		nights.tick(dt)
+
+
+func _update_runner(dt: float, inp: ControlMapper.InputFrame, bot_controls: FlightModel.Controls) -> void:
+	if phase in ["crashed", "busted"]:
+		if inp.pressed.has("confirm"):
+			respawn()
+		return
+	if turnaround_t > 0:
+		turnaround_t -= dt
+		if turnaround_t <= 0:
+			_finish_turnaround()
+		fm.controls = FlightModel.Controls.make({"brake": 1.0})
+		state = fm.step(dt, world.ground)
+		return
+	var pilot_aft: bool = kicker == "pilot" and kick_queue > 0
+	if pilot_aft:
+		inp = ControlMapper.InputFrame.new()  # nobody at the controls
+	elif autopilot.engaged and (_any_held(inp, ["pitch_up", "pitch_down", "roll_left", "roll_right"]) or inp.stick != null):
+		autopilot.disengage()
+		say("Autopilot disconnected")
+	var controls := mapper.update(dt, inp)
+	if bot_controls != null and not pilot_aft:
+		controls = bot_controls
+	elif state != null and autopilot.engaged:
+		controls = autopilot.update(dt, state, controls)
+	if parked and not _any_held(inp, ["throttle_up", "brake"]) and controls.throttle < 0.05:
+		controls.brake = 1.0  # parking brake while in menus
+	if phase == "parked" and loadout.busy() and controls.throttle > 0.05:
+		controls.throttle = 0.0
+		controls.brake = 1.0
+		if messages.is_empty() or time - messages.back()[0] > 4:
+			var what := "Still loading" if not loadout.pending.is_empty() else "Cargo still on the ramp! Load it [L] or drop the job [J]"
+			say(what + ".")
+	fm.controls = controls
+	var s := fm.step(dt, world.ground)
+	state = s
+	if s.valid:
+		loadout.fuel_lb = s.fuel_lb
+	_rules(dt, s)
+	if not (phase in ["crashed", "busted"]):
+		_crew_work(dt, s)
+	if phase == "parked" and not unloading.is_empty():
+		_unload_tick(dt)
+
+
+static func _any_held(inp: ControlMapper.InputFrame, keys: Array) -> bool:
+	for k in keys:
+		if inp.held.has(k):
+			return true
+	return false
+
+
+func runner_signature() -> SensorNet.Signature:
+	var s := state
+	if s == null or not runner_active() or phase != "flying":
+		return null
+	var agl := s.alt - world.ground(s.x, s.y) - fm.mass.gear_height_ft * FT
+	return SensorNet.Signature.new("runner", s.x, s.y, s.alt, agl, s.vx, s.vy, "air", transponder, squawk)
+
+
+func _update_world(dt: float) -> void:
+	var targets := []
+	var sig := runner_signature()
+	if sig != null:
+		targets.append(PoliceSystem.Target.new(sig, carrying_hot(), hot_value(), squawk if transponder else "runner"))
+	# AI runs (police mode)
+	if mode == Roles.POLICE:
+		var active := smugglers.filter(func(a): return a.active())
+		if director.due(time, active.size()):
+			_spawn_ai_run()
+			director.schedule_next(time)
+	var law_air := []
+	for u in police.units:
+		if u.faction() == "police" and u.state != "crashed":
+			law_air.append([u.x, u.y, u.z])
+	for a in smugglers:
+		if not a.active():
+			continue
+		var tr: String = a.update(dt, world, law_air,
+			func(jid, x, y, z, vx, vy): maritime.drop_bale(jid, x, y, z, vx, vy, 0.0, 60))
+		if tr == "escaped":
+			runner_score["escapes"] += 1
+			law_say("%s left the area - escaped" % police.alias(a.id))
+		elif tr == "crashed":
+			law_say("%s crashed" % police.alias(a.id))
+		if a.active():
+			targets.append(PoliceSystem.Target.new(a.signature(world), a.hot, 5000 if a.hot else 0, a.id))
+
+	for u in police.units:
+		if u.pilot:
+			u.stick = pilot_input.get(u.pilot, u.stick)
+	var outcomes := police.tick(dt, time, targets)
+	for tid in outcomes:
+		var what: String = outcomes[tid]
+		if tid == "runner":
+			_police_outcome(what)
+		else:
+			var a = Py.first(smugglers, func(s): return s.id == tid)
+			if a:
+				a.state = "busted"
+				bus.emit("ai_busted", time, "", ["law"], {"id": tid})
+	for e in police.events:
+		say(e)
+	police.events.clear()
+	for e in police.law_events:
+		law_say(e)
+	police.law_events.clear()
+
+	# maritime: cutters go where the task force suspects a drop
+	var law_goals := []
+	for t in police.tips:
+		if time - t.t < 600 and t.text in ["possible airdrop", "DF fix"]:
+			law_goals.append([t.x, t.y])
+	if police.controller == "ai" and not law_goals.is_empty() and features.has("cutters") and police.stock.get("cutter", 0) > 0:
+		police.stock["cutter"] -= 1
+		var c := maritime.new_cutter(law_goals.back())
+		radio.transmit(time, "police", c.id, "underway to suspected drop", [c.x, c.y])
+	maritime.update(dt, law_goals if police.controller == "ai" else [])
+	for ev in maritime.events:
+		_maritime_event(ev[0], ev[1])
+	maritime.events.clear()
+	_update_intel(dt)
+
+
+func _spawn_ai_run() -> void:
+	director.serial += 1
+	var r := director.rng
+	var ee := AISmuggler.entry_and_exit(r)
+	var drop := Maritime.random_drop_point(world, r, maritime.cove)
+	var jid := Jobs.new_id()
+	var a := AISmuggler.new("Runner-%d" % director.serial, ee[0][0], ee[0][1], 150.0, ee[2], drop, ee[1], jid,
+		{"bales_left": r.randint(4, 7)})
+	smugglers.append(a)
+	maritime.new_gofast(drop, jid)
+	law_say("Intel: a run is expected tonight.")
+
+
+func _police_outcome(what: String) -> void:
+	if what == "busted":
+		_bust("forced down by police")
+	elif what == "clean":
+		var fine := 500 if not transponder else 0
+		money -= fine
+		say("Police forced you down and searched the aircraft: clean." + (" Fined $%d for no transponder." % fine if fine else ""))
+	elif what == "hijacked":
+		var lost := active_jobs.filter(func(j): return j.hot())
+		for j in lost:
+			active_jobs.erase(j)
+			loadout.remove_job(j.id)
+		fm.apply_loadout(loadout)
+		say("Rivals forced you to jettison the goods!")
+
+
+func _maritime_event(kind: String, data: Dictionary) -> void:
+	var job = Py.first(active_jobs, func(j): return j.id == data.get("job_id"))
+	if kind == "bales_delivered":
+		var n: int = data["count"]
+		runner_score["bales_delivered"] += n
+		if job:
+			var pay := int(job.payout * n / float(maxi(1, job.bales_total)))
+			money += pay
+			job.bales_delivered = n
+			_resolve_job(job, "%s made the cove with %d/%d bales: +$%s" % [data["boat"], n, job.bales_total, Py.money(pay)])
+		bus.emit("bales_delivered", time, "", ["runner"], {"count": n, "job_id": data.get("job_id")})
+	elif kind == "boat_seized":
+		police.score["boats_seized"] += 1
+		police.score["bales_seized"] += data["count"]
+		law_say("%s seized %s with %d bales" % [data["cutter"], data["boat"], data["count"]])
+		if job:
+			_resolve_job(job, "Coast Guard took %s! Job lost." % data["boat"])
+		bus.emit("boat_seized", time, "", ["runner", "law"], data)
+	elif kind == "bale_seized":
+		police.score["bales_seized"] += 1
+		law_say("%s recovered a floating bale" % data["cutter"])
+	elif kind == "bale_splash" and job:
+		say("Splash - bale in the water.")
+	elif kind == "bale_lost" and job:
+		say("Bale lost (%s)." % data["why"])
+	elif kind == "boat_fleeing" and job:
+		say("%s: cutter on us, running!" % data["boat"])
+	elif kind == "cutter_contact":
+		radio.transmit(time, "police", data["cutter"], "surface contact, go-fast, pursuing", [data["x"], data["y"]])
+
+
+func _resolve_job(job: Jobs.Job, text: String) -> void:
+	job.resolved = true
+	active_jobs.erase(job)
+	say(text)
+
+
+## Scanner intercepts and spotter reports -> runner-side knowledge of police.
+func _update_intel(dt: float) -> void:
+	if gear.has("scanner") and features.has("scanner"):
+		for e in radio.scanner(_scanner_seen):
+			scanner_log.append(e)
+		for m in radio.channel("police", _scanner_seen):
+			if not m.encrypted and m.x != null:
+				intel[m.sender] = [m.t, m.x, m.y, "scanner"]
+		Py.keep_last(scanner_log, 30)
+	_scanner_seen = time
+	for sp in spotters:
+		if sp.moving_to:
+			sp.move_t -= dt
+			if sp.move_t <= 0:
+				sp.code = sp.moving_to
+				sp.moving_to = null
+				say("Spotter in position at %s." % World.airfield(sp.code).name)
+			continue
+		if time - sp.last_report_t < 8.0:
+			continue
+		sp.last_report_t = time
+		var af := World.airfield(sp.code)
+		var seen := police.units.filter(func(u): return u.faction() == "police" and u.state != "crashed" \
+			and PyMath.hypot(u.x - af.x, u.y - af.y) < SPOTTER_RANGE_M)
+		for u in seen:
+			intel[u.id] = [time + SPOTTER_DELAY_S, u.x, u.y, "spotter@" + sp.code]
+		if not seen.is_empty():
+			say("Spotter@%s: %d police unit(s) near the strip!" % [sp.code, seen.size()])
+	# forget stale intel
+	var fresh := {}
+	for k in intel:
+		if time - intel[k][0] < 90:
+			fresh[k] = intel[k]
+	intel = fresh
+
+
+# ================================================================ rules
+func _crash(reason: String) -> void:
+	phase = "crashed"
+	var fee := maxi(2500, int(spec.price * 0.12))
+	money -= fee
+	var lost := active_jobs.size()
+	last_outcome = "CRASH: %s. Repairs -$%s." % [reason, Py.money(fee)] + (" %d job(s) lost." % lost if lost else "")
+	say(last_outcome)
+	bus.emit("crashed", time, "", ["runner", "law"], {"reason": reason})
+
+
+func _bust(how: String) -> void:
+	phase = "busted"
+	var fine := 1500 + int(maxi(0, money) * 0.25)
+	money -= fine
+	last_outcome = "BUSTED (%s). Fine and impound -$%s. Cargo seized." % [how, Py.money(fine)]
+	say(last_outcome)
+	police.score["busts"] += 1
+	law_say("BUST: %s (%s)" % [squawk, how])
+	bus.emit("busted", time, "", ["runner", "law"], {"how": how})
+
+
+func _rules(dt: float, s: FlightModel.FlightState) -> void:
+	var lg := log
+	if fm.crash_reason:
+		_crash(fm.crash_reason)
+		return
+	if not s.valid:
+		_crash("Airframe failure")
+		return
+	var af_here := world.airfield_at(s.x, s.y, 4.0)
+
+	# --- leaving / flying
+	if not s.on_ground and s.agl > 3.0:
+		if not lg.airborne:
+			lg.airborne = true
+			lg.departed_from = lg.departed_from if lg.departed_from else location
+		if phase == "parked":
+			if not unloading.is_empty():
+				say("Took off with the load still aboard - no deal.")
+				unloading = []
+			phase = "flying"
+			location = null
+			police.reset(true)
+		lg.max_bank = maxf(lg.max_bank, absf(s.roll))
+	elif phase == "parked" and s.gs_kts > 3:
+		lg.departed_from = lg.departed_from if lg.departed_from else location
+
+	# --- collisions
+	if world.tree_hit(s.x, s.y, s.alt - fm.mass.gear_height_ft * FT, 4.0):
+		_crash("Hit trees")
+		return
+	if absf(s.x) > World.HALF + 3000 or absf(s.y) > World.HALF + 3000:
+		if messages.is_empty() or time - messages.back()[0] > 6:
+			say("Leaving the operating area - turn back!")
+
+	# --- touchdowns
+	if fm.touchdowns != lg.touchdowns_seen:
+		lg.touchdowns_seen = fm.touchdowns
+		var fpm := -fm.last_touchdown_fpm
+		lg.last_touchdown_fpm = fpm
+		lg.max_touchdown_fpm = maxf(lg.max_touchdown_fpm, fpm)
+		var limit := spec.gear_limit_fpm * (0.75 if loadout.compute(null, false).overweight_lb > 0 else 1.0)
+		if fpm > limit:
+			_crash("Gear collapsed on a %s fpm touchdown" % Py.f(fpm, 0))
+			return
+		if lg.airborne:
+			say("Touchdown %s fpm" % Py.f(fpm, 0) + (" - butter!" if fpm < 150 else ""))
+
+	if s.on_ground:
+		autopilot.disengage()
+		if world.is_water(s.x, s.y) and af_here == null:
+			_crash("Ditched in the sea")
+			return
+		if absf(s.roll) > 12:
+			_crash("Wingtip strike")
+			return
+		if s.pitch < -7:
+			_crash("Prop strike - nosed over")
+			return
+		if af_here == null and s.gs_kts > OFF_FIELD_MAX_GS_KTS:
+			_crash("Ran off the strip into rough ground")
+			return
+		if s.gs_kts < 1.0 and af_here != null and lg.airborne:
+			_arrive(af_here, s)
+
+
+func _arrive(af: Airfield, s: FlightModel.FlightState) -> void:
+	phase = "parked"
+	location = af.code
+	if police.landing_check(s, af, carrying_hot()):
+		_bust("arrested on landing at %s" % af.name)
+		return
+	var delivered := active_jobs.filter(func(j): return j.dest == af.code)
+	var hot_here := delivered.filter(func(j): return j.hot() and af.kind in ["bush", "shady"])
+	if not hot_here.is_empty():
+		# the buyers count it before they pay: sit tight and hope nobody followed you in
+		unloading = hot_here
+		unload_t = UNLOAD_HOT_S
+		say("Unloading - %s s. Watch the sky." % Py.f(UNLOAD_HOT_S, 0))
+		delivered = delivered.filter(func(j): return not hot_here.has(j))
+	for job in delivered:
+		_complete_delivery(job, af)
+	fm.apply_loadout(loadout)
+	police.reset(true)
+	log = FlightLog.new(fm.touchdowns)
+	refresh_board(af.code)
+	if delivered.is_empty() and hot_here.is_empty():
+		say("Parked at %s." % af.name)
+	bus.emit("landed", time, "", ["runner"], {"code": af.code})
+	save()
+
+
+func _complete_delivery(job: Jobs.Job, af: Airfield) -> void:
+	var drums := job.items.filter(func(i): return i.label == "Fuel drum")
+	if not drums.is_empty() and af.kind in ["bush", "shady"]:
+		var fuel := Py.sum_by(drums, func(i): return i.weight_lb) * 0.9
+		fuel_caches[af.code] = fuel_caches.get(af.code, 0.0) + fuel
+		say("%s lb of fuel cached at %s." % [Py.f(fuel, 0), af.name])
+	var g := _grade(job)
+	money += g[0]
+	active_jobs.erase(job)
+	loadout.remove_job(job.id)
+	say(("Delivered '%s': +$%s %s" % [job.title, Py.money(g[0]), g[1]]).strip_edges(false, true))
+	bus.emit("job_delivered", time, "", ["runner"], {"job_id": job.id, "pay": g[0], "dest": af.code, "hot": job.hot()})
+
+
+## A hot load being counted out on a bush/shady strip. Police arriving = raid.
+func _unload_tick(dt: float) -> void:
+	if unloading.is_empty():
+		return
+	var s := state
+	for u in police.units:
+		if (u.faction() == "police" and u.state != "crashed"
+				and PyMath.hypot(u.x - s.x, u.y - s.y) < RAID_RANGE_M and u.z - s.alt < 600):
+			unloading = []
+			_bust("raided on the ground at %s" % (airfield.name if airfield else "the strip"))
+			return
+	unload_t -= dt
+	if unload_t <= 0:
+		var af := airfield
+		for job in unloading:
+			if active_jobs.has(job):
+				_complete_delivery(job, af)
+		unloading = []
+		fm.apply_loadout(loadout)
+		save()
+
+
+## [pay, notes]
+func _grade(job: Jobs.Job) -> Array:
+	var pay := float(job.payout)
+	var notes := []
+	var lg := log
+	var left = job.time_left(time)
+	if left != null and left < 0:
+		pay *= 0.4
+		notes.append("(late)")
+	if Py.any(job.items, func(i): return i.fragile) and lg.max_touchdown_fpm > 400:
+		pay *= 0.5
+		notes.append("(breakage)")
+	if job.comfort and (lg.max_bank > 45 or lg.max_touchdown_fpm > 300):
+		pay *= 0.7
+		notes.append("(VIP unhappy)")
+	if lg.last_touchdown_fpm < 150:
+		pay *= 1.1
+		notes.append("(smooth landing bonus)")
+	return [int(pay), " ".join(notes)]
+
+
+# ================================================================ persistence
+func save() -> void:
+	if save_path == "":
+		return
+	DirAccess.make_dir_recursive_absolute(save_path.get_base_dir())
+	var o := owned.keys()
+	o.sort()
+	var g := gear.keys()
+	g.sort()
+	var data := {
+		"money": money,
+		"owned": o,
+		"aircraft": aircraft_key,
+		"location": location if parked else (log.departed_from if log.departed_from else START_FIELD),
+		"gear": g,
+	}
+	if campaign != null:
+		data["campaign"] = campaign.to_dict()
+	var f := FileAccess.open(save_path, FileAccess.WRITE)
+	if f:
+		f.store_string(JSON.stringify(data, "  "))
+
+
+static func read_save(path: String) -> Dictionary:
+	if path == "" or not FileAccess.file_exists(path):
+		return {}
+	var d = JSON.parse_string(FileAccess.get_file_as_string(path))
+	return d if d is Dictionary else {}
+
+
+static func load_or_new(path: String, opts := {}) -> Session:
+	var data := read_save(path)
+	var o := {}
+	o.merge(opts)
+	o["money"] = int(data.get("money", START_MONEY))
+	var owned_list := (data.get("owned", ["c172p"]) as Array).filter(func(k): return Aircraft.ROSTER.has(k))
+	o["owned"] = owned_list if not owned_list.is_empty() else ["c172p"]
+	o["aircraft_key"] = data.aircraft if Aircraft.ROSTER.has(data.get("aircraft", "")) else "c172p"
+	o["location"] = data.location if World.AIRFIELD_BY_CODE.has(data.get("location", "")) else START_FIELD
+	o["gear"] = (data.get("gear", []) as Array).filter(func(k): return GEAR.has(k))
+	o["save_path"] = path
+	return Session.new(o)

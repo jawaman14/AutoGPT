@@ -112,6 +112,8 @@ double PyMath::round_n(double x, int ndigits) {
 
 int64_t PyMath::round_int(double x) { return static_cast<int64_t>(std::nearbyint(x)); }
 
+double PyMath::log1p(double x) { return std::log1p(x); }
+
 String PyMath::fmt(double x, int decimals) {
     char buf[512];
     std::snprintf(buf, sizeof(buf), "%.*f", decimals, x);
@@ -129,6 +131,7 @@ void PyMath::_bind_methods() {
     ClassDB::bind_static_method("PyMath", D_METHOD("hypot3", "x", "y", "z"), &PyMath::hypot3);
     ClassDB::bind_static_method("PyMath", D_METHOD("round_n", "x", "ndigits"), &PyMath::round_n);
     ClassDB::bind_static_method("PyMath", D_METHOD("round_int", "x"), &PyMath::round_int);
+    ClassDB::bind_static_method("PyMath", D_METHOD("log1p", "x"), &PyMath::log1p);
     ClassDB::bind_static_method("PyMath", D_METHOD("fmt", "x", "decimals"), &PyMath::fmt);
     ClassDB::bind_static_method("PyMath", D_METHOD("fmt_thousands", "x", "decimals"), &PyMath::fmt_thousands);
 }

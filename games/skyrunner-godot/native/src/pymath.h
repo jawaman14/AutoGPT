@@ -17,6 +17,7 @@ public:
     static double hypot3(double x, double y, double z);
     static double round_n(double x, int ndigits);
     static int64_t round_int(double x);
+    static double log1p(double x);
     static String fmt(double x, int decimals);          // f"{x:.Nf}"
     static String fmt_thousands(double x, int decimals); // f"{x:,.Nf}"
 

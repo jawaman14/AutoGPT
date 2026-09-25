@@ -306,7 +306,7 @@ func state() -> FlightState:
 	s.weight_lb = fdm.get_property("inertia/weight-lbs")
 	s.cg_in = fdm.get_property("inertia/cg-x-in")
 	s.rpm = rpm if is_finite(rpm) else 0.0
-	s.engine_running = bool(fdm.get_property("propulsion/engine/set-running"))
+	s.engine_running = Py.truthy(fdm.get_property("propulsion/engine/set-running"))
 	s.vx = fdm.get_property("velocities/v-east-fps") * FT
 	s.vy = fdm.get_property("velocities/v-north-fps") * FT
 	s.p_dps = Py.degrees(fdm.get_property("velocities/p-rad_sec"))

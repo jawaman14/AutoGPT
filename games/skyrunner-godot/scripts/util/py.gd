@@ -200,3 +200,21 @@ static func keep_last(lst: Array, n: int) -> void:
 
 static func dict_get(d: Dictionary, k, default = null):
 	return d[k] if d.has(k) else default
+
+
+## Python truthiness: None/0/""/[]/{} are false. GDScript's bool() only takes numbers.
+static func truthy(x) -> bool:
+	match typeof(x):
+		TYPE_NIL:
+			return false
+		TYPE_BOOL:
+			return x
+		TYPE_INT, TYPE_FLOAT:
+			return x != 0
+		TYPE_STRING, TYPE_STRING_NAME:
+			return not String(x).is_empty()
+		TYPE_ARRAY, TYPE_DICTIONARY:
+			return not x.is_empty()
+		TYPE_OBJECT:
+			return x != null
+	return true
