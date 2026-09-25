@@ -47,6 +47,7 @@ func refresh() -> void:
 			Py.money(int(ss.retire_target)), int(ss.public.heat)],
 		"Case against you: %s   moves left tonight: %d%s" % [ss.evidence_rumor, int(o.actions), "   READY" if o.ready else ""],
 	]
+	lines += HQOrders.realism_lines(ss, "runner")
 	var rv = ss.get("rival")
 	if intel:
 		title.text = "MAP TABLE  -  " + head

@@ -114,8 +114,19 @@ func cmd_strategic() -> void:
 		off["rivals"] = false
 	var r0 := Strategic.run_matrix(maxi(20, Py.idiv(opts["n"], 4)), off, cal, [], null, null, opts["workers"])
 	abl["cartel"] = Strategic.equilibrium(Strategic.matrix(r0)[2])[2]
+	# the realism layer, one rule at a time (docs/BALANCE.md 14-19)
+	for rule in HQ.REALISM:
+		var off_r := {}
+		if rules is Dictionary:
+			off_r.merge(rules)
+		off_r[rule] = false
+		var rr := Strategic.run_matrix(maxi(20, Py.idiv(opts["n"], 4)), off_r, cal, [], null, null, opts["workers"])
+		abl["rule:" + rule] = Strategic.equilibrium(Strategic.matrix(rr)[2])[2]
 	_save("ablation", {"base": v, "without": abl})
 	_save("rivals", Strategic.rival_summary(r))
+	var rs := Strategic.realism_summary(r)
+	_save("realism", rs)
+	print("realism: ", Py.json(rs))
 	var shown := {}
 	for k in abl:
 		shown[k] = Py.round_n(abl[k], 3)

@@ -34,10 +34,16 @@ static func play_season(runner: String, law: String, seed: int, rules = null, ca
 	var rmem := {}
 	var lmem := {}
 	var halftime = null
+	var betray_left := []  ## nights left in the season when Los Cuervos broke a truce
+	var storms := 0
 	while ss.phase != "over":
 		HQBots.RUNNER_POLICIES[runner].call(ss, rng, rmem)
 		HQBots.LAW_POLICIES[law].call(ss, rng, lmem)
 		var plan := ss.start_operation()
+		if plan.get("rival_betrayed", false):
+			betray_left.append(int(ss.rules["nights"]) - ss.night)
+		if plan.get("weather", {}).get("sky") == "storm":
+			storms += 1
 		ss.finish_night(HQ.resolve_abstract(ss, plan, rng, cal))
 		if ss.night == Py.idiv(int(ss.rules["nights"]), 2):
 			halftime = ss.runner_progress() - ss.law_progress()
@@ -49,12 +55,78 @@ static func play_season(runner: String, law: String, seed: int, rules = null, ca
 		"runner_used": rmem.get("used", []), "law_used": lmem.get("used", []),
 		"history": ss.history,
 	}
+	if ss.xrng != null:
+		var zones := []
+		var seen := 0
+		var caught := 0
+		for rep in ss.reports:
+			for r in rep.runs:
+				if r.kind == "main":
+					zones.append(r.zone)
+					seen += int(r.detected)
+			caught += Py.count(rep.law_lines, func(l): return l.begins_with("The canary sang"))
+		out["realism"] = {"route_entropy": _entropy(zones), "main_runs": zones.size(), "main_detected": seen,
+			"canary_catches": caught, "storms": storms, "betray_left": betray_left,
+			"temper": ss.rival.temper if ss.rival != null else ""}
 	if ss.rival != null:
 		var hij := 0
 		for rep in ss.reports:
 			hij += Py.count(rep.runs, func(r): return r.hijacked)
 		out["rival"] = {"strength": Py.round_n(ss.rival.strength, 1), "busts": ss.rival.busts, "hijacks": hij}
 	return out
+
+
+## Shannon entropy (bits) of a route list: 0 = always the same, log2(3) = 1.585 = uniform.
+static func _entropy(zones: Array) -> float:
+	if zones.is_empty():
+		return 0.0
+	var h := 0.0
+	for z in HQ.ZONES:
+		var p := zones.count(z) / float(zones.size())
+		if p > 0.0:
+			h -= p * log(p) / log(2.0)
+	return h
+
+
+## What the realism layer did across a batch of seasons.
+static func realism_summary(results: Array) -> Dictionary:
+	var rs := results.filter(func(r): return r.has("realism"))
+	if rs.is_empty():
+		return {}
+	var n := float(rs.size())
+	var by_temper := {}
+	var left_hist := {}
+	for r in rs:
+		var t: String = r.realism.temper
+		if t == "":
+			continue
+		if not by_temper.has(t):
+			by_temper[t] = [0, 0]
+		by_temper[t][0] += 1
+		by_temper[t][1] += r.realism.betray_left.size()
+		for l in r.realism.betray_left:
+			left_hist[str(l)] = left_hist.get(str(l), 0) + 1
+	var betrayals := {}
+	for t in by_temper:
+		betrayals[t] = Py.round_n(by_temper[t][1] / float(by_temper[t][0]), 3)
+	var entropy := {}
+	var det := {}
+	for pol in HQBots.RUNNER_POLICIES:
+		var ps := rs.filter(func(r): return r.runner == pol)
+		if ps.is_empty():
+			continue
+		entropy[pol] = Py.round_n(Py.sum_by(ps, func(r): return r.realism.route_entropy) / ps.size(), 3)
+		var runs := Py.sum_by(ps, func(r): return r.realism.main_runs)
+		det[pol] = Py.round_n(Py.sum_by(ps, func(r): return r.realism.main_detected) / maxf(1.0, runs), 3)
+	return {
+		"seasons": rs.size(),
+		"storm_nights_per_season": Py.round_n(Py.sum_by(rs, func(r): return r.realism.storms) / n, 2),
+		"canary_catch_seasons": Py.round_n(Py.count(rs, func(r): return r.realism.canary_catches > 0) / n, 3),
+		"betrayals_per_season_by_temper": betrayals,
+		"betrayals_by_nights_left": left_hist,
+		"route_entropy_by_runner": entropy,
+		"main_run_detected_by_runner": det,
+	}
 
 
 static func _disable(ss: HQ.Season, name: String) -> void:

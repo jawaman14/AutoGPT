@@ -376,8 +376,8 @@ static func law_adaptive(ss: HQ.Season, rng: PyRandom, mem: Dictionary) -> void:
 	if o.fronts.size() > 1 and ss.night % 2 == 1:
 		ss.law_cmd("audit")
 	ss.law_cmd("patrol", {"zone": _predict_zone(ss, rng, mem)})
-	# patrols keep missing: test the dispatch line with a canary before paying for a sweep
-	if ss.on("canary") and evaded >= 1 and o.heat > 20:
+	# patrols keep missing: test the dispatch line with a canary (a single miss is just luck)
+	if ss.on("canary") and evaded >= 2 and o.heat > 20:
 		ss.law_cmd("canary")
 	var heavy := o.heat > 40
 	_fund_units(ss, 1, 2 if heavy else 1, 1)

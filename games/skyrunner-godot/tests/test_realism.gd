@@ -65,7 +65,7 @@ func test_a_routine_gets_you_seen() -> void:
 	var ss := _season(8)
 	ss.sightings = ["west", "west", "", "west"]
 	var ex := ss.pattern_exposure()
-	check_near(ex["west"], 0.3 * 3 / 4.0, 1e-9, "three of four sightings in the west")
+	check_near(ex["west"], HQ.RULES["pattern_k"] * 3 / 4.0, 1e-9, "three of four sightings in the west")
 	check_eq(ex["north"], 0.0, "never seen in the north")
 	var base := _detect_rate({}, {})
 	var seen := _detect_rate({"west": 0.3}, {})

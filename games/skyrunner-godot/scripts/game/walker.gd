@@ -151,8 +151,11 @@ func _step_up(dir: Vector3) -> void:
 		return
 	var up := Vector3(0, STEP, 0)
 	var fwd := dir * 0.35
-	if test_move(global_transform, up):
-		return  # a ceiling
+	var hit := KinematicCollision3D.new()
+	# pressed against the step, the upward sweep grazes its edge: only a
+	# downward-facing surface is a real ceiling
+	if test_move(global_transform, up, hit) and hit.get_normal().y < -0.5:
+		return
 	if test_move(global_transform.translated(up), fwd):
 		return  # a real wall, not a step
 	global_position += up + fwd

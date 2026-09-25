@@ -495,6 +495,7 @@ func _draw_hq(snap: Dictionary) -> void:
 				"   OUT FOR REVENGE" if rv.grudge else ""])
 		else:
 			lines.append("%s: %s, %d busted" % [rv.name, rv.band, int(rv.busts)])
+	lines += HQOrders.realism_lines(ss, "runner" if role == Roles.BOSS else "law")
 	lines += ["", "NEWS:"] + ss.get("news", []).slice(-4).map(func(n): return "  " + str(n).substr(0, 70))
 	lines += ["LOG:"] + ss.get("log", []).slice(-5).map(func(n): return "  " + str(n).substr(0, 70))
 	info.text = "\n".join(lines)

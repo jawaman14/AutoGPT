@@ -17,7 +17,9 @@ var shots: Array = []  ## [duration, start callable, per-frame callable]
 var shot_t := 0.0
 var caption: Label
 var path: Array = []
+var target: Area3D = null  ## what the walk is heading for
 var orbit := {}
+var _stall := [Vector3.ZERO, 0.0]  ## last position, seconds without progress
 
 
 func _initialize() -> void:
@@ -42,10 +44,10 @@ func _initialize() -> void:
 	shots = [
 		[3.0, func(): _cap("Parked at %s. TAB: get out and walk." % World.airfield(s.location).name), Callable()],
 		[7.0, _walk_to_board, _follow_path],
-		[6.0, _cut_ahead, _follow_path],
+		[12.0, _cut_ahead, _follow_path],  # walks end early on arrival
 		[3.5, func(): _use(), Callable()],
 		[1.0, _close_menus, Callable()],
-		[9.0, _walk_to_desk, _follow_path],
+		[16.0, _walk_to_desk, _follow_path],
 		[5.5, _desk_orders, Callable()],
 		[7.0, func(): _orbit_hq("org", 13.0, "The organisation's villa: sited by the map generator near the cove."), _orbit_step],
 		[7.0, func(): _orbit_hq("rival", 15.0, "Los Cuervos' compound: the rival outfit's base."), _orbit_step],
@@ -84,6 +86,7 @@ func _nearest(action: String) -> Area3D:
 func _route_to(area: Area3D, via := []) -> void:
 	var back: Vector3 = area.get_parent().global_transform.basis.z.normalized()
 	path = via + [area.global_position - back * 1.3]
+	target = area
 	app.walker.look_enabled = true
 
 
@@ -134,20 +137,37 @@ func _follow_path() -> void:
 		return
 	w.look_at(flat, Vector3.UP)
 	_key(KEY_W, true)
-	_key(KEY_SHIFT, w.global_position.distance_to(flat) > 6.0)
+	_key(KEY_SHIFT, w.global_position.distance_to(flat) > 2.5)
+	# boxed in by furniture short of the point: close enough, take the next one
+	if w.global_position.distance_to(_stall[0]) < 0.03:
+		_stall[1] += 1.0 / 30.0
+		if _stall[1] > 0.7:
+			path.pop_front()
+			_stall[1] = 0.0
+	else:
+		_stall = [w.global_position, 0.0]
+
+
+## Stop, turn to face what we came for, and press E.
+func _face_and_use() -> void:
+	_key(KEY_W, false)
+	_key(KEY_SHIFT, false)
+	var w := app.walker
+	if target != null:
+		var p := target.global_position
+		w.look_at(Vector3(p.x, w.global_position.y, p.z), Vector3.UP)
+		w.cam.rotation.x = -0.25
+		w._update_focus()
+	w.use()
 
 
 func _use() -> void:
-	_key(KEY_W, false)
-	_key(KEY_SHIFT, false)
-	app.walker.use()
+	_face_and_use()
 	_cap("E: the job board opens where you stand.")
 
 
 func _desk_orders() -> void:
-	_key(KEY_W, false)
-	_key(KEY_SHIFT, false)
-	app.walker.use()
+	_face_and_use()
 	var m: HQMenu = app.menus["hq"]
 	_cap("The boss's desk: tonight's orders, same rules as the boss station.")
 	if m.visible:
@@ -223,6 +243,11 @@ func _process(dt: float) -> bool:
 		if shot >= shots.size():
 			return true
 		shots[shot][1].call()
+		if OS.get_environment("TOUR_DEBUG") != "":
+			print("shot %d at %.1f s: menus %s" % [shot, t, app.menus.keys().filter(func(k): return app.menus[k].visible)])
 	elif shots[shot][2].is_valid():
 		shots[shot][2].call()
+		# a walk is over when we get there (the menu shot follows straight on)
+		if shots[shot][2] == _follow_path and path.is_empty() and shot_t > 0.5 and shot != 1:
+			shot_t = shots[shot][0]
 	return false

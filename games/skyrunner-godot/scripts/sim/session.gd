@@ -348,7 +348,7 @@ func set_weather(w: Dictionary) -> void:
 	var wr: Array = HQ.SKIES[sky][1]
 	weather = {"sky": sky, "wind_kt": int(w.get("wind_kt", (wr[0] + wr[1]) / 2)), "wind_dir": int(w.get("wind_dir", 250)),
 		"moon": float(w.get("moon", 0.5))}
-	police.visibility = HQ.SKIES[sky][2] * (0.75 + 0.35 * weather["moon"])
+	police.visibility = HQ.SKIES[sky][2] * (0.8 + 0.4 * weather["moon"])
 	weather_rev += 1
 	_apply_wind()
 

@@ -4,7 +4,7 @@ extends SceneTree
 ## scenarios. Record with Godot's Movie Maker (fixed 30 fps = the sim's step):
 ##
 ##   xvfb-run godot --rendering-method gl_compatibility --write-movie out.avi --fixed-fps 30 \
-##       --script res://tools/demo.gd -- <zone> <law> <tactic> <seed> [graphics] [max_s] [hour]
+##       --script res://tools/demo.gd -- <zone> <law> <tactic> <seed> [graphics] [max_s] [hour] [sky] [moon]
 ##
 ## tools/record_demo.sh wraps it and encodes an MP4.
 
@@ -29,6 +29,8 @@ func _initialize() -> void:
 	var hour := float(a[6]) if a.size() > 6 else 16.5
 	var st = Tactical.setup_trial(zone, law, tactic, seed)
 	s = st[0]
+	if a.size() > 7:  # weather: clear | cloud | storm (wind from the table's middle), optional moon 0..1
+		s.set_weather({"sky": a[7], "moon": float(a[8]) if a.size() > 8 else 0.5})
 	bot = st[1]
 	label = "%s route, police %s, tactic %s, seed %d" % [zone, law, tactic, seed]
 	var ui := Control.new()

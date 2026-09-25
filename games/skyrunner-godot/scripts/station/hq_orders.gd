@@ -23,6 +23,28 @@ static func _money(v) -> String:
 
 
 ## Rows for the current view: {key, label, detail, state, order, args, choices}.
+## Weather, the analysts' picture and what you know of Los Cuervos, for either HQ.
+static func realism_lines(ss: Dictionary, side: String) -> Array:
+	var out := []
+	var f = ss.get("forecast")
+	if f is Dictionary and not f.is_empty():
+		var w: Dictionary = ss.get("weather", {})
+		out.append("Forecast: %s, wind %03d/%d kt, moon %d%%%s" % [f.sky, int(f.wind_dir), int(f.wind_kt), int(float(f.moon) * 100),
+			("   actual: %s" % w.sky) if not w.is_empty() and w.sky != f.sky else ""])
+		if f.sky == "storm":
+			out.append("  storm: helicopters grounded, balloon down, cover for runs - and 2.5x the crashes")
+	var pat = ss.get("pattern")
+	if pat is Dictionary:
+		var parts := []
+		for z in ZONES:
+			parts.append("%s +%d%%" % [z, int(round(float(pat[z]) * 100))])
+		out.append(("Your routine (law's analysts expect you): " if side == "runner" else "Pattern of life (sightings): ") + "  ".join(parts))
+	var rv = ss.get("rival")
+	if side == "runner" and rv is Dictionary and rv.get("reputation", "") != "":
+		out.append("%s: %s   (%d nights left)" % [rv.name, rv.reputation, int(rv.nights_left)])
+	return out
+
+
 func rows(ss: Dictionary) -> Array:
 	return _runner_rows(ss) if side == "runner" else _law_rows(ss)
 
@@ -122,6 +144,10 @@ func _law_rows(ss: Dictionary) -> Array:
 		"detail": "$5k once: scanners go deaf", "state": "yes" if L.get("encryption") else "no"})
 	out.append({"key": "press", "label": "Press conference", "order": "press", "args": {},
 		"detail": "after a bust: support up, budget up", "state": "done" if L.get("press") else "-"})
+	if ss.get("canary_ok"):
+		out.append({"key": "canary", "label": "Canary trap on dispatch", "order": "canary", "args": {},
+			"detail": "$1.5k: feed the dispatch line a fake patrol. If they swerve around it, the leak is caught (set the patrol first)",
+			"state": ("fake: %s" % L.get("canary_zone")) if L.get("canary") else "-"})
 	var rv = ss.get("rival")
 	if rv is Dictionary:
 		out.append({"key": "gang_unit", "label": "Gang unit on %s" % rv.name, "order": "gang_unit", "args": {},

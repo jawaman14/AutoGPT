@@ -141,7 +141,9 @@ func set_hour(h: float) -> void:
 	var ls := fx.light_scale() if fx != null else 1.0
 	var moon_k := (0.15 + 0.85 * fx.moon_illum) if fx != null else 1.0
 	sun.light_energy = 1.0 * day * ls
-	sun.visible = day > 0.01
+	# the sun stays on (at zero energy) so it is always LIGHT0 for the sky shader:
+	# hiding it made the moon LIGHT0 and the night sky rendered as day
+	sun.shadow_enabled = quality.shadows and day > 0.01
 	sun.light_color = Color(1.0, 0.96, 0.88).lerp(Color(1.0, 0.6, 0.35), dusk)
 	moon.light_energy = 0.3 * night * moon_k * ls
 	var sky_col := NIGHT_SKY.lerp(DAY_SKY, day).lerp(DUSK_SKY, dusk * 0.45)

@@ -1,6 +1,6 @@
 extends SceneTree
 ## World screenshot:
-##   godot --script res://tools/shots/pilot_shot.gd -- <low|medium|high> <hour> <out.png> <chase|cockpit|tower> [view] [map_seed]
+##   godot --script res://tools/shots/pilot_shot.gd -- <low|medium|high> <hour> <out.png> <chase|cockpit|tower> [view] [map_seed] [sky] [moon]
 ## view: ground (default: parked at HAR) | air (climbing out near Eagle's Nest) |
 ##       org | law | rival (looking at that HQ) | overview (high above the island)
 ##       foot (on foot beside the parked aircraft, looking at the hangars) |
@@ -24,6 +24,8 @@ func _init():
 	if a.size() > 4: view = a[4]
 	var opts := {"seed": 1, "location": "HAR"}
 	if a.size() > 5: opts["map_seed"] = int(a[5])
+	if a.size() > 6:
+		opts["weather"] = {"sky": a[6], "moon": float(a[7]) if a.size() > 7 else 0.5}
 	var s := Session.new(opts)
 	app = PilotApp.new()
 	root.add_child(app)

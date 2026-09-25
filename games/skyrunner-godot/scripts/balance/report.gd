@@ -45,6 +45,24 @@ const CHANGELOG := [
 	["A second smuggling outfit: Los Cuervos",
 		"Requested feature: competing smuggler groups. Added a rival cartel run by the AI on its own random stream. It flies loads every night, splits the police, undercuts payouts where it owns the market, and hijacks your load if you share a route without a truce. The boss can hit it, buy a truce or sell its route to the police; the chief can send a gang unit. With the new calibration and the cartel on, the organisation's equilibrium was 39% (44% with the cartel off).",
 		"A 12-point grid over the cartel's market bite, its hijack chance and the retirement target. Retire at $38k (was $45k), market loss 30% at full rival control, hijack chance 20% + 30% x strength when you meet on the same route. Equilibrium 48.8% over 40,000 seasons, every ending between 13% and 27%, comebacks 21%. The cartel hijacks at least one load in a third of seasons, and recruit's ablation swing fell from +20 to +8 points: the cartel gives the task force a second target and the organisation a second enemy."],
+	["Heavy police flew exactly like standard police",
+		"Tactical sweep, 90 flights per posture: 'heavy' (2 helicopters, 2 interceptors) and 'standard' (1 + 1) gave identical rows, flight for flight. The AI sends a fixed response per wanted level (1 helicopter, then +1 interceptor, then +1 more), so a second helicopter never left the ground: the chief's extra money bought nothing.",
+		"STAKEOUT_RESULT"],
+	["Weather and the moon",
+		"Requested: realism. Each night now has a forecast both HQs see while planning (clear 55%, cloud 30%, storm 15%, right 75% of the time) and a moon on a 29.5-day cycle. Cloud, rain and a dark moon cut how far crews see; storms ground most helicopters and the aerostat (TARS balloons are winched down for lightning), make the sea too rough for cutters, and more than double crash risk. Live: JSBSim wind and Dryden turbulence, rain, lightning, a storm deck, the moon's phase. The first version handed the organisation 69% (weather was a flat -16% on detection). Centring the factors on 1.0 (clear x1.1, cloud x0.9, storm x0.7; moon x0.8-1.2; crashes x0.8/1.1/2.2) still left it at 62%: attribution runs (one storm effect off at a time) put ~5 points on visibility, 1 or less each on grounded helicopters, balloon and cutters, the rest on interactions (the law bots learn less from fewer sightings). That matches history: smugglers picked bad weather and dark nights.",
+		"Kept the realism and moved the economy instead: retire target $38k -> $48k (with the pattern rule below at 0.45). Equilibrium 51.2% over 40,000 seasons, endings 14-28%, comebacks 22%. Weather is now worth about 13 points to the organisation on ablation - the biggest single lever in the game - so reading the forecast is part of playing well."],
+	["Pattern of life: predictability is exploitable",
+		"Game theory's inspection game (police vs smuggler) has no pure-strategy equilibrium: whoever is predictable loses. The old abstract model had no memory, so flying the same route every night cost nothing (the greedy bot flew the sea every night, 0 bits of route entropy). Real task forces keep sighting logs and patrol where the pattern points.",
+		"The law's analysts now add up to +45% detection on a route, scaled by the share of the last four nights' sightings that fell there; both HQs see the numbers. The runner bots now weight their route choice away from that exposure. Ablation: switching it off hands the organisation ~5 points; route entropy runs from 0 (greedy) to 1.5 bits (cautious, shadow; 1.585 is uniform), and the most mixed strategies are detected least."],
+	["The canary trap",
+		"Real counter-intelligence tests a suspected leak by feeding a unique false detail down one channel and watching whether it comes back. Added as a chief order ($1.5k): the bribed dispatcher passes on a fake patrol; if the organisation's plan swerves around a patrol that never flew, the dispatcher is arrested (+12 evidence). The first version made the law worse off (-5 points): the adaptive chief sprang it after any single missed patrol, which is usually just luck, and it caught a leak in 3% of seasons.",
+		"The chief bot now waits for two evaded patrols. The canary is neutral at equilibrium (+/-1 point) and catches a leak in ~2% of seasons: a niche counter that matters against dispatcher-reliant play. It also makes every leak an uncertain signal, which is the point: the organisation can no longer treat the dispatcher as ground truth."],
+	["Truces unravel near the end",
+		"A truce with Los Cuervos is an iterated prisoner's dilemma: cooperation holds while the future is worth more than one betrayal (the shadow of the future). Backward induction says it collapses as the season runs out. Each season Los Cuervos now get a hidden temper - tit-for-tat, grudge-holder or opportunist - that the organisation learns from how they behave. Opportunists sell your route to the task force, most often in the last two nights; grudge-holders never make peace after you hit or sold them; tit-for-tat answers your last move.",
+		"Measured over 40,000 seasons: betrayals land at 157 each with 1 and 2 nights left, 142 on the last night, against 20-90 on any earlier night; opportunists betray 0.055 times per season, tit-for-tat 0.004, grudgers never. The runner bots now refuse to pay for a truce with a known opportunist near the end, and defect first on the last night. Ablation: ~1 point, because truces are rare in the bot meta - it matters to humans who read the reputation line."],
+	["The pilot's nerves",
+		"Requested: psychology. Stress now follows what real smuggling pilots feared (wanted level, a police aircraft in sight, low flying in the dark or a storm, fuel running out; a crew in the right seat takes 25% off), rising in seconds and settling over half a minute. Following the Yerkes-Dodson curve, moderate arousal costs nothing; above 0.6 the screen tunnels and drains of colour, the heartbeat becomes audible and an 8-12 Hz tremor (the band adrenaline amplifies) is added to the stick.",
+		"Human hands only: the bot and the autopilot are immune, so none of the numbers in this report move. It is a skill tax that rewards staying calm - a co-pilot, altitude, fuel margin - rather than a dice roll."],
 ]
 
 
@@ -210,6 +228,23 @@ static func write_report(results_dir: String, out_path: String) -> String:
 			"- Seasons with at least one hijack: %s; hijacks per season: %s" % [_pct(rv["hijack_seasons"]), Py.f(rv["hijacks_per_season"], 2)],
 			"- Cartel planes busted per season: %s; cartel strength at the end: %s/100" % [Py.f(rv["rival_busts_per_season"], 2), Py.f(rv["end_strength"], 0)],
 			""]
+	var rz = _load(results_dir, "realism")
+	if rz is Dictionary and not rz.is_empty():
+		lines += ["## 5. The realism layer", "",
+			"Weather and moon, pattern-of-life analysis, the canary trap and the rivals' tempers (entries 15-18 above), "
+			+ "measured over the same seasons:", "",
+			"- Storm nights per season: %s; seasons where a canary caught a leak: %s" % [Py.f(rz["storm_nights_per_season"], 2), _pct(rz["canary_catch_seasons"])],
+			"- Truce betrayals per season, by temper: %s" % ", ".join((rz["betrayals_per_season_by_temper"] as Dictionary).keys().map(
+				func(k): return "%s %s" % [k, Py.f(rz["betrayals_per_season_by_temper"][k], 3)])),
+			"", "Betrayals by nights left in the season (backward induction: the end is when truces break):", "",
+			"| nights left | " + " | ".join(range(10).map(func(i): return str(i))) + " |",
+			"|---" + "|---".repeat(10) + "|",
+			"| betrayals | " + " | ".join(range(10).map(func(i): return str(int(rz["betrayals_by_nights_left"].get(str(i), 0))))) + " |",
+			"", "Route mixing against the analysts (entropy in bits; 1.585 = uniform over three routes):", "",
+			"| organisation bot | route entropy | main run detected |", "|---|---|---|"]
+		for pol in rz["route_entropy_by_runner"]:
+			lines.append("| %s | %s | %s |" % [pol, Py.f(rz["route_entropy_by_runner"][pol], 2), _pct(rz["main_run_detected_by_runner"][pol])])
+		lines.append("")
 	var abl = _load(results_dir, "ablation")
 	if abl:
 		var base: float = abl["base"]

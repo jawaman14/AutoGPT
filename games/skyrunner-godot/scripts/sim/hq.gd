@@ -16,7 +16,7 @@ extends RefCounted
 # Every number the balance simulator is allowed to move lives here.
 const RULES := {
 	"nights": 10,
-	"retire_target": 38000,  # clean $ to win (45000 before the cartel; docs/BALANCE.md)
+	"retire_target": 48000,  # clean $ to win (45000 -> 38000 with the cartel -> 48000 with weather; docs/BALANCE.md)
 	"indict_evidence": 100.0,
 	"start_dirty": 16000,
 	"start_budget_k": 15.0,
@@ -58,7 +58,12 @@ const RULES := {
 	# the realism layer (docs/BALANCE.md 14-18): its own random stream, like the cartel's
 	"weather": true,  # nightly sky, wind and moon: cover, crash risk, grounded balloons and helicopters
 	"pattern": true,  # the task force's analysts learn your routine: repeat a route and they expect you
-	"pattern_k": 0.3,  # detection bonus when every recent sighting was on tonight's route
+	"pattern_k": 0.45,  # detection bonus when every recent sighting was on tonight's route
+	"storm_heli": 0.4,  # helicopter effectiveness in a storm (most won't launch into a thunderstorm)
+	"storm_sea": 0.5,  # cutters in heavy seas
+	"storm_balloon": true,  # the aerostat is winched down for lightning
+	"weather_vis": true,  # sky and moon change detection
+	"weather_crash": true,  # sky changes crash risk
 	"canary": true,  # the chief can feed the dispatch line a false patrol to smoke out a leak
 	"rival_tempers": true,  # Los Cuervos are tit-for-tat, grudgers or opportunists; truces unravel near the end
 }
@@ -68,11 +73,13 @@ const PYTHON_RULES := {"rivals": false, "retire_target": 45000, "weather": false
 	"canary": false, "rival_tempers": false}
 const REALISM := ["weather", "pattern", "canary", "rival_tempers"]
 
-## Sky -> [chance, wind kt range, visibility factor on detection, crash factor]
+## Sky -> [chance, wind kt range, visibility factor on detection, crash factor].
+## Both factors average ~1 over the season: weather moves risk between nights
+## (a timing decision), it doesn't hand either side a flat bonus (BALANCE.md 14).
 const SKIES := {
-	"clear": [0.55, [4, 12], 1.0, 1.0],
-	"cloud": [0.30, [8, 18], 0.85, 1.3],
-	"storm": [0.15, [18, 30], 0.7, 2.5],
+	"clear": [0.55, [4, 12], 1.1, 0.8],
+	"cloud": [0.30, [8, 18], 0.9, 1.1],
+	"storm": [0.15, [18, 30], 0.7, 2.2],
 }
 const AEROSTAT_MAX_WIND := 25  ## kt: above this, or with lightning about, the tethered balloon is winched down (TARS practice)
 const MOON_DAYS := 29.53
@@ -780,7 +787,7 @@ class Season:
 		}
 		if on("weather"):
 			plan["weather"] = weather.duplicate()
-			if L.aerostat and (weather["sky"] == "storm" or int(weather["wind_kt"]) > AEROSTAT_MAX_WIND):
+			if L.aerostat and ((weather["sky"] == "storm" and Py.truthy(rules["storm_balloon"])) or int(weather["wind_kt"]) > AEROSTAT_MAX_WIND):
 				plan["aerostat"] = false
 				plan["leak_aerostat"] = false
 				law_log.append("Aerostat winched down: %s, %d kt." % ["lightning" if weather["sky"] == "storm" else "wind", int(weather["wind_kt"])])
@@ -1132,7 +1139,7 @@ class Season:
 			var lg: Array = law_log.slice(-8) + (reports.back().law_lines if not reports.is_empty() else [])
 			base.merge({"law": L.to_dict(), "indict_evidence": rules["indict_evidence"],
 				"clean_estimate": int(est) if est else null, "known_fronts": o.fronts.size(),
-				"wiretap_ok": L.evidence >= 20, "log": lg})
+				"wiretap_ok": L.evidence >= 20, "log": lg, "canary_ok": on("canary")})
 			if rival != null:
 				base["rival"] = {"name": rival.name, "band": rival.band(), "busts": rival.busts}
 		return base
@@ -1200,10 +1207,13 @@ static func resolve_abstract(season: Season, plan: Dictionary, rng: PyRandom, ca
 	var heli_k := 1.0
 	var sea_k := 1.0
 	if not wx.is_empty():
-		vis = SKIES[wx["sky"]][2] * (0.75 + 0.35 * float(wx["moon"]))
-		crash_k = SKIES[wx["sky"]][3]
-		heli_k = 0.4 if wx["sky"] == "storm" else 1.0
-		sea_k = 0.5 if wx["sky"] == "storm" else 1.0
+		if Py.truthy(R.get("weather_vis", true)):
+			vis = SKIES[wx["sky"]][2] * (0.8 + 0.4 * float(wx["moon"]))
+		if Py.truthy(R.get("weather_crash", true)):
+			crash_k = SKIES[wx["sky"]][3]
+		if wx["sky"] == "storm":
+			heli_k = float(R.get("storm_heli", 0.4))
+			sea_k = float(R.get("storm_sea", 0.5))
 	var pattern: Dictionary = plan.get("pattern", {})
 	for kind in kinds:
 		var zone: String = main_zone if kind == "main" else rng.choice(ZONES)
@@ -1268,8 +1278,8 @@ static func _resolve_rivals(season: Season, plan: Dictionary, runs: Array, cal: 
 	var units: Dictionary = plan["funded"]
 	var zone: String = plan["rival_zone"]
 	var wx: Dictionary = plan.get("weather", {})
-	var vis: float = SKIES[wx["sky"]][2] * (0.75 + 0.35 * float(wx["moon"])) if not wx.is_empty() else 1.0
-	var crash_k: float = SKIES[wx["sky"]][3] if not wx.is_empty() else 1.0
+	var vis: float = SKIES[wx["sky"]][2] * (0.8 + 0.4 * float(wx["moon"])) if not wx.is_empty() and Py.truthy(R.get("weather_vis", true)) else 1.0
+	var crash_k: float = SKIES[wx["sky"]][3] if not wx.is_empty() and Py.truthy(R.get("weather_crash", true)) else 1.0
 	for i in plan.get("rival_runs", 0):
 		var r := RunResult.new("rival", zone)
 		var p_det: float = cal.detect[zone] + (cal.aerostat_detect[zone] if plan["aerostat"] else 0.0)
