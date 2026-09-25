@@ -46,6 +46,9 @@ func _init(sess_, runner_ai_ = "adaptive", law_ai_ = "adaptive", rules := {}) ->
 	_bot_rng = PyRandom.new()
 	_bot_rng.seed(sess.seed + 505)
 	sess.money = int(season.org.dirty)  # the organisation's war chest is the crew's cash
+	sess.bus.subscribe("hijacked", func(_ev):
+		if phase == "operation" and main != null:
+			main.hijacked = true)
 
 
 # ------------------------------------------------------------ money sync
@@ -153,6 +156,22 @@ func _begin() -> void:
 	crews = []
 	for k in plan["crews"] + plan["decoys"]:
 		crews.append(_spawn_run(k >= plan["crews"]))
+	# the rival cartel flies tonight too; meet them on your route and they come for your load
+	if plan.has("rival_zone"):
+		for k in plan["rival_runs"]:
+			var a := _spawn_run(false)
+			a.kind = "rival"
+			a.id = "Cuervo-%d" % sess.director.serial
+		ps.features.erase("rivals")
+		if season.rrng.random() < plan["hijack_p"] and not hot.is_empty():
+			var p: Array = sess.job_xy(hot[0])
+			ps.features["rivals"] = true
+			ps._rival_spawned["runner"] = true
+			ps.spawn_rival(p, "runner")
+			sess.say("Radio chatter in Spanish on the company frequency. Company tonight.")
+		if plan.get("rival_tipped"):
+			ps.add_tip(HQ.ZONE_CENTRE[plan["rival_zone"]][0], HQ.ZONE_CENTRE[plan["rival_zone"]][1], 4000,
+				"anonymous caller: a Cuervos plane moves tonight", "", null)
 	sess.say("Night %d: operation under way (%d crews, %d decoys)." % [plan["night"], plan["crews"], plan["decoys"]])
 	sess.law_say("Night %d: operations begin." % plan["night"])
 
@@ -196,7 +215,8 @@ func _finish() -> void:
 	var ss := season
 	var runs := [main]
 	for a in crews:
-		var r := HQ.RunResult.new("decoy" if not a.hot else "crew", "sea")
+		var kind := "rival" if a.kind == "rival" else ("decoy" if not a.hot else "crew")
+		var r := HQ.RunResult.new(kind, ss.plan.get("rival_zone", "sea") if kind == "rival" else "sea")
 		r.busted = a.state == "busted" and a.hot
 		r.clean_stop = a.state == "busted" and not a.hot
 		r.crashed = a.state == "crashed"

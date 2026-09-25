@@ -8,12 +8,14 @@ var role: String
 var error = null
 var last_result := [true, ""]
 var acks := {}
+var ticks := true  ## false: someone else runs the session (split-screen demo)
 var _seq := 0
 
 
-func _init(s: Session, role_: String) -> void:
+func _init(s: Session, role_: String, ticks_ := true) -> void:
 	sess = s
 	role = role_
+	ticks = ticks_
 
 
 func send_command(cmd: String, args := {}) -> int:
@@ -33,7 +35,8 @@ func send_input(roll: float, pitch: float, throttle: float) -> void:
 
 
 func tick(dt: float) -> void:
-	sess.update(dt)
+	if ticks:
+		sess.update(dt)
 
 
 func alive() -> bool:

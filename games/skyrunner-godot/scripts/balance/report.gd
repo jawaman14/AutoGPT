@@ -186,6 +186,24 @@ static func write_report(results_dir: String, out_path: String) -> String:
 				for a in Py.sorted_by(av.keys(), func(k): return -av[k][0]):
 					lines.append("| %s | %s pts | %d |" % [a, _signed(av[a][0] * 100, 0), av[a][1]])
 				lines.append("")
+	if strat:
+		var ends := Strategic.endings(strat)
+		lines += ["Win conditions (target: each at least 8% of seasons):", "", "| ending | share |", "|---|---|"]
+		for k in ends:
+			lines.append("| %s | %s |" % [k, _pct(ends[k])])
+		lines.append("")
+	var rv = _load(results_dir, "rivals")
+	if rv is Dictionary and not rv.is_empty():
+		lines += ["## 4. The rival cartel (Los Cuervos)", "",
+			"A third, AI-run outfit fights the organisation for the island's markets. Each night it flies its own "
+			+ "loads in the zone it likes best (weighted by its turf and the pay, dodging a patrol it hears about). "
+			+ "Its flights split the task force's attention; its busts are good press for the police. Where it owns "
+			+ "the market the organisation's loads pay up to 40% less, and meeting it on the same route without a "
+			+ "truce risks a hijack. The boss can hit it, buy a truce or sell its route to the police; the chief can "
+			+ "send a gang unit after it.", "",
+			"- Seasons with at least one hijack: %s; hijacks per season: %s" % [_pct(rv["hijack_seasons"]), Py.f(rv["hijacks_per_season"], 2)],
+			"- Cartel planes busted per season: %s; cartel strength at the end: %s/100" % [Py.f(rv["rival_busts_per_season"], 2), Py.f(rv["end_strength"], 0)],
+			""]
 	var abl = _load(results_dir, "ablation")
 	if abl:
 		var base: float = abl["base"]

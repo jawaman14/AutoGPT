@@ -486,6 +486,13 @@ func _draw_hq(snap: Dictionary) -> void:
 			"Known fronts %d   laundered estimate %s" % [int(ss.known_fronts), ("$" + Py.money(int(est))) if est else "unknown"],
 			"Moves left tonight: %d%s" % [int(L.actions), "   READY" if L.ready else ""],
 		]
+	var rv = ss.get("rival")
+	if rv is Dictionary:
+		if role == Roles.BOSS:
+			lines.append("%s: %s%s%s" % [rv.name, rv.band, ("   truce %d nights" % int(rv.truce_nights)) if rv.truce_nights else "",
+				"   OUT FOR REVENGE" if rv.grudge else ""])
+		else:
+			lines.append("%s: %s, %d busted" % [rv.name, rv.band, int(rv.busts)])
 	lines += ["", "NEWS:"] + ss.get("news", []).slice(-4).map(func(n): return "  " + str(n).substr(0, 70))
 	lines += ["LOG:"] + ss.get("log", []).slice(-5).map(func(n): return "  " + str(n).substr(0, 70))
 	info.text = "\n".join(lines)

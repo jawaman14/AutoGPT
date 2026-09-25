@@ -52,6 +52,36 @@ static func _grow(ss: HQ.Season, rng: PyRandom) -> void:
 		ss.runner_cmd("buy_front", {"kind": "laundromat"})
 
 
+## The cartel war, for bots that read the room (only when rules.rivals is on;
+## no random draws otherwise, so rival-free seasons are unchanged). Call after
+## the route is set: a hit weakens them on tonight's route.
+static func _cartel(ss: HQ.Season, rng: PyRandom, mem: Dictionary) -> void:
+	var rv := ss.rival
+	if rv == null:
+		return
+	var o := ss.org
+	var danger: int = DANGER[ss.view("runner")["evidence_rumor"]]
+	var contested: bool = rv.turf[o.route] > 0.4
+	var strong: bool = rv.band() in ["strong", "dominant"]
+	var last := _last(ss)
+	var hijacked := last != null and Py.any(last.runs, func(r): return r.hijacked)
+	if rv.truce_nights == 0 and rv.grudge == 0 and (strong or hijacked) and rng.random() < 0.6:
+		ss.runner_cmd("truce")
+	elif (strong or hijacked) and contested and o.dirty > 20000 and o.heat < 50 and rv.truce_nights == 0:
+		ss.runner_cmd("hit_rival")
+	if danger >= 2 and rv.truce_nights == 0 and rng.random() < 0.5:
+		ss.runner_cmd("tip_off")  # hand the task force someone else to chase
+
+
+## Route choice that also weighs the rivals' grip on each market.
+static func _rival_route_weights(ss: HQ.Season, base: Array) -> PackedFloat64Array:
+	var w := PackedFloat64Array(base)
+	if ss.rival != null:
+		for i in HQ.ZONES.size():
+			w[i] *= 1.0 - ss.rules["rival_market"] * ss.rival.turf[HQ.ZONES[i]]
+	return w
+
+
 static func _last(ss: HQ.Season) -> HQ.NightReport:
 	return ss.reports.back() if not ss.reports.is_empty() else null
 
@@ -161,6 +191,7 @@ static func runner_adaptive(ss: HQ.Season, rng: PyRandom, mem: Dictionary) -> vo
 	if not o.bribes.has("dispatcher") and ss.night >= 3 and o.dirty > 20000 and danger < 2:
 		ss.runner_cmd("bribe", {"who": "dispatcher"})
 	_pick_route(ss, rng, mem, leak)
+	_cartel(ss, rng, mem)
 	_launder_all(ss)
 	ss.runner_cmd("ready")
 
@@ -193,11 +224,12 @@ static func runner_smart(ss: HQ.Season, rng: PyRandom, mem: Dictionary) -> void:
 		ss.runner_cmd("decoys", {"n": 1})
 	var last := _last(ss)
 	mem["rat"] = last != null and Py.any(last.runs, func(r): return r.busted and r.kind == "main" and not r.intercepted)
-	var z: String = HQ.ZONES[rng.choices_index(PackedFloat64Array([0.45, 0.25, 0.30]), 1)[0]]  # west is the least watched
+	var z: String = HQ.ZONES[rng.choices_index(_rival_route_weights(ss, [0.45, 0.25, 0.30]), 1)[0]]  # west is the least watched
 	if z == mem.get("last_route") and rng.random() < 0.5:
 		z = rng.choice(HQ.ZONES.filter(func(x): return x != z))
 	mem["last_route"] = z
 	ss.runner_cmd("route", {"zone": z})
+	_cartel(ss, rng, mem)
 	_launder_all(ss)
 	ss.runner_cmd("ready")
 
@@ -216,6 +248,8 @@ static func runner_random(ss: HQ.Season, rng: PyRandom, mem: Dictionary) -> void
 		["lawyer", {"on": a_lawyer}], ["opsec", {}], ["counterintel", {}], ["lie_low", {}], ["upgrade", {}],
 		["buy_front", {"kind": a_front}], ["gear", {"name": a_gear}],
 	]
+	if ss.rival != null:
+		options += [["hit_rival", {}], ["truce", {}], ["tip_off", {}]]
 	options = rng.shuffle(options)
 	if not mem.has("used"):
 		mem["used"] = []
@@ -318,11 +352,17 @@ static func law_adaptive(ss: HQ.Season, rng: PyRandom, mem: Dictionary) -> void:
 	_fund_units(ss, 1, 2 if heavy else 1, 1)
 	if L.budget_k >= HQ.LAW_COSTS_K["aerostat"]:
 		ss.law_cmd("aerostat")
+	# the cartel war: busting Cuervos is good press and splits the organisation's cover
+	if ss.rival != null and ss.rival.band() in ["strong", "dominant"] and L.budget_k >= ss.rules["gang_unit_k"]:
+		ss.law_cmd("gang_unit")
 	ss.law_cmd("ready")
 
 
 static func law_random(ss: HQ.Season, rng: PyRandom, mem: Dictionary) -> void:
-	var options := rng.shuffle(["aerostat", "recruit", "wiretap", "audit", "ia_sweep", "encryption", "press"])
+	var names := ["aerostat", "recruit", "wiretap", "audit", "ia_sweep", "encryption", "press"]
+	if ss.rival != null:
+		names.append("gang_unit")
+	var options := rng.shuffle(names)
 	if not mem.has("used"):
 		mem["used"] = []
 	for name in options.slice(0, 3):

@@ -76,6 +76,18 @@ func _runner_rows(ss: Dictionary) -> Array:
 	var g: String = ["scanner", "detector"][_pick("gear", 2)]
 	out.append({"key": "gear", "label": "Buy gear < %s >" % g, "order": "gear", "args": {"name": g},
 		"detail": "%s for the crews" % _money(HQ.GEAR_PRICES[g]), "state": ", ".join(o.get("gear", [])) if o.get("gear", []) else "-"})
+	var rv = ss.get("rival")
+	if rv is Dictionary:
+		var turf := ", ".join(HQOrders.ZONES.map(func(z): return "%s %d%%" % [z, int(float(rv.turf[z]) * 100)]))
+		out.append({"key": "hit_rival", "label": "Hit %s" % rv.name, "order": "hit_rival", "args": {},
+			"detail": "$5,000: they lose strength and turf on tonight's route; +12 heat, the task force opens a violence file; ends any truce",
+			"state": str(rv.band)})
+		out.append({"key": "truce", "label": "Offer %s a truce" % rv.name, "order": "truce", "args": {},
+			"detail": "3 nights: they stay off your route and stop hijacking, for 15% of your takings. The stronger they are, the likelier they refuse.",
+			"state": ("%d nights left" % int(rv.truce_nights)) if rv.truce_nights else ("they want blood" if rv.grudge else "-")})
+		out.append({"key": "tip_off", "label": "Sell their route to the police", "order": "tip_off", "args": {},
+			"detail": "their run tonight is as good as flagged; a friend in the task force loses 4 evidence on you. If they're busted they may work out who talked.",
+			"state": "turf: " + turf})
 	out.append({"key": "ready", "label": "READY - send the run", "order": "ready", "args": {},
 		"detail": "lock tonight's plan", "state": "READY" if o.get("ready") else ""})
 	return out
@@ -110,6 +122,11 @@ func _law_rows(ss: Dictionary) -> Array:
 		"detail": "$5k once: scanners go deaf", "state": "yes" if L.get("encryption") else "no"})
 	out.append({"key": "press", "label": "Press conference", "order": "press", "args": {},
 		"detail": "after a bust: support up, budget up", "state": "done" if L.get("press") else "-"})
+	var rv = ss.get("rival")
+	if rv is Dictionary:
+		out.append({"key": "gang_unit", "label": "Gang unit on %s" % rv.name, "order": "gang_unit", "args": {},
+			"detail": "$4k: their runs are far likelier to be caught tonight, and each bust is good press - but the squad isn't watching the organisation",
+			"state": ("out tonight" if L.get("gang_unit") else "-") + "   cartel %s, %d busted" % [rv.band, int(rv.busts)]})
 	out.append({"key": "ready", "label": "READY - start the operation", "order": "ready", "args": {},
 		"detail": "lock tonight's posture", "state": "READY" if L.get("ready") else ""})
 	return out

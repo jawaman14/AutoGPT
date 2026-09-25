@@ -51,6 +51,53 @@ static func _contraband_job(origin: String, dest: String, rng: PyRandom) -> Jobs
 
 ## `trace`, if given, collects one row per second (debugging parity with Python).
 static func run_trial(zone: String, law: String, tactic: String, seed: int, aircraft := "c172p", trace = null) -> Dictionary:
+	var st = setup_trial(zone, law, tactic, seed, aircraft)
+	if st is String:
+		var t := _trial(zone, law, tactic, aircraft, seed)
+		t["outcome"] = "error: " + st
+		return t
+	var s: Session = st[0]
+	var bot: PilotBot = st[1]
+	var job: Jobs.Job = st[2]
+	var tr := _trial(zone, law, tactic, aircraft, seed)
+	var events := {}
+	s.bus.subscribe("*", func(ev): events[ev.kind] = true)
+	var frame := func(sess: Session):
+		var c = sess.police.cases.get("runner")
+		if c != null and (Py.truthy(c.detected_by) or c.wanted) and not tr["detected"]:
+			tr["detected"] = true
+			tr["first_detect_s"] = sess.time
+		if c != null and c.wanted:
+			tr["flagged"] = true
+		if Py.any(sess.police.units, func(u): return u.sees_player and u.faction() == "police" and u.target_id == "runner"):
+			tr["intercepted"] = true
+		if trace != null and Py.round_int(sess.time * 30) % 30 == 0:
+			var fs := sess.state
+			trace.append([sess.time, bot.phase, fs.x, fs.y, fs.alt, sess.police.suspicion, sess.police.wanted,
+				sess.police.units.map(func(u): return [u.id, u.x, u.y, u.z, u.state, u.target_id])])
+	var out := PilotBot.fly(s, bot, 2400, 1.0 / 30, frame)
+	# a hot load on a strip takes a minute to unload: the police may yet arrive
+	var t_end := s.time + 120
+	while not s.unloading.is_empty() and s.time < t_end and s.phase == "parked":
+		s.update(1.0 / 10)
+	# let the boat finish its trip to the cove (airdrops pay on arrival)
+	if job.is_airdrop() and not (s.phase in ["crashed", "busted"]):
+		t_end = s.time + 900
+		while s.time < t_end and not job.resolved:
+			s.update(1.0 / 10)
+	tr["busted"] = s.phase == "busted" or events.has("busted")
+	tr["crashed"] = s.phase == "crashed" or events.has("crashed")
+	tr["boat_seized"] = events.has("boat_seized")
+	tr["delivered"] = events.has("job_delivered") or (events.has("bales_delivered") and not tr["boat_seized"])
+	tr["outcome"] = s.last_outcome if s.last_outcome != "" else out
+	tr["minutes"] = s.time / 60
+	s.dispose()
+	return tr
+
+
+## The trial's world, job, bot and police posture, ready to fly: [session, bot, job],
+## or an error string. The demo recorder flies the same setup in real time.
+static func setup_trial(zone: String, law: String, tactic: String, seed: int, aircraft := "c172p"):
 	var rng := PyRandom.new()
 	rng.seed(seed)
 	var od: Array = MISSIONS[zone]
@@ -78,10 +125,7 @@ static func run_trial(zone: String, law: String, tactic: String, seed: int, airc
 	var err = s.accept_job(job)
 	if err != null:
 		s.dispose()
-		push_error(err)
-		var t := _trial(zone, law, tactic, aircraft, seed)
-		t["outcome"] = "error: " + str(err)
-		return t
+		return str(err)
 	s.loadout.auto_balance()
 	s.loadout.pending.clear()
 	s.fm.apply_loadout(s.loadout)
@@ -108,40 +152,7 @@ static func run_trial(zone: String, law: String, tactic: String, seed: int, airc
 		s.police.features["informants"] = true
 		s.police.add_tip(txy[0] + rng.uniform(-1200, 1200), txy[1] + rng.uniform(-1200, 1200), 2500,
 			"informant: a load moves tonight", s.squawk, "runner")
-	var tr := _trial(zone, law, tactic, aircraft, seed)
-	var events := {}
-	s.bus.subscribe("*", func(ev): events[ev.kind] = true)
-	var frame := func(sess: Session):
-		var c = sess.police.cases.get("runner")
-		if c != null and (Py.truthy(c.detected_by) or c.wanted) and not tr["detected"]:
-			tr["detected"] = true
-			tr["first_detect_s"] = sess.time
-		if c != null and c.wanted:
-			tr["flagged"] = true
-		if Py.any(sess.police.units, func(u): return u.sees_player and u.faction() == "police" and u.target_id == "runner"):
-			tr["intercepted"] = true
-		if trace != null and Py.round_int(sess.time * 30) % 30 == 0:
-			var st := sess.state
-			trace.append([sess.time, bot.phase, st.x, st.y, st.alt, sess.police.suspicion, sess.police.wanted,
-				sess.police.units.map(func(u): return [u.id, u.x, u.y, u.z, u.state, u.target_id])])
-	var out := PilotBot.fly(s, bot, 2400, 1.0 / 30, frame)
-	# a hot load on a strip takes a minute to unload: the police may yet arrive
-	var t_end := s.time + 120
-	while not s.unloading.is_empty() and s.time < t_end and s.phase == "parked":
-		s.update(1.0 / 10)
-	# let the boat finish its trip to the cove (airdrops pay on arrival)
-	if job.is_airdrop() and not (s.phase in ["crashed", "busted"]):
-		t_end = s.time + 900
-		while s.time < t_end and not job.resolved:
-			s.update(1.0 / 10)
-	tr["busted"] = s.phase == "busted" or events.has("busted")
-	tr["crashed"] = s.phase == "crashed" or events.has("crashed")
-	tr["boat_seized"] = events.has("boat_seized")
-	tr["delivered"] = events.has("job_delivered") or (events.has("bales_delivered") and not tr["boat_seized"])
-	tr["outcome"] = s.last_outcome if s.last_outcome != "" else out
-	tr["minutes"] = s.time / 60
-	s.dispose()
-	return tr
+	return [s, bot, job]
 
 
 static func _picket_point(zone: String, rng: PyRandom) -> Array:

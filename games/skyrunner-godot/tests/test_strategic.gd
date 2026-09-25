@@ -44,12 +44,15 @@ func _cal() -> HQ.Calibration:
 func test_seasons_match_python() -> void:
 	for s in ref.seasons:
 		var a: Array = s.args
-		var got := Strategic.play_season(a[0], a[1], int(a[2]), a[3], _cal() if a[4] else null, a[5])
+		var rules := {"rivals": false}  # Python has no rival cartel
+		if a[3] is Dictionary:
+			rules.merge(a[3])
+		var got := Strategic.play_season(a[0], a[1], int(a[2]), rules, _cal() if a[4] else null, a[5])
 		_same(got, s.result, "%s vs %s seed %d %s" % [a[0], a[1], a[2], a[5]])
 
 
 func test_matrix_equilibrium_and_summary_match_python() -> void:
-	var res := Strategic.run_matrix(3, null, _cal())
+	var res := Strategic.run_matrix(3, {"rivals": false}, _cal())
 	var want: Dictionary = ref.matrix
 	for i in want.results.size():
 		var w: Dictionary = want.results[i]

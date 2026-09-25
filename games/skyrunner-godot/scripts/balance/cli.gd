@@ -12,7 +12,8 @@ extends SceneTree
 ## Results are saved as JSON under sim-results/ so the report can be rebuilt
 ## without re-flying anything. `worker <kind> <in> <out>` is internal (WorkerPool).
 
-var opts := {"workers": 4, "seeds": 3, "n": 200, "calibrated": true, "results": "sim-results", "out": "docs/BALANCE.md"}
+var opts := {"workers": 4, "seeds": 3, "n": 200, "calibrated": true, "results": "sim-results", "out": "docs/BALANCE.md",
+	"grid": "", "rules": ""}
 
 
 func _init() -> void:
@@ -28,12 +29,12 @@ func _init() -> void:
 		if a in ["--workers", "--seeds", "--n"]:
 			opts[a.substr(2)] = int(args[i + 1])
 			i += 1
-		elif a in ["--results", "--out"]:
+		elif a in ["--results", "--out", "--grid", "--rules"]:
 			opts[a.substr(2)] = args[i + 1]
 			i += 1
 		elif a == "--uncalibrated":
 			opts["calibrated"] = false
-		elif a in ["feasibility", "tactical", "strategic", "report", "all"]:
+		elif a in ["feasibility", "tactical", "strategic", "report", "all", "tune"]:
 			what = a
 		else:
 			printerr("unknown argument " + a)
@@ -94,7 +95,8 @@ func cmd_strategic() -> void:
 	if c is Dictionary:
 		cal = HQ.Calibration.from_dict(c)
 	var t0 := Time.get_ticks_msec()
-	var r := Strategic.run_matrix(opts["n"], null, cal, [], null, null, opts["workers"])
+	var rules = JSON.parse_string(opts["rules"]) if opts["rules"] != "" else null
+	var r := Strategic.run_matrix(opts["n"], rules, cal, [], null, null, opts["workers"])
 	for x in r:
 		x.erase("history")
 	_save("strategic", r)
@@ -103,13 +105,58 @@ func cmd_strategic() -> void:
 	print(Py.json(Strategic.summary(r)))
 	var abl := {}
 	for mech in Strategic.ABLATIONS:
-		var rr := Strategic.run_matrix(maxi(20, Py.idiv(opts["n"], 4)), null, cal, [mech], null, null, opts["workers"])
+		var rr := Strategic.run_matrix(maxi(20, Py.idiv(opts["n"], 4)), rules, cal, [mech], null, null, opts["workers"])
 		abl[mech] = Strategic.equilibrium(Strategic.matrix(rr)[2])[2]
+	# the cartel as a whole: the same matrix with rivals off
+	var off := {"rivals": false}
+	if rules is Dictionary:
+		off.merge(rules)
+		off["rivals"] = false
+	var r0 := Strategic.run_matrix(maxi(20, Py.idiv(opts["n"], 4)), off, cal, [], null, null, opts["workers"])
+	abl["cartel"] = Strategic.equilibrium(Strategic.matrix(r0)[2])[2]
 	_save("ablation", {"base": v, "without": abl})
+	_save("rivals", Strategic.rival_summary(r))
 	var shown := {}
 	for k in abl:
 		shown[k] = Py.round_n(abl[k], 3)
 	print("ablations (equilibrium runner win without each mechanic): ", shown)
+
+
+## Grid search over rule values: --grid '{"retire_target": [40000, 45000], "rival_market": [0.3, 0.4]}'
+## Prints each combination's equilibrium and how evenly the endings spread.
+func cmd_tune() -> void:
+	var grid = JSON.parse_string(opts["grid"]) if opts["grid"] != "" else {}
+	var base = JSON.parse_string(opts["rules"]) if opts["rules"] != "" else {}
+	var cal: HQ.Calibration = null
+	var c = _load("calibration") if opts["calibrated"] else null
+	if c is Dictionary:
+		cal = HQ.Calibration.from_dict(c)
+	var combos := [{}]
+	for k in grid:
+		var nxt := []
+		for combo in combos:
+			for v in grid[k]:
+				var d: Dictionary = combo.duplicate()
+				d[k] = v
+				nxt.append(d)
+		combos = nxt
+	var rows := []
+	for combo in combos:
+		var rules: Dictionary = base.duplicate()
+		rules.merge(combo, true)
+		var r := Strategic.run_matrix(opts["n"], rules, cal, [], null, null, opts["workers"])
+		var eq := Strategic.equilibrium(Strategic.matrix(r)[2])
+		var ends := Strategic.endings(r)
+		var worst: float = ends.values().min()
+		var p: Array = eq[0]
+		var q: Array = eq[1]
+		var mix := "%d/%d" % [Py.count(p, func(x): return x > 0.01), Py.count(q, func(x): return x > 0.01)]
+		rows.append([absf(eq[2] - 0.5) + maxf(0.0, 0.08 - worst), combo, eq[2], worst, mix, ends])
+		print("%s  eq %.3f  rarest ending %.3f  mix %s" % [JSON.stringify(combo), eq[2], worst, mix])
+	rows.sort_custom(func(a, b): return a[0] < b[0])
+	print("\nbest:")
+	for row in rows.slice(0, 5):
+		print("  %s  eq %.3f  rarest %.3f  mix %s  %s" % [JSON.stringify(row[1]), row[2], row[3], row[4], JSON.stringify(row[5])])
 
 
 func cmd_report() -> void:

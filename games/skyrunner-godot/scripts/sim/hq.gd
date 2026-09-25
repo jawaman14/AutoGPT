@@ -46,6 +46,15 @@ const RULES := {
 	"comeback_gap": 0.25,
 	"fed_bonus_k": 10.0,
 	"cartel_bonus": 0.30,
+	# the rival cartel (Los Cuervos): a third, AI-run outfit fighting you for turf
+	"rivals": true,
+	"rival_market": 0.4,  # payout lost in a zone at full rival control
+	"rival_hijack_base": 0.2,  # hijack chance when you meet them on the same route
+	"rival_hijack_k": 0.3,  # ... plus this much at full rival strength
+	"hit_cost": 5000,
+	"truce_share": 0.15,  # of your takings, per night of truce
+	"truce_nights": 3,
+	"gang_unit_k": 4.0,  # $k: the chief's squad for the cartel war
 }
 
 const ZONES := ["west", "north", "sea"]
@@ -79,10 +88,10 @@ const LAW_COSTS_K := {  # $k per night unless noted
 const INFORMANT_CAP := 2  ## was 3: stacked tip+intercept+evidence made it the dominant lever (docs/BALANCE.md)
 
 const RUNNER_ACTIONS := ["launder", "buy_front", "bribe", "drop_bribe", "loyalty", "lawyer", "opsec",
-	"counterintel", "crews", "decoys", "route", "lie_low", "upgrade", "gear", "ready"]
+	"counterintel", "crews", "decoys", "route", "lie_low", "upgrade", "gear", "hit_rival", "truce", "tip_off", "ready"]
 const GEAR_PRICES := {"scanner": 1800, "detector": 2500}
 const LAW_ACTIONS := ["fund", "patrol", "aerostat", "recruit", "wiretap", "audit", "ia_sweep",
-	"encryption", "press", "ready"]
+	"encryption", "press", "gang_unit", "ready"]
 const FREE_ACTIONS := ["launder", "route", "ready", "drop_bribe"]  ## don't cost an action point
 
 
@@ -128,6 +137,32 @@ class Org:
 			"laundered_tonight": laundered_tonight, "actions": actions, "ready": ready}
 
 
+## The rival cartel. Runs its own loads each night (rolled by the resolver, or
+## flown as AI traffic in the live game), grows or loses turf and strength, and
+## hijacks your loads when you meet it on the same route without a truce.
+class Rival:
+	var name := "Los Cuervos"
+	var strength := 50.0  ## 0..100
+	var cash := 20000
+	var turf := {"west": 0.35, "north": 0.25, "sea": 0.55}  ## rival share of each zone's market
+	var truce_nights := 0
+	var grudge := 0  ## nights of retaliation left (they know who sold them out, or who shot at them)
+	var busts := 0
+	# tonight
+	var zone = null
+	var runs := 0
+	var tipped := false  ## you sold their route to the police
+	var hit := false
+
+	func band() -> String:
+		return ["broken", "weak", "steady", "strong", "dominant"][mini(4, int(strength / 20.5))]
+
+	func to_dict() -> Dictionary:
+		return {"name": name, "strength": Py.round_n(strength, 1), "cash": cash, "turf": turf.duplicate(),
+			"truce_nights": truce_nights, "grudge": grudge, "busts": busts, "zone": zone, "runs": runs,
+			"tipped": tipped, "hit": hit}
+
+
 class TaskForce:
 	var bank_k := 0.0
 	var support := 50.0
@@ -144,11 +179,12 @@ class TaskForce:
 	var audit := false
 	var ia_sweep := false
 	var press := false
+	var gang_unit := false
 	var actions := 0
 	var ready := false
 
 	func to_dict() -> Dictionary:
-		return {"bank_k": bank_k, "support": support, "evidence": evidence, "informants": informants,
+		return {"gang_unit": gang_unit, "bank_k": bank_k, "support": support, "evidence": evidence, "informants": informants,
 			"encryption": encryption, "fed_arrived": fed_arrived, "budget_k": budget_k, "funded": funded.duplicate(),
 			"aerostat": aerostat, "patrol": patrol, "wiretap": wiretap, "audit": audit, "ia_sweep": ia_sweep,
 			"press": press, "actions": actions, "ready": ready}
@@ -166,6 +202,7 @@ class RunResult:
 	var delivered_value := 0  ## dirty $ to the organisation
 	var seized_value := 0  ## street value taken by the police
 	var clean_stop := false  ## police forced down a clean aircraft (decoy)
+	var hijacked := false  ## the rival cartel took the load
 
 	func _init(kind_: String, zone_: String, opts := {}) -> void:
 		kind = kind_
@@ -202,6 +239,8 @@ class Season:
 	var cartel_bonus := false
 	var plan := {}
 	var plan_hist: Array = []
+	var rival: Rival = null  ## null when rules.rivals is off (and for Python-parity runs)
+	var rrng: PyRandom  ## the rivals' own random stream: switching them off leaves every other roll unchanged
 	var disabled := {}  ## ablations: orders that just answer "disabled" (Python monkeypatches them)
 
 	func _init(rng_: PyRandom = null, rules_ := {}) -> void:
@@ -214,6 +253,10 @@ class Season:
 		org = Org.new()
 		org.dirty = int(rules["start_dirty"])
 		law = TaskForce.new()
+		if Py.truthy(rules.get("rivals", false)):
+			rival = Rival.new()
+			rrng = PyRandom.new()
+			rrng.seed(int(rng.random() * 2147483647.0))
 		_begin_planning()
 
 	# ============================================================ planning
@@ -236,7 +279,13 @@ class Season:
 		L.audit = false
 		L.ia_sweep = false
 		L.press = false
+		L.gang_unit = false
 		L.patrol = null
+		if rival != null:
+			rival.tipped = false
+			rival.hit = false
+			rival.zone = null
+			rival.runs = 0
 		L.actions = int(R["actions_per_night"])
 		L.ready = false
 		L.budget_k = (R["support_base_k"] + R["support_k"] * L.support / 100.0 + R["heat_k"] * o.heat
@@ -414,6 +463,59 @@ class Season:
 		org.ready = true
 		return null
 
+	# ---- the cartel war (rules.rivals)
+	## Send the muscle: they lose strength and turf on your route, you get heat and
+	## the task force gets a violence file. Halves tonight's hijack risk; ends any truce.
+	func _r_hit_rival(a: Dictionary):
+		var o := org
+		if rival == null:
+			return "No rival outfit on the island."
+		var cost := int(rules["hit_cost"])
+		if o.dirty < cost:
+			return "Not enough cash."
+		o.dirty -= cost
+		rival.strength = maxf(0.0, rival.strength - 20.0)
+		rival.turf[o.route] = maxf(0.05, rival.turf[o.route] - 0.15)
+		rival.truce_nights = 0
+		rival.grudge = maxi(rival.grudge, 2)
+		rival.hit = true
+		o.heat += 12
+		law.evidence += 3.0
+		runner_log.append("Your people hit a Cuervos stash in the %s." % o.route)
+		return null
+
+	## Offer a truce: three nights of peace for a share of your takings. The
+	## stronger they are, the less they need it.
+	func _r_truce(a: Dictionary):
+		if rival == null:
+			return "No rival outfit on the island."
+		if rival.truce_nights > 0:
+			return "The truce already holds."
+		if rival.grudge > 0:
+			return "They want blood, not talk."
+		var p := clampf(0.85 - rival.strength / 200.0, 0.2, 0.9)
+		if rrng.random() < p:
+			rival.truce_nights = int(rules["truce_nights"])
+			runner_log.append("Truce with %s: %d nights, %d%% of the takings." % [rival.name, rival.truce_nights, int(rules["truce_share"] * 100)])
+		else:
+			runner_log.append("%s laughed at the offer." % rival.name)
+		return null
+
+	## Sell their route to the task force: their run tonight is as good as flagged,
+	## and a friend in the task force loses some of your paperwork. If they get
+	## busted they may work out who talked.
+	func _r_tip_off(a: Dictionary):
+		if rival == null:
+			return "No rival outfit on the island."
+		if rival.truce_nights > 0:
+			rival.truce_nights = 0
+			rival.grudge = maxi(rival.grudge, 2)
+			runner_log.append("You broke the truce.")
+		rival.tipped = true
+		law.support += 2.0
+		law.evidence = maxf(0.0, law.evidence - 4.0)
+		return null
+
 	# ---- task force orders
 	func _spend(k: float):
 		if law.budget_k + 1e-9 < k:
@@ -503,6 +605,19 @@ class Season:
 		law.press = true
 		return null
 
+	## A squad for the cartel war: the rivals' runs are far likelier to be caught
+	## tonight (and each rival bust is good press), at the cost of focus on the organisation.
+	func _l_gang_unit(a: Dictionary):
+		if rival == null:
+			return "No cartel war to fight."
+		if law.gang_unit:
+			return "The gang unit is already out."
+		var err = _spend(rules["gang_unit_k"])
+		if err:
+			return err
+		law.gang_unit = true
+		return null
+
 	func _l_ready(a: Dictionary):
 		law.ready = true
 		return null
@@ -534,8 +649,49 @@ class Season:
 			"leak_aerostat": L.aerostat if leak_patrol else false,
 			"no_customs": o.bribes.has("tower"),
 		}
+		if rival != null:
+			_plan_rival()
 		plan_hist.append(plan)
 		return plan
+
+	## Where Los Cuervos fly tonight, and how dangerous meeting them would be.
+	func _plan_rival() -> void:
+		var o := org
+		var rv := rival
+		var weights := []
+		for z in ZONES:
+			var w: float = (0.25 + rv.turf[z]) * ZONE_PAY[z]
+			if law.patrol == z and rrng.random() < 0.5:  # their own sources
+				w *= 0.3
+			if rv.truce_nights > 0 and z == o.route:
+				w *= 0.05
+			weights.append(w)
+		var total := 0.0
+		for w in weights:
+			total += w
+		var pick := rrng.random() * total
+		var zone: String = ZONES[ZONES.size() - 1]
+		for i in ZONES.size():
+			pick -= weights[i]
+			if pick < 0:
+				zone = ZONES[i]
+				break
+		rv.zone = zone
+		rv.runs = 0 if rv.strength < 10 else (2 if rv.strength > 70 else 1)
+		var hijack := 0.0
+		if rv.truce_nights == 0 and rv.runs > 0 and not o.lie_low:
+			if zone == o.route:
+				hijack = rules["rival_hijack_base"] + rules["rival_hijack_k"] * rv.strength / 100.0 + (0.15 if rv.grudge > 0 else 0.0)
+			elif rv.grudge > 0:
+				hijack = 0.1  # they come looking for you
+			if rv.hit:
+				hijack *= 0.5
+		plan["rival_zone"] = zone
+		plan["rival_runs"] = rv.runs
+		plan["rival_tipped"] = rv.tipped
+		plan["gang_unit"] = law.gang_unit
+		plan["truce"] = rv.truce_nights > 0
+		plan["hijack_p"] = hijack
 
 	func informant_tip() -> bool:
 		var L := law
@@ -553,11 +709,27 @@ class Season:
 		var L := law
 		var R := rules
 		var rep := NightReport.new(night, runs)
+		var takings := 0
 		# --- the organisation's takings
 		for r in runs:
+			if r.kind == "rival":
+				_rival_run(r, rep)
+				continue
+			if r.hijacked:
+				o.heat += 6
+				rep.lines.append("Shots fired at a remote strip: a load changes hands.")
+				rep.runner_lines.append("%s hijacked tonight's load in the %s." % [rival.name, r.zone])
+			if r.delivered_value and rival != null:
+				# Cuervos undercut you where they own the market; you take turf by delivering
+				var lost := int(r.delivered_value * R["rival_market"] * rival.turf[r.zone] * (R["crew_share"] if r.kind == "crew" else 1.0))
+				o.dirty -= lost
+				takings -= lost
+				rival.turf[r.zone] = maxf(0.05, rival.turf[r.zone] - 0.06)
 			if r.delivered_value and not (live and r.kind == "main"):
 				var share: float = R["crew_share"] if r.kind == "crew" else 1.0
 				o.dirty += int(r.delivered_value * share * (1 + (R["cartel_bonus"] if cartel_bonus else 0.0)))
+			if r.delivered_value:
+				takings += int(r.delivered_value * (R["crew_share"] if r.kind == "crew" else 1.0))
 			if r.detected and r.kind != "decoy":
 				o.heat += 4
 			if r.delivered_value:
@@ -629,6 +801,8 @@ class Season:
 		if L.press:
 			L.support += 6
 			rep.lines.append("Task force parades seized cocaine for the cameras.")
+		if rival != null:
+			_rival_drift(takings, rep)
 		# --- drift
 		o.heat = maxf(0.0, o.heat - R["heat_decay"] - (R["lie_low_decay"] if o.lie_low else 0.0))
 		o.loyalty = maxf(0.0, o.loyalty - 0.05)
@@ -642,6 +816,43 @@ class Season:
 		phase = "debrief"
 		_check_end()
 		return rep
+
+	## A rival run's outcome, from the resolver or the live game's AI traffic.
+	func _rival_run(r: RunResult, rep: NightReport) -> void:
+		var rv := rival
+		var L := law
+		if r.busted:
+			rv.busts += 1
+			rv.strength = maxf(0.0, rv.strength - 12.0)
+			rv.turf[r.zone] = maxf(0.05, rv.turf[r.zone] - 0.1)
+			L.support += 5.0 + (3.0 if L.gang_unit else 0.0)
+			L.bank_k += r.seized_value / 1000.0 * rules["seizure_share"]
+			rep.lines.append("Police bust a %s plane in the %s." % [rv.name, r.zone])
+			if rv.tipped and rrng.random() < 0.3:
+				rv.grudge = 3
+				rep.runner_lines.append("%s know who sold them out." % rv.name)
+		elif r.delivered_value:
+			rv.strength = minf(100.0, rv.strength + 5.0)
+			rv.turf[r.zone] = minf(0.9, rv.turf[r.zone] + 0.08)
+			rv.cash += r.delivered_value
+		if r.boat_seized:
+			L.support += 2.0
+			rv.strength = maxf(0.0, rv.strength - 5.0)
+
+	func _rival_drift(takings: int, rep: NightReport) -> void:
+		var rv := rival
+		if rv.truce_nights > 0:
+			var share := int(maxi(0, takings) * rules["truce_share"])
+			org.dirty -= share
+			rv.cash += share
+			if share:
+				rep.runner_lines.append("Truce payment to %s: $%s." % [rv.name, Py.money(share)])
+			rv.truce_nights -= 1
+		rv.grudge = maxi(0, rv.grudge - 1)
+		rv.strength += (50.0 - rv.strength) * 0.05  # new pilots, new buyers: they regroup
+		rv.strength = clampf(rv.strength, 0.0, 100.0)
+		if rv.strength < 5.0:
+			rep.lines.append("%s are finished on the island - for now." % rv.name)
 
 	func snapshot_numbers() -> Dictionary:
 		var o := org
@@ -714,12 +925,21 @@ class Season:
 			base.merge({"org": od, "capacity": o.capacity(), "retire_target": int(rules["retire_target"]),
 				"evidence": Py.round_n(rumor, 1) if rumor != null else null, "evidence_rumor": band,
 				"patrol_leak": L.patrol if o.bribes.has("dispatcher") else null, "log": lg})
+			if rival != null:
+				var rv := rival
+				var tf := {}
+				for z in ZONES:
+					tf[z] = Py.round_n(rv.turf[z], 2)
+				base["rival"] = {"name": rv.name, "band": rv.band(), "turf": tf, "truce_nights": rv.truce_nights,
+					"grudge": rv.grudge > 0, "zone": rv.zone if phase != "planning" else null}
 		else:
 			var est = o.clean * rng.uniform(0.7, 1.3) if L.audit or L.wiretap else null
 			var lg: Array = law_log.slice(-8) + (reports.back().law_lines if not reports.is_empty() else [])
 			base.merge({"law": L.to_dict(), "indict_evidence": rules["indict_evidence"],
 				"clean_estimate": int(est) if est else null, "known_fronts": o.fronts.size(),
 				"wiretap_ok": L.evidence >= 20, "log": lg})
+			if rival != null:
+				base["rival"] = {"name": rival.name, "band": rival.band(), "busts": rival.busts}
 		return base
 
 
@@ -762,7 +982,8 @@ static func resolve_abstract(season: Season, plan: Dictionary, rng: PyRandom, ca
 		kinds.append("crew")
 	for i in plan["decoys"]:
 		kinds.append("decoy")
-	var n_tracks := kinds.size()
+	var rival_runs: int = plan.get("rival_runs", 0)
+	var n_tracks := kinds.size() + rival_runs  # the cartel's flights split the police too
 	var units: Dictionary = plan["funded"]
 	var main_zone: String = plan["route"]
 	if plan.get("leak_patrol") != null or plan.get("leak_aerostat"):
@@ -796,6 +1017,8 @@ static func resolve_abstract(season: Season, plan: Dictionary, rng: PyRandom, ca
 				haz *= 0.75
 			if o.gear.has("detector"):
 				haz *= 0.85
+			if plan.get("gang_unit", false):
+				haz *= 0.85  # half the squad is chasing Cuervos tonight
 			r.intercepted = rng.random() < 1 - exp(-haz)
 			if r.intercepted:
 				var speed_edge := 0.12 * o.tier if kind == "main" else 0.0
@@ -818,4 +1041,41 @@ static func resolve_abstract(season: Season, plan: Dictionary, rng: PyRandom, ca
 			if not r.boat_seized:
 				r.delivered_value = value
 		runs.append(r)
+	if season.rival != null and plan.has("rival_zone"):  # hand-built plans (tests) have no cartel
+		_resolve_rivals(season, plan, runs, cal)
 	return runs
+
+
+## Rival runs and hijacks, on the rivals' own random stream.
+static func _resolve_rivals(season: Season, plan: Dictionary, runs: Array, cal: Calibration) -> void:
+	var rr := season.rrng
+	var R := season.rules
+	for r in runs:
+		if r.kind == "main" and r.delivered_value and rr.random() < plan.get("hijack_p", 0.0):
+			r.hijacked = true
+			r.delivered_value = 0
+	var units: Dictionary = plan["funded"]
+	var zone: String = plan["rival_zone"]
+	for i in plan.get("rival_runs", 0):
+		var r := RunResult.new("rival", zone)
+		var p_det: float = cal.detect[zone] + (cal.aerostat_detect[zone] if plan["aerostat"] else 0.0)
+		if plan.get("rival_tipped", false):
+			p_det += 0.5
+		r.detected = rr.random() < minf(0.97, p_det)
+		if r.detected:
+			var match_: float = 1.6 if (plan["patrol"] == zone or plan.get("rival_tipped", false)) else 0.8
+			var weighted: float = units["heli"] * cal.intercept_per_unit["heli"] + units["interceptor"] * cal.intercept_per_unit["interceptor"]
+			var haz: float = cal.intercept_k * PyMath.log1p(weighted) * match_ * (1.6 if plan.get("gang_unit", false) else 1.0)
+			r.intercepted = rr.random() < 1 - exp(-haz)
+			r.busted = r.intercepted and rr.random() < cal.bust_given_intercept
+		var value := int(R["run_payout"] * ZONE_PAY[zone])
+		if r.busted:
+			r.seized_value = value * 3
+		elif rr.random() < cal.crash[zone]:
+			r.crashed = true
+		elif zone == "sea" and plan["cutters"] and rr.random() < minf(0.9, cal.cutter_seize * plan["cutters"] * 0.7):
+			r.boat_seized = true
+			r.seized_value = value * 3
+		else:
+			r.delivered_value = value
+		runs.append(r)

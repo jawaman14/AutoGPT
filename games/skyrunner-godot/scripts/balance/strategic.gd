@@ -18,7 +18,8 @@ extends RefCounted
 ## Same seeds, same numbers as the Python simulator: the season rules, the bot
 ## policies and both random streams are bit-exact ports.
 
-const ABLATIONS := ["bribe", "wiretap", "decoys", "crews", "audit", "recruit", "lawyer", "opsec", "comeback"]
+const ABLATIONS := ["bribe", "wiretap", "decoys", "crews", "audit", "recruit", "lawyer", "opsec", "comeback",
+	"hit_rival", "truce", "tip_off", "gang_unit"]
 
 
 static func play_season(runner: String, law: String, seed: int, rules = null, cal: HQ.Calibration = null,
@@ -41,13 +42,19 @@ static func play_season(runner: String, law: String, seed: int, rules = null, ca
 		if ss.night == Py.idiv(int(ss.rules["nights"]), 2):
 			halftime = ss.runner_progress() - ss.law_progress()
 		ss.next_night()
-	return {
+	var out := {
 		"runner": runner, "law": law, "seed": seed, "winner": ss.winner, "reason": ss.reason,
 		"nights": ss.night, "halftime": halftime,
 		"margin": ss.runner_progress() - ss.law_progress(),
 		"runner_used": rmem.get("used", []), "law_used": lmem.get("used", []),
 		"history": ss.history,
 	}
+	if ss.rival != null:
+		var hij := 0
+		for rep in ss.reports:
+			hij += Py.count(rep.runs, func(r): return r.hijacked)
+		out["rival"] = {"strength": Py.round_n(ss.rival.strength, 1), "busts": ss.rival.busts, "hijacks": hij}
+	return out
 
 
 static func _disable(ss: HQ.Season, name: String) -> void:
@@ -227,6 +234,30 @@ static func summary(results: Array) -> Dictionary:
 		"comeback_rate": float(comebacks.size()) / maxi(1, with_half.size()),
 		"close_finish": float(close) / maxi(1, n),
 	}
+
+
+## Cartel numbers over many seasons: how often it matters.
+static func rival_summary(results: Array) -> Dictionary:
+	var rs := results.filter(func(r): return r.has("rival"))
+	if rs.is_empty():
+		return {}
+	var n := float(rs.size())
+	return {
+		"seasons": rs.size(),
+		"hijack_seasons": Py.count(rs, func(r): return r.rival.hijacks > 0) / n,
+		"hijacks_per_season": Py.sum_by(rs, func(r): return r.rival.hijacks) / n,
+		"rival_busts_per_season": Py.sum_by(rs, func(r): return r.rival.busts) / n,
+		"end_strength": Py.sum_by(rs, func(r): return r.rival.strength) / n,
+	}
+
+
+## The five ways a season ends, as shares (the target is >= 8% each).
+static func endings(results: Array) -> Dictionary:
+	var keys := ["retired rich", "walked free", "convicted at trial", "boss indicted", "organisation broke"]
+	var out := {}
+	for k in keys:
+		out[k] = Py.count(results, func(r): return str(r.reason).ends_with(k)) / float(maxi(1, results.size()))
+	return out
 
 
 ## Win rate of the random bot's side when it used an action at least once vs never:

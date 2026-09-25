@@ -1165,6 +1165,7 @@ func _police_outcome(what: String) -> void:
 			loadout.remove_job(j.id)
 		fm.apply_loadout(loadout)
 		say("Rivals forced you to jettison the goods!")
+		bus.emit("hijacked", time, "", ["runner"], {"jobs": lost.map(func(j): return j.id)})
 
 
 func _maritime_event(kind: String, data: Dictionary) -> void:
