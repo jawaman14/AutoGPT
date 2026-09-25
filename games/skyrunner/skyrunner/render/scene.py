@@ -80,7 +80,11 @@ def build_world_scene(base, world, quality: Quality) -> WorldScene:
 def graphics_prc(quality: Quality, offscreen: bool, title: str = "Skyrunner") -> str:
     """Panda3D config lines for this preset."""
     if offscreen:
-        return "window-type offscreen\naudio-library-name null\nwin-size 1280 720"
+        # A bot-testing box has no GPU and no X server: try hardware (EGL headless, GLX)
+        # first, but fall back to the software rasteriser so --watch and the balance
+        # sims still render instead of raising "Could not open window".
+        return ("window-type offscreen\naudio-library-name null\nwin-size 1280 720\n"
+                "aux-display pandagl\naux-display p3tinydisplay")
     lines = ["win-size 1280 720", f"window-title {title}", "sync-video 1"]
     if quality.msaa:
         lines += ["framebuffer-multisample 1", f"multisamples {quality.msaa}"]
