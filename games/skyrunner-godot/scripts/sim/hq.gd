@@ -16,7 +16,7 @@ extends RefCounted
 # Every number the balance simulator is allowed to move lives here.
 const RULES := {
 	"nights": 10,
-	"retire_target": 45000,  # clean $ to win
+	"retire_target": 38000,  # clean $ to win (45000 before the cartel; docs/BALANCE.md)
 	"indict_evidence": 100.0,
 	"start_dirty": 16000,
 	"start_budget_k": 15.0,
@@ -48,7 +48,7 @@ const RULES := {
 	"cartel_bonus": 0.30,
 	# the rival cartel (Los Cuervos): a third, AI-run outfit fighting you for turf
 	"rivals": true,
-	"rival_market": 0.4,  # payout lost in a zone at full rival control
+	"rival_market": 0.3,  # payout lost in a zone at full rival control
 	"rival_hijack_base": 0.2,  # hijack chance when you meet them on the same route
 	"rival_hijack_k": 0.3,  # ... plus this much at full rival strength
 	"hit_cost": 5000,
@@ -56,6 +56,9 @@ const RULES := {
 	"truce_nights": 3,
 	"gang_unit_k": 4.0,  # $k: the chief's squad for the cartel war
 }
+
+## The Python game's rules (no cartel, the old retire target): parity tests run with these.
+const PYTHON_RULES := {"rivals": false, "retire_target": 45000}
 
 const ZONES := ["west", "north", "sea"]
 const ZONE_CENTRE := {"west": [-9000.0, 3000.0], "north": [2000.0, 8000.0], "sea": [13000.0, -11000.0]}

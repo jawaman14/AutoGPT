@@ -39,6 +39,12 @@ const CHANGELOG := [
 	["Recruiting a second informant was still nearly free",
 		"Known limits flagged the fix above as partial: recruit's ablation stayed the single biggest number (+20.2) because the cost and odds only depended on the informant cap, not on how many were already in place. Stacking to the cap (2) cost the same $5k twice and succeeded at the same rate twice, so a chief who could afford it just always went to 2 early and never felt a choice.",
 		"Recruiting cost now scales with the count already turned ($5k, then $10k for the second), and the success chance is multiplied by 0.6 per existing informant, so the second head is a real, worse bet rather than a free top-up. Equilibrium barely moved (0.450 -> 0.451 at 40000 seasons) because most of recruit's value is 'have one at all' versus 'have none', which this doesn't touch - that first informant is doing the work the task force's whole case-building game is built on. The remaining ablation size is now read as by-design (evidence is the task force's only win path) rather than a bug, per the note above."],
+	["The balance rested on 9-flight calibration cells",
+		"Porting to Godot, the season simulator reproduced Python's numbers exactly, yet the Godot build's own tactical sweep (same seeds) produced an equilibrium of 69% instead of 45%. 130 of 189 flights were identical; the rest diverged because the pip JSBSim and a source-built JSBSim differ by a few ulps in longitude, and a flight near a bot decision threshold amplifies that. Totals matched (109 vs 109 flagged), but the calibration fits each zone from 9 flights, so a handful of flipped outcomes moved intercept_k from 2.0 to 1.3 and the season result by 24 points.",
+		"The tactical sweep now flies 10 seeds per cell (630 flights). intercept_k settles at 1.96, next to Python's 2.03; west-route detection is higher than the small sample said (0.47 vs 0.22). Lesson: a calibration built on a single-digit sample is a coin toss, however exact the simulator downstream."],
+	["A second smuggling outfit: Los Cuervos",
+		"Requested feature: competing smuggler groups. Added a rival cartel run by the AI on its own random stream. It flies loads every night, splits the police, undercuts payouts where it owns the market, and hijacks your load if you share a route without a truce. The boss can hit it, buy a truce or sell its route to the police; the chief can send a gang unit. With the new calibration and the cartel on, the organisation's equilibrium was 39% (44% with the cartel off).",
+		"A 12-point grid over the cartel's market bite, its hijack chance and the retirement target. Retire at $38k (was $45k), market loss 30% at full rival control, hijack chance 20% + 30% x strength when you meet on the same route. Equilibrium 48.8% over 40,000 seasons, every ending between 13% and 27%, comebacks 21%. The cartel hijacks at least one load in a third of seasons, and recruit's ablation swing fell from +20 to +8 points: the cartel gives the task force a second target and the organisation a second enemy."],
 ]
 
 
@@ -221,7 +227,7 @@ static func write_report(results_dir: String, out_path: String) -> String:
 		+ "numbers suggest.",
 		"- The season simulator rolls nights from calibrated probabilities. It captures the economy and "
 		+ "the information war, not flying skill.",
-		"- Sample sizes: tactical cells have 3-9 flights each. Anything under about 15 points of "
+		"- Sample sizes: tactical cells have 10-30 flights each. Anything under about 10 points of "
 		+ "difference is noise.",
 		"- Recruit is nearly worthless to a random bot (+2 pts) but the single biggest ablation at "
 		+ "equilibrium (about +20 pts even after the cost/odds were scaled per informant): most of its "

@@ -85,7 +85,7 @@ func test_hq_seasons_match_for_every_bot_pairing() -> void:
 			check_eq([rname, lname], [want.runner, want.law], "pairing order")
 			var r := PyRandom.new()
 			r.seed(1000 + 10 * ri + li)
-			var ss := HQ.Season.new(r, {"rivals": false})  # Python has no rival cartel
+			var ss := HQ.Season.new(r, HQ.PYTHON_RULES)  # Python has no rival cartel
 			var bot := PyRandom.new()
 			bot.seed(7 + ri * 31 + li)
 			var mem := [{}, {}]

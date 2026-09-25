@@ -44,7 +44,7 @@ func _cal() -> HQ.Calibration:
 func test_seasons_match_python() -> void:
 	for s in ref.seasons:
 		var a: Array = s.args
-		var rules := {"rivals": false}  # Python has no rival cartel
+		var rules := HQ.PYTHON_RULES.duplicate()  # Python has no rival cartel
 		if a[3] is Dictionary:
 			rules.merge(a[3])
 		var got := Strategic.play_season(a[0], a[1], int(a[2]), rules, _cal() if a[4] else null, a[5])
@@ -52,7 +52,7 @@ func test_seasons_match_python() -> void:
 
 
 func test_matrix_equilibrium_and_summary_match_python() -> void:
-	var res := Strategic.run_matrix(3, {"rivals": false}, _cal())
+	var res := Strategic.run_matrix(3, HQ.PYTHON_RULES, _cal())
 	var want: Dictionary = ref.matrix
 	for i in want.results.size():
 		var w: Dictionary = want.results[i]
