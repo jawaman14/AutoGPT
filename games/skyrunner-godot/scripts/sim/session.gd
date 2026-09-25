@@ -123,6 +123,10 @@ var pilot_input := {}  ## police pilots' sticks
 var _scanner_seen := 0.0
 var map_seed := 0  ## the island this session is on (0 = classic)
 var nights = null  ## NightDirector when the Organisation layer is on
+var weather := {}  ## {sky, wind_kt, wind_dir, moon}; empty = calm and clear (the tactical sims fly that)
+var weather_rev := 0
+var _tied := false  ## parked at idle in weather: tied down, the wind can't flip it
+var hand_tremor := Vector2.ZERO  ## set each frame by the pilot's Nerves (the 3D client)  ## bumped on every change, so the renderer knows to follow
 
 
 ## opts: world, seed, money, owned, aircraft_key, location, jsbsim_root, save_path, mode, features, humans, gear
@@ -178,6 +182,9 @@ func _init(opts := {}) -> void:
 		var law_ai = null if (humans.has(Roles.CHIEF) or humans.has(Roles.CONTROLLER)) else "adaptive"
 		nights = NightDirector.new(self, runner_ai, law_ai)
 	_switch_aircraft(aircraft_key, 0.6)
+	if opts.has("weather"):
+		var w = opts["weather"]
+		set_weather(w if w is Dictionary else {"sky": str(w)})
 	spawn_at(location if location != null else START_FIELD)
 	if police.controller == "ai":
 		if features.has("aerostat"):
@@ -321,6 +328,7 @@ func spawn_airborne(x: float, y: float, heading: float, alt_agl: float, speed_kt
 
 
 func _after_spawn() -> void:
+	_apply_wind()
 	mapper.reset()
 	autopilot.disengage()
 	kick_queue = 0
@@ -328,6 +336,34 @@ func _after_spawn() -> void:
 	log = FlightLog.new(fm.touchdowns)
 	state = fm.state()
 	fm.controls.brake = 1.0
+
+
+## Tonight's weather (the HQ season's, or --weather in the sandbox): cloud, rain
+## and a dark moon shorten how far a police crew can see you; wind and
+## turbulence go to JSBSim.
+func set_weather(w: Dictionary) -> void:
+	var sky: String = w.get("sky", "clear")
+	if not HQ.SKIES.has(sky):
+		sky = "clear"
+	var wr: Array = HQ.SKIES[sky][1]
+	weather = {"sky": sky, "wind_kt": int(w.get("wind_kt", (wr[0] + wr[1]) / 2)), "wind_dir": int(w.get("wind_dir", 250)),
+		"moon": float(w.get("moon", 0.5))}
+	police.visibility = HQ.SKIES[sky][2] * (0.75 + 0.35 * weather["moon"])
+	weather_rev += 1
+	_apply_wind()
+
+
+func _apply_wind() -> void:
+	if weather.is_empty() or fm == null:
+		return
+	var fps: float = 0.0 if _tied else weather["wind_kt"] * 1.68781
+	var toward := deg_to_rad(weather["wind_dir"] + 180.0)  # wind is named for where it blows from
+	fm.fdm.set_property("atmosphere/wind-north-fps", cos(toward) * fps)
+	fm.fdm.set_property("atmosphere/wind-east-fps", sin(toward) * fps)
+	fm.fdm.set_property("atmosphere/turb-type", 0 if _tied else 4)  # MIL-F-8785C (Dryden)
+	fm.fdm.set_property("atmosphere/turbulence/milspec/severity", {"clear": 1, "cloud": 2, "storm": 3}[weather["sky"]])
+	if fm.has("atmosphere/turbulence/milspec/windspeed_at_20ft_fps"):
+		fm.fdm.set_property("atmosphere/turbulence/milspec/windspeed_at_20ft_fps", fps)
 
 
 func refresh_board(code: String) -> void:
@@ -1042,6 +1078,11 @@ func _update_runner(dt: float, inp: ControlMapper.InputFrame, bot_controls: Flig
 		controls = bot_controls
 	elif state != null and autopilot.engaged:
 		controls = autopilot.update(dt, state, controls)
+	elif hand_tremor != Vector2.ZERO:
+		# a frightened pilot's hands (Nerves): only on human hands, never the bot or the autopilot
+		controls = controls.copy()
+		controls.aileron = clampf(controls.aileron + hand_tremor.x, -1.0, 1.0)
+		controls.elevator = clampf(controls.elevator + hand_tremor.y, -1.0, 1.0)
 	if parked and not _any_held(inp, ["throttle_up", "brake"]) and controls.throttle < 0.05:
 		controls.brake = 1.0  # parking brake while in menus
 	if phase == "parked" and loadout.busy() and controls.throttle > 0.05:
@@ -1050,6 +1091,11 @@ func _update_runner(dt: float, inp: ControlMapper.InputFrame, bot_controls: Flig
 		if messages.is_empty() or time - messages.back()[0] > 4:
 			var what := "Still loading" if not loadout.pending.is_empty() else "Cargo still on the ramp! Load it [L] or drop the job [J]"
 			say(what + ".")
+	if not weather.is_empty():
+		var tie: bool = phase == "parked" and controls.throttle < 0.05
+		if tie != _tied:
+			_tied = tie
+			_apply_wind()
 	fm.controls = controls
 	var s := fm.step(dt, world.ground)
 	state = s

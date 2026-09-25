@@ -8,6 +8,9 @@ uniform sampler2D noise_pack : filter_linear_mipmap, repeat_enable;
 uniform float coverage = 0.45;
 uniform float wind = 1.0;
 uniform vec3 moon_dir = vec3(-0.4, 0.5, 0.75);
+uniform float overcast = 0.0;  // 0 clear .. 1 storm deck
+uniform float moon_illum = 0.5;  // 0 new .. 1 full
+uniform float flash = 0.0;  // lightning
 
 float stars(vec3 d) {
 	vec3 p = floor(d * 400.0);
@@ -36,8 +39,14 @@ void sky() {
 	// night: stars and the moon
 	float night = 1.0 - day;
 	col += vec3(stars(d)) * night * smoothstep(0.02, 0.2, d.y);
-	float md = dot(d, normalize(moon_dir));
-	col += vec3(0.9, 0.92, 1.0) * smoothstep(0.9993, 0.9996, md) * night;
+	vec3 mdir = normalize(moon_dir);
+	float md = dot(d, mdir);
+	// the phase: the lit disc minus a second disc slid sideways by (1 - illumination)
+	vec3 side = normalize(cross(mdir, vec3(0.0, 1.0, 0.0)));
+	float shadow = smoothstep(0.9993, 0.9996, dot(d, normalize(mdir + side * 0.03 * (1.0 - moon_illum) * 2.0)));
+	float disc = smoothstep(0.9993, 0.9996, md) * (1.0 - shadow * step(moon_illum, 0.97));
+	col += vec3(0.9, 0.92, 1.0) * disc * night * (0.25 + 0.75 * moon_illum);
+	col += vec3(0.5, 0.55, 0.7) * pow(max(md, 0.0), 60.0) * 0.12 * moon_illum * night;  // moon glow
 	// clouds on a flattened dome
 	if (d.y > 0.01) {
 		vec2 uv = d.xz / (d.y + 0.12);
@@ -45,10 +54,14 @@ void sky() {
 		float c1 = texture(noise_pack, uv * 0.08 + vec2(t, t * 0.4)).b;
 		float c2 = texture(noise_pack, uv * 0.25 - vec2(t * 1.7, t)).r;
 		float dens = smoothstep(1.0 - coverage, 1.0 - coverage + 0.35, c1 * 0.75 + c2 * 0.35);
-		vec3 lit = mix(vec3(0.25, 0.27, 0.32), vec3(1.0), day);
+		vec3 lit = mix(vec3(0.25, 0.27, 0.32), vec3(1.0), day) * (1.0 - 0.6 * overcast);
 		lit = mix(lit, vec3(1.0, 0.62, 0.42), dusk * 0.7);
 		float shade = 0.72 + 0.28 * smoothstep(0.3, 0.9, c2);
 		col = mix(col, lit * shade, dens * smoothstep(0.01, 0.12, d.y) * 0.9);
 	}
+	// under a storm deck the whole sky goes slate grey
+	vec3 slate = mix(vec3(0.02, 0.025, 0.03), vec3(0.34, 0.37, 0.4), day);
+	col = mix(col, slate, overcast * 0.75);
+	col += vec3(0.75, 0.8, 1.0) * flash;
 	COLOR = col;
 }

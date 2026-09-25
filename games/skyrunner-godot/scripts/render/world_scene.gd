@@ -25,6 +25,8 @@ var field_lights: Array = []  ## emissive runway light meshes
 var hour := 14.0
 var time_scale := 0.0
 var night := 0.0  ## 0 day .. 1 full night, for other nodes (aircraft lights)
+var fx: WeatherFX  ## rain, lightning, cloud deck, moon phase (Session.weather)
+var ambient_base := 0.7  ## ambient energy before lightning
 
 
 func setup(world_: World, q: Quality) -> WorldScene:
@@ -43,6 +45,8 @@ func setup(world_: World, q: Quality) -> WorldScene:
 		add_child(Buildings.airfield_site(world, af))
 	for k in world.map.hqs:
 		add_child(Buildings.hq(world, world.map.hqs[k]))
+	fx = WeatherFX.new().setup(self)
+	add_child(fx)
 	var aer := Models.build_aerostat()
 	aer.name = "aerostat"
 	aer.position = MeshBuilder.to_godot([SensorNet.AEROSTAT_POS[0], SensorNet.AEROSTAT_POS[1], 2500.0])
@@ -134,14 +138,19 @@ func set_hour(h: float) -> void:
 	var day := smoothstep(-10.0, 8.0, el)  # through civil twilight to full day
 	var dusk := clampf(1.0 - absf(el - 2.0) / 9.0, 0.0, 1.0)
 	night = 1.0 - day
-	sun.light_energy = 1.0 * day
+	var ls := fx.light_scale() if fx != null else 1.0
+	var moon_k := (0.15 + 0.85 * fx.moon_illum) if fx != null else 1.0
+	sun.light_energy = 1.0 * day * ls
 	sun.visible = day > 0.01
 	sun.light_color = Color(1.0, 0.96, 0.88).lerp(Color(1.0, 0.6, 0.35), dusk)
-	moon.light_energy = 0.3 * night
+	moon.light_energy = 0.3 * night * moon_k * ls
 	var sky_col := NIGHT_SKY.lerp(DAY_SKY, day).lerp(DUSK_SKY, dusk * 0.45)
+	if fx != null:
+		sky_col = sky_col.lerp(Color(0.3, 0.33, 0.36) * (0.15 + 0.85 * day), fx.overcast * 0.7)
 	env.fog_light_color = sky_col
 	if sky_shader != null:
-		env.ambient_light_energy = lerpf(0.4, 0.7, day)
+		ambient_base = lerpf(0.4, 0.7, day) * (1.0 - 0.3 * (fx.overcast if fx != null else 0.0))
+		env.ambient_light_energy = ambient_base
 		env.ambient_light_color = Color(0.1, 0.11, 0.16).lerp(BOUNCE, day)
 	else:
 		env.background_color = sky_col
@@ -152,6 +161,12 @@ func set_hour(h: float) -> void:
 	if water != null:
 		water.set_sky(sky_col)
 	Buildings.set_night(night)
+
+
+## Tonight's weather (Session.weather).
+func set_weather(w: Dictionary) -> void:
+	if fx != null and not w.is_empty():
+		fx.apply(w)
 
 
 func _process(dt: float) -> void:

@@ -223,6 +223,7 @@ class Case:
 	var tipped := false
 	var drop_alerted := false
 	var odd_destination := {}  ## strips a squawking "legit" flight let down into
+	var staked = null  ## airfield code a spare unit is staking out for this track
 	var last_contact = null  ## [x, y, agl, vx, vy, squawking] at the last radar contact
 
 	func _init(tid: String, opts := {}) -> void:
@@ -260,6 +261,7 @@ var tips: Array = []
 var events: Array = []  ## runner-facing messages
 var law_events: Array = []  ## controller-facing messages
 var score := {"busts": 0, "clean_stops": 0, "bales_seized": 0, "boats_seized": 0}
+var visibility := 1.0  ## weather and moon: scales how far crews see (Session.set_weather)
 var no_customs := false  ## the tower chief is on the organisation's payroll tonight
 var sensors: SensorNet
 var detections := {}
@@ -509,6 +511,14 @@ func _ai_escalate(c: Case, level: int, sig: SensorNet.Signature) -> void:
 				idle.goal = null
 			elif not (k == "interceptor" and not features.has("interceptors")):
 				launch(k, null, c.target_id, null, [sig.x, sig.y])
+		# spare helicopters don't chase: they stake out where the track is going
+		# (predictive dispatch; a real task force covers the likely strip)
+		if level >= 2 and c.staked == null and stock.get("heli", 0) > 0:
+			var af = predict_destination(sig)
+			if af != null:
+				c.staked = af.code
+				launch("heli", null, null, [af.x, af.y])
+				law_events.append("Stake-out: spare helicopter to %s" % af.code)
 	elif level < c.wanted:
 		events.append("Wanted level down" if level else "You lost them. Heat is off.")
 		if level == 0:
@@ -517,6 +527,30 @@ func _ai_escalate(c: Case, level: int, sig: SensorNet.Signature) -> void:
 					u.state = "return"
 					u.target_id = null
 	c.wanted = level
+
+
+## The strip a track is most likely heading for: bush and shady strips within
+## 45 degrees of its course, nearest first (null when it's heading nowhere useful).
+func predict_destination(sig: SensorNet.Signature):
+	var sp := sqrt(sig.vx * sig.vx + sig.vy * sig.vy)
+	if sp < 10.0:
+		return null
+	var best = null
+	var best_d := 1e12
+	for af in World.AIRFIELDS:
+		if not (af.kind in ["bush", "shady"]):
+			continue
+		var dx: float = af.x - sig.x
+		var dy: float = af.y - sig.y
+		var d := sqrt(dx * dx + dy * dy)
+		if d < 1500.0 or d > 30000.0:
+			continue
+		if (dx * sig.vx + dy * sig.vy) / (d * sp) < cos(deg_to_rad(45.0)):
+			continue
+		if d < best_d:
+			best_d = d
+			best = af
+	return best
 
 
 # ---------------------------------------------------- main tick
@@ -695,7 +729,7 @@ func _close_case(tid: String, hot: bool) -> void:
 func _can_see(u: Pursuer, sig: SensorNet.Signature) -> bool:
 	if u.state == "crashed":
 		return false
-	if u.dist_to(sig) > SIGHT_RANGE_M:
+	if u.dist_to(sig) > SIGHT_RANGE_M * visibility:
 		return false
 	return world.line_of_sight([u.x, u.y, u.z], [sig.x, sig.y, sig.z], 100)
 

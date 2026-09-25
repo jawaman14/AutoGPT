@@ -46,6 +46,7 @@ func _init(sess_, runner_ai_ = "adaptive", law_ai_ = "adaptive", rules := {}) ->
 	_bot_rng = PyRandom.new()
 	_bot_rng.seed(sess.seed + 505)
 	sess.money = int(season.org.dirty)  # the organisation's war chest is the crew's cash
+	_show_forecast()
 	sess.bus.subscribe("hijacked", func(_ev):
 		if phase == "operation" and main != null:
 			main.hijacked = true)
@@ -120,8 +121,14 @@ func _begin() -> void:
 	var hot: Array = sess.active_jobs.filter(func(j): return j.hot())
 	var zone := zone_of(hot[0]) if not hot.is_empty() else "west"
 	_pull()
+	var planned := ss.org.route
 	ss.org.route = zone
 	var plan := ss.start_operation()
+	plan["planned_route"] = planned  # the canary trap compares what HQ planned with what was flown
+	if plan.has("weather"):
+		sess.set_weather(plan["weather"])
+		if plan["weather"] != ss.forecast:
+			sess.say("The forecast was wrong: %s, %d kt." % [plan["weather"]["sky"], int(plan["weather"]["wind_kt"])])
 	phase = "operation"
 	ended_at = null
 	main = HQ.RunResult.new("main", zone)
@@ -248,9 +255,19 @@ func _finish() -> void:
 		sess.law_say(text)
 		return
 	ss.next_night()
+	_show_forecast()
 	_push()  # tonight's overheads and standing bribes came off the books
 	_ai_planned = false
 	sess.say("Night %d of %d: HQ is planning." % [ss.night, int(ss.rules["nights"])])
+
+
+## While HQ plans, the sky outside is the forecast.
+func _show_forecast() -> void:
+	if season.forecast.is_empty():
+		return
+	sess.set_weather(season.forecast)
+	var f := season.forecast
+	sess.say("Forecast: %s, wind %03d at %d kt, moon %d%%." % [f["sky"], int(f["wind_dir"]), int(f["wind_kt"]), int(float(f["moon"]) * 100)])
 
 
 # ------------------------------------------------------------ views

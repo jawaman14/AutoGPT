@@ -47,6 +47,8 @@ invisible only below the radar floor - and a squawk that vanishes on radar
 is a red flag. Airdrops: fly low and slow over the boat, K to kick
 (solo: autopilot first). Police within 350 m for a few seconds = busted."""
 
+var nerves: Nerves
+var _weather_rev := -1
 var s: Session
 var quality: Quality
 var bot = null  ## AutoRunner
@@ -89,6 +91,9 @@ func setup(sess: Session, graphics := "high", bot_ = null, server_ = null) -> Pi
 	name = "PilotApp"
 	scene = WorldScene.new().setup(sess.world, quality)
 	add_child(scene)
+	nerves = Nerves.new().setup()
+	nerves.layer = 0  # over the 3D view, under the HUD (layer 1) and menus
+	add_child(nerves)
 	cam = Camera3D.new()
 	cam.near = 0.5
 	cam.far = 60000.0
@@ -449,9 +454,14 @@ func _process(delta: float) -> void:
 			server.pump(s)
 		var inp := _gather_input() if not on_foot else _foot_input()
 		s.update(dt, inp, bot.step(dt) if bot != null and not on_foot else null)
+		nerves.update(s, dt)
 		if server != null:
 			server.publish(s)
+	if _weather_rev != s.weather_rev:
+		_weather_rev = s.weather_rev
+		scene.set_weather(s.weather)
 	_sync_scene(dt)
+	hud.pulse = nerves.bpm if nerves.stress > 0.3 else 0.0
 	hud.cam_mode = cam_mode
 	hud.mouse_yoke = mouse_yoke
 	var m := _active_menu()

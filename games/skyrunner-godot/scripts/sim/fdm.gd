@@ -141,6 +141,9 @@ func apply_loadout(lo: Loadout) -> void:
 
 func spawn(x: float, y: float, heading_deg: float, terrain_m: float, loadout: Loadout,
 		airborne_alt_m = null, speed_kts := 0.0) -> void:
+	# JSBSim's Dryden turbulence segfaults when the initial conditions are re-run;
+	# Session._after_spawn turns the weather back on
+	fdm.set_property("atmosphere/turb-type", 0)
 	var ll := xy_to_latlon(x, y)
 	fdm.set_property("ic/lat-geod-deg", ll[0])
 	fdm.set_property("ic/long-gc-deg", ll[1])

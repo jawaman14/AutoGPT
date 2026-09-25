@@ -4,6 +4,7 @@ extends Control
 ## PAPI, scanner intel, campaign objectives, throttle and bust/rival bars, and
 ## the minimap (port of render/hud.py Hud).
 
+var pulse := 0.0  ## the pilot's heart rate when it's up (Nerves), else 0
 var s: Session
 var flight: Label
 var status: Label
@@ -145,6 +146,11 @@ func refresh() -> void:
 			"   KICKING" if s.kick_queue else ""],
 		"%s%sCAM:%s" % ["BRAKE " if c.brake > 0.5 else "", "YOKE:MOUSE " if mouse_yoke else "", cam_mode],
 	]
+	if not s.weather.is_empty():
+		var w := s.weather
+		lines.append("WX   %s %03d/%dkt moon %d%%" % [str(w.sky).to_upper(), int(w.wind_dir), int(w.wind_kt), int(float(w.moon) * 100)])
+	if pulse > 0.0:
+		lines.append("PULSE %3.0f%s" % [pulse, "  SHAKING" if pulse > 131 else ""])
 	flight.text = "\n".join(lines)
 	throttle_bar.value = c.throttle
 	var wanted: int = s.police.wanted

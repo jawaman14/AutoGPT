@@ -14,6 +14,7 @@ const RUN := 5.5
 const JUMP := 4.2
 const GRAVITY := 9.81
 const EYE := 1.65
+const STEP := 0.55  ## kerbs, terraces, foundation edges: walk up anything this high
 const MOUSE := 0.0025
 
 var cam: Camera3D
@@ -128,6 +129,7 @@ func _physics_process(dt: float) -> void:
 	else:
 		velocity.y -= GRAVITY * dt
 	move_and_slide()
+	_step_up(dir)
 	# no swimming: deep water sends you back to the last dry footing
 	var gz := world.height(global_position.x, -global_position.z)
 	if gz < -1.2 and global_position.y < 0.2:
@@ -140,6 +142,20 @@ func _physics_process(dt: float) -> void:
 		global_position.y = world.ground(global_position.x, -global_position.z) + 0.5
 		velocity = Vector3.ZERO
 	_update_focus()
+
+
+## CharacterBody3D doesn't climb steps: if a low obstacle stops us, try the
+## same move from STEP higher and, if that's clear, take the step.
+func _step_up(dir: Vector3) -> void:
+	if dir == Vector3.ZERO or not is_on_wall() or not is_on_floor():
+		return
+	var up := Vector3(0, STEP, 0)
+	var fwd := dir * 0.35
+	if test_move(global_transform, up):
+		return  # a ceiling
+	if test_move(global_transform.translated(up), fwd):
+		return  # a real wall, not a step
+	global_position += up + fwd
 
 
 func _update_focus() -> void:

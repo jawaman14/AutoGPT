@@ -55,10 +55,28 @@ const RULES := {
 	"truce_share": 0.15,  # of your takings, per night of truce
 	"truce_nights": 3,
 	"gang_unit_k": 4.0,  # $k: the chief's squad for the cartel war
+	# the realism layer (docs/BALANCE.md 14-18): its own random stream, like the cartel's
+	"weather": true,  # nightly sky, wind and moon: cover, crash risk, grounded balloons and helicopters
+	"pattern": true,  # the task force's analysts learn your routine: repeat a route and they expect you
+	"pattern_k": 0.3,  # detection bonus when every recent sighting was on tonight's route
+	"canary": true,  # the chief can feed the dispatch line a false patrol to smoke out a leak
+	"rival_tempers": true,  # Los Cuervos are tit-for-tat, grudgers or opportunists; truces unravel near the end
 }
 
 ## The Python game's rules (no cartel, the old retire target): parity tests run with these.
-const PYTHON_RULES := {"rivals": false, "retire_target": 45000}
+const PYTHON_RULES := {"rivals": false, "retire_target": 45000, "weather": false, "pattern": false,
+	"canary": false, "rival_tempers": false}
+const REALISM := ["weather", "pattern", "canary", "rival_tempers"]
+
+## Sky -> [chance, wind kt range, visibility factor on detection, crash factor]
+const SKIES := {
+	"clear": [0.55, [4, 12], 1.0, 1.0],
+	"cloud": [0.30, [8, 18], 0.85, 1.3],
+	"storm": [0.15, [18, 30], 0.7, 2.5],
+}
+const AEROSTAT_MAX_WIND := 25  ## kt: above this, or with lightning about, the tethered balloon is winched down (TARS practice)
+const MOON_DAYS := 29.53
+const TEMPERS := ["tit_for_tat", "grudger", "opportunist"]
 
 const ZONES := ["west", "north", "sea"]
 static var ZONE_CENTRE := {"west": [-9000.0, 3000.0], "north": [2000.0, 8000.0], "sea": [13000.0, -11000.0]}  ## per map (World.use_layout)
@@ -87,6 +105,7 @@ const LAW_COSTS_K := {  # $k per night unless noted
 	"heli": 4.0, "interceptor": 7.0, "cutter": 4.0, "aerostat": 6.0,
 	"informant": 5.0, "informant_upkeep": 1.0, "wiretap": 7.0, "audit": 3.0,
 	"ia_sweep": 4.0, "encryption": 5.0,  # one-off
+	"canary": 1.5,
 }
 const INFORMANT_CAP := 2  ## was 3: stacked tip+intercept+evidence made it the dominant lever (docs/BALANCE.md)
 
@@ -94,7 +113,7 @@ const RUNNER_ACTIONS := ["launder", "buy_front", "bribe", "drop_bribe", "loyalty
 	"counterintel", "crews", "decoys", "route", "lie_low", "upgrade", "gear", "hit_rival", "truce", "tip_off", "ready"]
 const GEAR_PRICES := {"scanner": 1800, "detector": 2500}
 const LAW_ACTIONS := ["fund", "patrol", "aerostat", "recruit", "wiretap", "audit", "ia_sweep",
-	"encryption", "press", "gang_unit", "ready"]
+	"encryption", "press", "gang_unit", "canary", "ready"]
 const FREE_ACTIONS := ["launder", "route", "ready", "drop_bribe"]  ## don't cost an action point
 
 
@@ -151,7 +170,14 @@ class Rival:
 	var truce_nights := 0
 	var grudge := 0  ## nights of retaliation left (they know who sold them out, or who shot at them)
 	var busts := 0
+	var temper := ""  ## tit_for_tat | grudger | opportunist (hidden; rules.rival_tempers)
+	var wronged := 0  ## times you hit them or sold them out
+	var wronged_night := -99
+	var kept := 0  ## truce nights they honoured
+	var betrayals := 0
+	var revealed := false  ## you've learned what kind of outfit they are
 	# tonight
+	var betrayed := false
 	var zone = null
 	var runs := 0
 	var tipped := false  ## you sold their route to the police
@@ -163,7 +189,17 @@ class Rival:
 	func to_dict() -> Dictionary:
 		return {"name": name, "strength": Py.round_n(strength, 1), "cash": cash, "turf": turf.duplicate(),
 			"truce_nights": truce_nights, "grudge": grudge, "busts": busts, "zone": zone, "runs": runs,
-			"tipped": tipped, "hit": hit}
+			"tipped": tipped, "hit": hit, "temper": temper, "wronged": wronged, "kept": kept,
+			"betrayals": betrayals, "revealed": revealed, "betrayed": betrayed}
+
+	## What the organisation has worked out about them.
+	func reputation() -> String:
+		if temper == "":
+			return ""
+		if not revealed:
+			return "unknown: kept %d truce night(s), broke %d" % [kept, betrayals]
+		return {"tit_for_tat": "tit for tat: they pay back what you do", "grudger": "grudge-holders: they never forget",
+			"opportunist": "opportunists: a truce lasts while it pays"}[temper]
 
 
 class TaskForce:
@@ -183,11 +219,13 @@ class TaskForce:
 	var ia_sweep := false
 	var press := false
 	var gang_unit := false
+	var canary := false
+	var canary_zone = null  ## the false patrol fed to the dispatch line
 	var actions := 0
 	var ready := false
 
 	func to_dict() -> Dictionary:
-		return {"gang_unit": gang_unit, "bank_k": bank_k, "support": support, "evidence": evidence, "informants": informants,
+		return {"gang_unit": gang_unit, "canary": canary, "canary_zone": canary_zone, "bank_k": bank_k, "support": support, "evidence": evidence, "informants": informants,
 			"encryption": encryption, "fed_arrived": fed_arrived, "budget_k": budget_k, "funded": funded.duplicate(),
 			"aerostat": aerostat, "patrol": patrol, "wiretap": wiretap, "audit": audit, "ia_sweep": ia_sweep,
 			"press": press, "actions": actions, "ready": ready}
@@ -245,6 +283,11 @@ class Season:
 	var rival: Rival = null  ## null when rules.rivals is off (and for Python-parity runs)
 	var rrng: PyRandom  ## the rivals' own random stream: switching them off leaves every other roll unchanged
 	var disabled := {}  ## ablations: orders that just answer "disabled" (Python monkeypatches them)
+	var xrng: PyRandom = null  ## the realism layer's stream (rules.weather/pattern/canary/rival_tempers)
+	var forecast := {}  ## tonight's forecast, known to both HQs while planning
+	var weather := {}  ## what actually blew in (the forecast is right 75% of the time)
+	var moon0 := 0.0  ## moon phase on night 1 (0 = new)
+	var sightings: Array = []  ## per night: the zone where the law saw your own run, or ""
 
 	func _init(rng_: PyRandom = null, rules_ := {}) -> void:
 		if rng_ == null:
@@ -260,7 +303,46 @@ class Season:
 			rival = Rival.new()
 			rrng = PyRandom.new()
 			rrng.seed(int(rng.random() * 2147483647.0))
+		if REALISM.any(func(k): return Py.truthy(rules.get(k, false))):
+			xrng = PyRandom.new()
+			xrng.seed(int(rng.random() * 2147483647.0))
+			moon0 = xrng.random()
+			if rival != null and Py.truthy(rules.get("rival_tempers", false)):
+				rival.temper = TEMPERS[xrng.randint(0, 2)]
 		_begin_planning()
+
+	func on(rule: String) -> bool:
+		return Py.truthy(rules.get(rule, false))
+
+	## Moon illumination tonight, 0 (new) .. 1 (full).
+	func moon(n := -1) -> float:
+		var ph := moon0 + float(night if n < 0 else n) / MOON_DAYS
+		return 0.5 - 0.5 * cos(TAU * ph)
+
+	func _draw_weather() -> Dictionary:
+		var r := xrng.random()
+		var sky := "storm"
+		for k in ["clear", "cloud"]:
+			r -= SKIES[k][0]
+			if r < 0:
+				sky = k
+				break
+		var w: Array = SKIES[sky][1]
+		return {"sky": sky, "wind_kt": xrng.randint(w[0], w[1]), "wind_dir": xrng.randint(0, 35) * 10, "moon": Py.round_n(moon(), 2)}
+
+	## How much the law's analysts expect you on each route: the share of the last
+	## four nights' sightings that fell there, times pattern_k.
+	func pattern_exposure() -> Dictionary:
+		var out := {}
+		var recent := sightings.slice(-4)
+		for z in ZONES:
+			var n := recent.count(z)
+			out[z] = rules["pattern_k"] * n / 4.0 if on("pattern") else 0.0
+		return out
+
+	## What the dispatcher tells the organisation about tonight's patrol.
+	func leak_zone():
+		return law.canary_zone if law.canary else law.patrol
 
 	# ============================================================ planning
 	func _begin_planning() -> void:
@@ -283,12 +365,18 @@ class Season:
 		L.ia_sweep = false
 		L.press = false
 		L.gang_unit = false
+		L.canary = false
+		L.canary_zone = null
 		L.patrol = null
 		if rival != null:
 			rival.tipped = false
 			rival.hit = false
 			rival.zone = null
 			rival.runs = 0
+			rival.betrayed = false
+		if on("weather"):
+			forecast = _draw_weather()
+			weather = {}
 		L.actions = int(R["actions_per_night"])
 		L.ready = false
 		L.budget_k = (R["support_base_k"] + R["support_k"] * L.support / 100.0 + R["heat_k"] * o.heat
@@ -482,6 +570,8 @@ class Season:
 		rival.truce_nights = 0
 		rival.grudge = maxi(rival.grudge, 2)
 		rival.hit = true
+		rival.wronged += 1
+		rival.wronged_night = night
 		o.heat += 12
 		law.evidence += 3.0
 		runner_log.append("Your people hit a Cuervos stash in the %s." % o.route)
@@ -496,6 +586,12 @@ class Season:
 			return "The truce already holds."
 		if rival.grudge > 0:
 			return "They want blood, not talk."
+		if on("rival_tempers"):
+			if rival.temper == "grudger" and rival.wronged > 0:
+				rival.revealed = true
+				return "%s never forget: no truce with you, ever." % rival.name
+			if rival.temper == "tit_for_tat" and rival.wronged_night >= night - 1:
+				return "Too soon: %s answer what you did last, not what you say." % rival.name
 		var p := clampf(0.85 - rival.strength / 200.0, 0.2, 0.9)
 		if rrng.random() < p:
 			rival.truce_nights = int(rules["truce_nights"])
@@ -515,6 +611,8 @@ class Season:
 			rival.grudge = maxi(rival.grudge, 2)
 			runner_log.append("You broke the truce.")
 		rival.tipped = true
+		rival.wronged += 1
+		rival.wronged_night = night
 		law.support += 2.0
 		law.evidence = maxf(0.0, law.evidence - 4.0)
 		return null
@@ -545,6 +643,8 @@ class Season:
 		if zone != null and not ZONES.has(zone):
 			return "Unknown zone."
 		law.patrol = zone
+		if law.canary and zone == law.canary_zone:  # keep the lie a lie
+			law.canary_zone = ZONES.filter(func(z): return z != zone)[0]
 		return null
 
 	func _l_aerostat(a: Dictionary):
@@ -621,6 +721,24 @@ class Season:
 		law.gang_unit = true
 		return null
 
+	## A canary trap: tell the dispatch line the patrol is somewhere it isn't. If
+	## the organisation's plan swerves around the fake, the leak is found.
+	func _l_canary(a: Dictionary):
+		if not on("canary"):
+			return "No canary traps in these rules."
+		if law.patrol == null:
+			return "Set the patrol first: the canary needs a real plan to lie about."
+		if law.canary:
+			return "The canary is already singing."
+		var err = _spend(LAW_COSTS_K["canary"])
+		if err:
+			return err
+		law.canary = true
+		var fakes := ZONES.filter(func(z): return z != law.patrol)
+		law.canary_zone = fakes[xrng.randint(0, fakes.size() - 1)]
+		law_log.append("Canary: dispatch hears the patrol goes %s (it goes %s)." % [law.canary_zone, law.patrol])
+		return null
+
 	func _l_ready(a: Dictionary):
 		law.ready = true
 		return null
@@ -634,6 +752,14 @@ class Season:
 		var tip := informant_tip()
 		var wire: bool = L.wiretap and not o.opsec
 		var leak_patrol: bool = o.bribes.has("dispatcher")
+		if on("weather"):
+			weather = forecast.duplicate()
+			if xrng.random() < 0.25:  # the forecast was wrong: one step better or worse
+				var order := ["clear", "cloud", "storm"]
+				var i := clampi(order.find(forecast["sky"]) + (1 if xrng.random() < 0.5 else -1), 0, 2)
+				weather["sky"] = order[i]
+				var w: Array = SKIES[order[i]][1]
+				weather["wind_kt"] = xrng.randint(w[0], w[1])
 		plan = {
 			"night": night,
 			"route": o.route,
@@ -648,10 +774,20 @@ class Season:
 			"encryption": L.encryption and not o.bribes.has("dispatcher"),
 			"tip": tip or wire,
 			"tip_zone": o.route if (tip or wire) else null,
-			"leak_patrol": L.patrol if leak_patrol else null,
+			"leak_patrol": leak_zone() if leak_patrol else null,
 			"leak_aerostat": L.aerostat if leak_patrol else false,
 			"no_customs": o.bribes.has("tower"),
 		}
+		if on("weather"):
+			plan["weather"] = weather.duplicate()
+			if L.aerostat and (weather["sky"] == "storm" or int(weather["wind_kt"]) > AEROSTAT_MAX_WIND):
+				plan["aerostat"] = false
+				plan["leak_aerostat"] = false
+				law_log.append("Aerostat winched down: %s, %d kt." % ["lightning" if weather["sky"] == "storm" else "wind", int(weather["wind_kt"])])
+		if on("pattern"):
+			plan["pattern"] = pattern_exposure()
+		if L.canary:
+			plan["canary"] = L.canary_zone
 		if rival != null:
 			_plan_rival()
 		plan_hist.append(plan)
@@ -695,6 +831,24 @@ class Season:
 		plan["gang_unit"] = law.gang_unit
 		plan["truce"] = rv.truce_nights > 0
 		plan["hijack_p"] = hijack
+		# a truce is an iterated prisoner's dilemma: it holds while the future is worth
+		# more than one betrayal. Opportunists defect as the season runs out.
+		if on("rival_tempers") and rv.truce_nights > 0 and not o.lie_low:
+			var left := int(rules["nights"]) - night
+			var p: float = {"tit_for_tat": 0.02, "grudger": 0.0,
+				"opportunist": 0.08 + (0.6 if left <= 1 else (0.3 if left == 2 else 0.0))}[rv.temper]
+			if rv.temper == "tit_for_tat" and rv.wronged_night >= night - 1:
+				p = 0.6  # you hit them last night: they hit back
+			if xrng.random() < p:
+				rv.betrayed = true
+				rv.betrayals += 1
+				rv.revealed = true
+				rv.truce_nights = 0
+				plan["truce"] = false
+				plan["tip"] = true  # they sell your route to the task force
+				plan["tip_zone"] = o.route
+				plan["rival_betrayed"] = true
+				law_log.append("Anonymous caller with an accent: the organisation flies the %s tonight." % o.route)
 
 	func informant_tip() -> bool:
 		var L := law
@@ -763,6 +917,35 @@ class Season:
 				L.evidence += 5
 				L.bank_k += r.seized_value / 1000.0 * R["seizure_share"]
 				rep.lines.append("Coast Guard seizes a go-fast boat.")
+		# --- the realism layer
+		if on("pattern"):
+			var seen := ""
+			for r in runs:
+				if r.kind == "main" and r.detected:
+					seen = r.zone
+			sightings.append(seen)
+		var fake = plan.get("canary")
+		if fake != null:
+			var main_zone = null
+			for r in runs:
+				if r.kind == "main":
+					main_zone = r.zone
+			var planned: String = plan.get("planned_route", plan.get("route", ""))
+			if planned == fake and main_zone != null and main_zone != fake and o.bribes.has("dispatcher"):
+				o.bribes.erase("dispatcher")
+				L.evidence += R["evidence_bribe"]
+				L.support += 2
+				rep.law_lines.append("The canary sang: they swerved around a patrol that never flew. The dispatcher is arrested.")
+				rep.runner_lines.append("Our man in dispatch fed us a fake patrol - and got arrested for it. It was a trap.")
+			else:
+				rep.law_lines.append("The canary stayed quiet.")
+		if rival != null and on("rival_tempers"):
+			if rival.betrayed:
+				rep.runner_lines.append("%s sold your route to the task force. The truce is dead." % rival.name)
+			elif rival.truce_nights > 0:
+				rival.kept += 1
+				if rival.kept >= 4 and rival.temper != "opportunist":
+					rival.revealed = true
 		# --- investigations
 		if L.informants:
 			L.evidence += R["evidence_informant"] * L.informants * (1.0 - 0.5 * o.loyalty)
@@ -919,6 +1102,12 @@ class Season:
 		var base := {"night": night, "nights": int(rules["nights"]), "phase": phase, "winner": winner,
 			"reason": reason, "news": news.duplicate(),
 			"public": {"heat": Py.round_int(o.heat), "support": Py.round_int(L.support)}}
+		if on("weather"):
+			base["forecast"] = forecast.duplicate()
+			base["weather"] = weather.duplicate()
+		if on("pattern"):
+			base["pattern"] = pattern_exposure()
+			base["sightings"] = sightings.slice(-4)
 		if side == "runner":
 			var rumor = L.evidence if (o.bribes.has("dispatcher") or o.lawyer) else null
 			var band: String = ["thin", "building", "serious", "closing in"][mini(3, int(L.evidence / 25))]
@@ -927,7 +1116,7 @@ class Season:
 			var lg: Array = runner_log.slice(-8) + (reports.back().runner_lines if not reports.is_empty() else [])
 			base.merge({"org": od, "capacity": o.capacity(), "retire_target": int(rules["retire_target"]),
 				"evidence": Py.round_n(rumor, 1) if rumor != null else null, "evidence_rumor": band,
-				"patrol_leak": L.patrol if o.bribes.has("dispatcher") else null, "log": lg})
+				"patrol_leak": leak_zone() if o.bribes.has("dispatcher") else null, "log": lg})
 			if rival != null:
 				var rv := rival
 				var tf := {}
@@ -935,6 +1124,9 @@ class Season:
 					tf[z] = Py.round_n(rv.turf[z], 2)
 				base["rival"] = {"name": rv.name, "band": rv.band(), "turf": tf, "truce_nights": rv.truce_nights,
 					"grudge": rv.grudge > 0, "zone": rv.zone if phase != "planning" else null}
+				if on("rival_tempers"):
+					base["rival"]["reputation"] = rv.reputation()
+					base["rival"]["nights_left"] = int(rules["nights"]) - night
 		else:
 			var est = o.clean * rng.uniform(0.7, 1.3) if L.audit or L.wiretap else null
 			var lg: Array = law_log.slice(-8) + (reports.back().law_lines if not reports.is_empty() else [])
@@ -1000,19 +1192,35 @@ static func resolve_abstract(season: Season, plan: Dictionary, rng: PyRandom, ca
 				if not avoid.has(z):
 					main_zone = z
 					break
+	# weather and moon (rules.weather): cloud, rain and a dark moon hide you; storms
+	# ground helicopters and the balloon and make every landing a gamble
+	var wx: Dictionary = plan.get("weather", {})
+	var vis := 1.0
+	var crash_k := 1.0
+	var heli_k := 1.0
+	var sea_k := 1.0
+	if not wx.is_empty():
+		vis = SKIES[wx["sky"]][2] * (0.75 + 0.35 * float(wx["moon"]))
+		crash_k = SKIES[wx["sky"]][3]
+		heli_k = 0.4 if wx["sky"] == "storm" else 1.0
+		sea_k = 0.5 if wx["sky"] == "storm" else 1.0
+	var pattern: Dictionary = plan.get("pattern", {})
 	for kind in kinds:
 		var zone: String = main_zone if kind == "main" else rng.choice(ZONES)
 		var r := RunResult.new(kind, zone)
 		var p_det: float = cal.detect[zone] + (cal.aerostat_detect[zone] if plan["aerostat"] else 0.0)
 		if kind == "main" and plan["tip"]:
 			p_det += 0.30
+		if kind == "main":
+			p_det += pattern.get(zone, 0.0)  # the analysts expected you here
+		p_det *= vis
 		if kind == "decoy":
 			p_det += 0.25  # decoys want to be seen
 		p_det = minf(0.97, p_det)
 		r.detected = rng.random() < p_det
 		if r.detected:
 			var match_: float = 1.6 if plan["patrol"] == zone else (1.1 if kind == "main" and plan["tip"] else 0.8)
-			var weighted: float = (units["heli"] * cal.intercept_per_unit["heli"]
+			var weighted: float = (units["heli"] * cal.intercept_per_unit["heli"] * heli_k
 				+ units["interceptor"] * cal.intercept_per_unit["interceptor"])
 			var haz: float = cal.intercept_k * PyMath.log1p(weighted) * match_
 			haz /= 1.0 + 0.6 * maxi(0, n_tracks - 1) / float(maxi(1, units["heli"] + units["interceptor"]))  # spread thin
@@ -1031,13 +1239,13 @@ static func resolve_abstract(season: Season, plan: Dictionary, rng: PyRandom, ca
 					else:
 						r.busted = true
 		if kind != "decoy" and not r.busted:
-			r.crashed = rng.random() < cal.crash[zone] * (1.0 if kind == "main" else 0.7)
+			r.crashed = rng.random() < cal.crash[zone] * (1.0 if kind == "main" else 0.7) * crash_k
 		var value := int(R["run_payout"] * ZONE_PAY[zone] * (o.payout_mult() if kind == "main" else 1.0))
 		if r.busted:
 			r.seized_value = value * 3  # street value
 		elif kind != "decoy" and not r.crashed:
 			if zone == "sea" and plan["cutters"]:
-				var p: float = cal.cutter_seize * plan["cutters"] * (1.6 if r.detected else 0.7)
+				var p: float = cal.cutter_seize * plan["cutters"] * (1.6 if r.detected else 0.7) * sea_k
 				if rng.random() < minf(0.9, p):
 					r.boat_seized = true
 					r.seized_value = value * 3
@@ -1059,12 +1267,15 @@ static func _resolve_rivals(season: Season, plan: Dictionary, runs: Array, cal: 
 			r.delivered_value = 0
 	var units: Dictionary = plan["funded"]
 	var zone: String = plan["rival_zone"]
+	var wx: Dictionary = plan.get("weather", {})
+	var vis: float = SKIES[wx["sky"]][2] * (0.75 + 0.35 * float(wx["moon"])) if not wx.is_empty() else 1.0
+	var crash_k: float = SKIES[wx["sky"]][3] if not wx.is_empty() else 1.0
 	for i in plan.get("rival_runs", 0):
 		var r := RunResult.new("rival", zone)
 		var p_det: float = cal.detect[zone] + (cal.aerostat_detect[zone] if plan["aerostat"] else 0.0)
 		if plan.get("rival_tipped", false):
 			p_det += 0.5
-		r.detected = rr.random() < minf(0.97, p_det)
+		r.detected = rr.random() < minf(0.97, p_det * vis)
 		if r.detected:
 			var match_: float = 1.6 if (plan["patrol"] == zone or plan.get("rival_tipped", false)) else 0.8
 			var weighted: float = units["heli"] * cal.intercept_per_unit["heli"] + units["interceptor"] * cal.intercept_per_unit["interceptor"]
@@ -1074,7 +1285,7 @@ static func _resolve_rivals(season: Season, plan: Dictionary, runs: Array, cal: 
 		var value := int(R["run_payout"] * ZONE_PAY[zone])
 		if r.busted:
 			r.seized_value = value * 3
-		elif rr.random() < cal.crash[zone]:
+		elif rr.random() < cal.crash[zone] * crash_k:
 			r.crashed = true
 		elif zone == "sea" and plan["cutters"] and rr.random() < minf(0.9, cal.cutter_seize * plan["cutters"] * 0.7):
 			r.boat_seized = true

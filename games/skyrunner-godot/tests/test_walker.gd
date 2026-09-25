@@ -117,3 +117,29 @@ func test_the_boss_desk_gives_orders() -> void:
 	m.key("enter")
 	check(s.nights.season.org.route != before, "route changed from the desk: %s -> %s" % [before, s.nights.season.org.route])
 	app.free()
+
+
+func test_walks_up_a_step() -> void:
+	var app := _app({"seed": 1, "location": "HAR"})
+	app._toggle_on_foot()
+	var w := app.walker
+	# a 30 cm kerb in front of us
+	var kerb := StaticBody3D.new()
+	var cs := CollisionShape3D.new()
+	var bs := BoxShape3D.new()
+	bs.size = Vector3(8, 0.3, 8)
+	cs.shape = bs
+	kerb.add_child(cs)
+	app.add_child(kerb)
+	await _frames(40)  # land first
+	var fwd := -w.global_transform.basis.z
+	kerb.global_position = w.global_position + fwd * 6.5 + Vector3(0, 0.15, 0)
+	await _frames(2)
+	_key(KEY_W, true)
+	_key(KEY_SHIFT, true)
+	await _frames(90)
+	_key(KEY_W, false)
+	_key(KEY_SHIFT, false)
+	var top := kerb.global_position.y + 0.15
+	check(w.global_position.y > top - 0.1, "climbed the kerb (%.2f vs top %.2f)" % [w.global_position.y, top])
+	app.free()

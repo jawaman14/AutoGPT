@@ -35,7 +35,16 @@ static func _pick_route(ss: HQ.Season, rng: PyRandom, mem: Dictionary, avoid = n
 	var last = mem.get("last_route")
 	if zones.has(last) and zones.size() > 1 and rng.random() < 0.5:
 		zones.erase(last)
-	var z: String = rng.choice(zones)
+	var z: String
+	if ss.on("pattern"):
+		# the analysts expect you where they've seen you: mix it up (the inspection game's answer)
+		var ex := ss.pattern_exposure()
+		var w := PackedFloat64Array()
+		for zz in zones:
+			w.append(maxf(0.1, 1.0 - 2.0 * ex[zz]))
+		z = zones[rng.choices_index(w, 1)[0]]
+	else:
+		z = rng.choice(zones)
 	ss.runner_cmd("route", {"zone": z})
 	mem["last_route"] = z
 
@@ -65,6 +74,18 @@ static func _cartel(ss: HQ.Season, rng: PyRandom, mem: Dictionary) -> void:
 	var strong: bool = rv.band() in ["strong", "dominant"]
 	var last := _last(ss)
 	var hijacked := last != null and Py.any(last.runs, func(r): return r.hijacked)
+	if ss.on("rival_tempers"):
+		var left := int(ss.rules["nights"]) - ss.night
+		# backward induction: a known opportunist will sell you out at the end, so
+		# don't pay for a truce then; and on the last night, defect first
+		if rv.truce_nights > 0 and left <= 1 and danger >= 1:
+			ss.runner_cmd("tip_off")
+			return
+		if rv.revealed and rv.temper == "opportunist" and left <= 2:
+			hijacked = false
+			strong = false
+		if rv.revealed and rv.temper == "grudger" and rv.wronged > 0:
+			strong = false  # no point asking
 	if rv.truce_nights == 0 and rv.grudge == 0 and (strong or hijacked) and rng.random() < 0.6:
 		ss.runner_cmd("truce")
 	elif (strong or hijacked) and contested and o.dirty > 20000 and o.heat < 50 and rv.truce_nights == 0:
@@ -123,7 +144,7 @@ static func runner_corrupt(ss: HQ.Season, rng: PyRandom, mem: Dictionary) -> voi
 	for b in ["dispatcher", "harbor"]:
 		if not o.bribes.has(b) and o.dirty > HQ.BRIBES[b][0] + 6000:
 			ss.runner_cmd("bribe", {"who": b})
-	var leak = ss.law.patrol if o.bribes.has("dispatcher") else null
+	var leak = ss.leak_zone() if o.bribes.has("dispatcher") else null
 	ss.runner_cmd("crews", {"n": 1})
 	_grow(ss, rng)
 	_pick_route(ss, rng, mem, leak)
@@ -187,7 +208,7 @@ static func runner_adaptive(ss: HQ.Season, rng: PyRandom, mem: Dictionary) -> vo
 	# a bust last night smells like a rat
 	var last := _last(ss)
 	mem["informant_suspected"] = last != null and Py.any(last.runs, func(r): return r.busted and r.kind == "main")
-	var leak = ss.law.patrol if o.bribes.has("dispatcher") else null
+	var leak = ss.leak_zone() if o.bribes.has("dispatcher") else null
 	if not o.bribes.has("dispatcher") and ss.night >= 3 and o.dirty > 20000 and danger < 2:
 		ss.runner_cmd("bribe", {"who": "dispatcher"})
 	_pick_route(ss, rng, mem, leak)
@@ -219,7 +240,8 @@ static func runner_smart(ss: HQ.Season, rng: PyRandom, mem: Dictionary) -> void:
 		if o.loyalty < 0.45:
 			ss.runner_cmd("loyalty")
 		_grow(ss, rng)
-		ss.runner_cmd("crews", {"n": 1 if o.heat > 45 or o.dirty < 15000 else 2})
+		var storm: bool = ss.on("weather") and ss.forecast.get("sky") == "storm"
+		ss.runner_cmd("crews", {"n": 0 if storm else (1 if o.heat > 45 or o.dirty < 15000 else 2)})
 	if o.heat > 40:
 		ss.runner_cmd("decoys", {"n": 1})
 	var last := _last(ss)
@@ -278,6 +300,11 @@ static func _predict_zone(ss: HQ.Season, rng: PyRandom, mem: Dictionary) -> Stri
 	return HQ.ZONES[rng.choices_index(w, 1)[0]]
 
 
+## The balloon comes down in a storm or a gale: don't pay for it on that forecast.
+static func _balloon_weather(ss: HQ.Season) -> bool:
+	return not ss.on("weather") or (ss.forecast.get("sky") != "storm" and int(ss.forecast.get("wind_kt", 0)) <= HQ.AEROSTAT_MAX_WIND)
+
+
 static func _fund_units(ss: HQ.Season, heli: int, interceptor: int, cutter: int) -> void:
 	for pair in [["interceptor", interceptor], ["heli", heli], ["cutter", cutter]]:
 		var n: int = pair[1]
@@ -288,7 +315,8 @@ static func _fund_units(ss: HQ.Season, heli: int, interceptor: int, cutter: int)
 ## All money into aircraft, boats and radar.
 static func law_interdiction(ss: HQ.Season, rng: PyRandom, mem: Dictionary) -> void:
 	ss.law_cmd("patrol", {"zone": _predict_zone(ss, rng, mem)})
-	ss.law_cmd("aerostat")
+	if _balloon_weather(ss):
+		ss.law_cmd("aerostat")
 	_fund_units(ss, 1, 2, 1)
 	_fund_units(ss, 2, 2, 1)
 	ss.law_cmd("ready")
@@ -319,7 +347,7 @@ static func law_balanced(ss: HQ.Season, rng: PyRandom, mem: Dictionary) -> void:
 	else:
 		ss.law_cmd("audit")
 	_fund_units(ss, 1, 1, 1)
-	if L.budget_k > HQ.LAW_COSTS_K["aerostat"] + 4:
+	if L.budget_k > HQ.LAW_COSTS_K["aerostat"] + 4 and _balloon_weather(ss):
 		ss.law_cmd("aerostat")
 	ss.law_cmd("ready")
 
@@ -348,9 +376,12 @@ static func law_adaptive(ss: HQ.Season, rng: PyRandom, mem: Dictionary) -> void:
 	if o.fronts.size() > 1 and ss.night % 2 == 1:
 		ss.law_cmd("audit")
 	ss.law_cmd("patrol", {"zone": _predict_zone(ss, rng, mem)})
+	# patrols keep missing: test the dispatch line with a canary before paying for a sweep
+	if ss.on("canary") and evaded >= 1 and o.heat > 20:
+		ss.law_cmd("canary")
 	var heavy := o.heat > 40
 	_fund_units(ss, 1, 2 if heavy else 1, 1)
-	if L.budget_k >= HQ.LAW_COSTS_K["aerostat"]:
+	if L.budget_k >= HQ.LAW_COSTS_K["aerostat"] and _balloon_weather(ss):
 		ss.law_cmd("aerostat")
 	# the cartel war: busting Cuervos is good press and splits the organisation's cover
 	if ss.rival != null and ss.rival.band() in ["strong", "dominant"] and L.budget_k >= ss.rules["gang_unit_k"]:
@@ -369,6 +400,9 @@ static func law_random(ss: HQ.Season, rng: PyRandom, mem: Dictionary) -> void:
 		if ss.law_cmd(name) == null:
 			mem["used"].append(name)
 	ss.law_cmd("patrol", {"zone": rng.choice(HQ.ZONES)})
+	if ss.on("canary") and rng.random() < 0.3:
+		if ss.law_cmd("canary") == null:
+			mem["used"].append("canary")
 	var h := rng.randint(0, 2)
 	var i := rng.randint(0, 2)
 	var c := rng.randint(0, 1)
