@@ -45,8 +45,11 @@ New in the Godot build:
     arrested, so a leak is never ground truth.
   - *Rival tempers.* Los Cuervos are tit-for-tat, grudge-holders or opportunists, and you learn which
     from how they behave. Truces unravel as the season runs out (backward induction).
-  - *The surge.* Every spare police helicopter joins the chase as a flanker, aiming ahead to cut you
-    off, and two aircraft on your tail box you in (the bust meter fills 50% faster).
+  - *Spare helicopters patrol.* The task force keeps one helicopter for the chase and flies every
+    spare over a zone before the run - where the analysts expect you. Flag one and it joins the
+    chase as a flanker, aiming ahead to cut you off; two aircraft on your tail box you in (the bust
+    meter fills 50% faster). The sims showed why: one chaser already catches every runner it can
+    reach, so extra aircraft pay by finding you, not by chasing harder.
   - *Nerves.* Stress follows what real smuggling pilots feared. Past the Yerkes-Dodson hump the screen
     tunnels, you hear your heartbeat and your hands shake (8-12 Hz, human hands only). A co-pilot
     steadies you.
