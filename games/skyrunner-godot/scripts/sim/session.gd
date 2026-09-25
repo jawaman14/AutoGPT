@@ -1244,6 +1244,8 @@ func _maritime_event(kind: String, data: Dictionary) -> void:
 		say("Bale lost (%s)." % data["why"])
 	elif kind == "boat_fleeing" and job:
 		say("%s: cutter on us, running!" % data["boat"])
+	elif kind == "boat_returning" and job:
+		say("%s: cutter's gone, heading back to the rendezvous." % data["boat"])
 	elif kind == "cutter_contact":
 		radio.transmit(time, "police", data["cutter"], "surface contact, go-fast, pursuing", [data["x"], data["y"]])
 

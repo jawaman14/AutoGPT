@@ -17,6 +17,10 @@ const MISSIONS := {"west": ["FRM", "QRY"], "north": ["FRM", "EGL"], "sea": ["COV
 
 const BOT_CRASH_CAP := 0.06
 
+## Replay the Python simulator exactly (parity tests): no surge, no spare patrols,
+## boats that run home empty, the Python bot's airdrop and its delivery count.
+static var PYTHON := false
+
 ## name: [heli, interceptor, cutter, aerostat, patrol_match, tip]
 const LAW_CONFIGS := {
 	"light": [1, 0, 0, false, false, false],
@@ -61,7 +65,11 @@ static func run_trial(zone: String, law: String, tactic: String, seed: int, airc
 	var job: Jobs.Job = st[2]
 	var tr := _trial(zone, law, tactic, aircraft, seed)
 	var events := {}
-	s.bus.subscribe("*", func(ev): events[ev.kind] = true)
+	var bales := [0]
+	s.bus.subscribe("*", func(ev):
+		events[ev.kind] = true
+		if ev.kind == "bales_delivered":
+			bales[0] += int(ev.data.get("count", 0)))
 	var frame := func(sess: Session):
 		var c = sess.police.cases.get("runner")
 		if c != null and (Py.truthy(c.detected_by) or c.wanted) and not tr["detected"]:
@@ -88,7 +96,8 @@ static func run_trial(zone: String, law: String, tactic: String, seed: int, airc
 	tr["busted"] = s.phase == "busted" or events.has("busted")
 	tr["crashed"] = s.phase == "crashed" or events.has("crashed")
 	tr["boat_seized"] = events.has("boat_seized")
-	tr["delivered"] = events.has("job_delivered") or (events.has("bales_delivered") and not tr["boat_seized"])
+	# a boat that gave up waiting runs home empty: that's "bales_delivered" with a count of 0
+	tr["delivered"] = events.has("job_delivered") or ((bales[0] > 0 or (PYTHON and events.has("bales_delivered"))) and not tr["boat_seized"])
 	tr["outcome"] = s.last_outcome if s.last_outcome != "" else out
 	tr["minutes"] = s.time / 60
 	s.dispose()
@@ -138,6 +147,11 @@ static func setup_trial(zone: String, law: String, tactic: String, seed: int, ai
 		legs = [PilotBot.Leg.new("land", d.x, d.y, dest)]
 	s.set_fuel(PilotBot.plan_fuel_lb(s, legs))
 	var bot := PilotBot.new(s, legs, PilotBot.BotStyle.make(TACTICS[tactic]))
+	if PYTHON:
+		bot.python_drops = true
+		s.maritime.boats_return = false
+		s.police.surge = false
+		s.police.spare_patrol = false
 	# the night's law posture
 	if cfg[3]:
 		s.police.set_aerostat(true)
@@ -152,6 +166,14 @@ static func setup_trial(zone: String, law: String, tactic: String, seed: int, ai
 		s.police.features["informants"] = true
 		s.police.add_tip(txy[0] + rng.uniform(-1200, 1200), txy[1] + rng.uniform(-1200, 1200), 2500,
 			"informant: a load moves tonight", s.squawk, "runner")
+	# spare helicopters patrol before the run; the law doesn't know tonight's route,
+	# so the first zone is a draw (its own stream: the other postures fly unchanged)
+	if cfg[0] > 1:
+		var zr := PyRandom.new()
+		zr.seed(seed * 7919 + 17)
+		var zs: Array = HQ.ZONES.duplicate()
+		var k := zr.randint(0, 2)
+		s.police.patrol_spares(zs.slice(k) + zs.slice(0, k))
 	return [s, bot, job]
 
 

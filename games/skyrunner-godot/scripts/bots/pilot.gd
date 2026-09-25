@@ -158,6 +158,7 @@ class BotStyle:
 		return b
 
 
+var python_drops := false  ## the Python bot's airdrop (500 m orbit, never aborts): parity replays only
 var sess: Session
 var legs: Array
 var style: BotStyle
@@ -594,14 +595,18 @@ func _p_drop(c: FlightModel.Controls, s: FlightModel.FlightState, dt: float) -> 
 	var lg := leg()
 	var d := PyMath.hypot(lg.x - s.x, lg.y - s.y)
 	var remaining := sess._droppables().size()
-	if remaining == 0 and sess.kick_queue == 0:
+	# no airdrop job left (the boat's gone): nothing to drop to, head home with the load
+	var abort: bool = not python_drops and not Py.any(sess.active_jobs, func(j): return j.is_airdrop())
+	if (remaining == 0 or abort) and sess.kick_queue == 0:
 		if sess.autopilot.engaged:
 			sess.command(role, "autopilot", {"on": false})
 		leg_i += 1
 		_set_phase("enroute")
 		return
-	# orbit the rendezvous clockwise at ~500 m, 110 m above the water, ~95 kt
-	var r := 500.0
+	# orbit the rendezvous clockwise, 110 m above the water, ~95 kt. Python asked for a
+	# 500 m circle, outside the 450 m kick radius, so most drops never happened; aim for
+	# 250 m and the bank limit settles it near 400 m, inside the circle
+	var r := 500.0 if python_drops else 250.0
 	var tangent := bearing(lg.x, lg.y, s.x, s.y) + 90.0
 	var hdg_t := tangent + _clamp((d - r) * 0.12, -60, 60)
 	if d > 1500:

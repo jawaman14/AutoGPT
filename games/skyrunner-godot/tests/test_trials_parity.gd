@@ -31,9 +31,11 @@ func _match(got: Dictionary, want: Dictionary, what: String) -> void:
 
 
 func test_tactical_trials_replay_exactly() -> void:
+	Tactical.PYTHON = true
 	for w in ref.tactical:
 		Jobs._next_id = 1
 		_match(Tactical.run_trial(w.zone, w.law, w.tactic, int(w.seed)), w, "%s/%s/%s" % [w.zone, w.law, w.tactic])
+	Tactical.PYTHON = false
 
 
 func test_feasibility_trials_replay_exactly() -> void:

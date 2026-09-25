@@ -183,6 +183,7 @@ var rng: PyRandom
 var boats: Array = []
 var bales: Array = []
 var events: Array = []  ## [[kind, data]]
+var boats_return := true  ## a go-fast that fled empty goes back out once the cutter's gone (Godot-only)
 var cove: Array
 var cg_station: Array
 var _serial := 0
@@ -280,9 +281,16 @@ func _gofast(b: Boat, dt: float, floating: Array) -> void:
 		events.append(["boat_fleeing", {"boat": b.id}])
 	if b.state == "fleeing":
 		b.steer(dt, world, cove)
+		# nothing aboard yet: hide, then go back for the drop (Python ran home and
+		# "delivered" 0 bales, which closed the job before the plane arrived)
+		var empty_handed: bool = boats_return and b.cargo.is_empty() and b.goal != null
 		if threat == null or PyMath.hypot(threat.x - b.x, threat.y - b.y) > 5000:
-			b.state = "collecting" if not mine.is_empty() else "running"
-		if PyMath.hypot(cove[0] - b.x, cove[1] - b.y) < 80:
+			if empty_handed and mine.is_empty():
+				b.state = "to_rendezvous"
+				events.append(["boat_returning", {"boat": b.id}])
+			else:
+				b.state = "collecting" if not mine.is_empty() else "running"
+		elif PyMath.hypot(cove[0] - b.x, cove[1] - b.y) < 80 and not empty_handed:
 			_deliver(b)
 		return
 	if b.state == "to_rendezvous":

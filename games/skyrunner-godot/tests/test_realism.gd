@@ -349,3 +349,41 @@ func test_tremor_only_on_human_hands() -> void:
 	check_eq(s.fm.controls.aileron, 0.0, "bot: steady hands")
 	check_eq(s.mapper.controls.aileron, s.mapper.controls.aileron, "")
 	s.dispose()
+
+
+func test_spare_helicopters_patrol_before_the_run() -> void:
+	var s := Session.new({"seed": 2, "location": "FRM", "features": ["contraband"]})
+	var ps := s.police
+	ps.stock = {"heli": 3, "interceptor": 1, "cutter": 0}
+	var zones := ps.patrol_spares(["north", "west", "sea"])
+	check_eq(zones, ["north", "west"], "two spares out, most likely zone first")
+	check_eq(ps.stock["heli"], 1, "one stays in the hangar for the chase")
+	var goals: Array = ps._launches.map(func(l): return l[4])
+	check_eq(goals, [HQ.ZONE_CENTRE["north"], HQ.ZONE_CENTRE["west"]], "flown to the zone centres")
+	check(ps.law_events.any(func(e): return "on patrol over the north" in e), "the desk hears about it")
+	s.dispose()
+
+
+func test_one_helicopter_stays_home() -> void:
+	var s := Session.new({"seed": 2, "location": "FRM", "features": ["contraband"]})
+	var ps := s.police
+	ps.stock = {"heli": 1, "interceptor": 1, "cutter": 0}
+	check_eq(ps.patrol_spares(["north"]), [], "no spare, no patrol")
+	ps.stock = {"heli": 3, "interceptor": 1, "cutter": 0}
+	ps.controller = "human"
+	check_eq(ps.patrol_spares(["north"]), [], "a human controller decides for themselves")
+	s.dispose()
+
+
+func test_a_patrolling_helicopter_takes_the_chase() -> void:
+	var s := Session.new({"seed": 2, "location": "FRM", "features": ["contraband", "interceptors"]})
+	var ps := s.police
+	ps.stock = {"heli": 2, "interceptor": 0, "cutter": 0}
+	ps.patrol_spares(["west"])
+	ps.tick((PoliceSystem.LAUNCH_DELAY_S + 1.0), ps.now + (PoliceSystem.LAUNCH_DELAY_S + 1.0), [])
+	var u: PoliceSystem.Pursuer = Py.first(ps.units, func(u): return u.kind == "heli")
+	check(u != null and u.state == "goto" and u.target_id == null, "out on patrol")
+	ps._ai_escalate(ps.case("runner"), 1, _quarry_track(s))
+	check_eq(u.target_id, "runner", "the patrol is re-tasked to the flagged track")
+	check_eq(_launched_for(ps, "heli", "runner"), 1, "and the reserve launches after it")
+	s.dispose()

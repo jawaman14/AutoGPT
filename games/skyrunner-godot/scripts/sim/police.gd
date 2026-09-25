@@ -280,6 +280,7 @@ var _unalias := {}
 var pending_claim := {}  ## role -> unit kind waiting to launch
 var frozen := false  ## tests: stand the task force down (Python monkeypatches tick)
 var surge := true  ## spare helicopters join the chase and close units box the runner in (Godot-only)
+var spare_patrol := true  ## the AI flies spare helicopters on patrol before the run (Godot-only)
 
 
 func _init(world_: World, rng_: PyRandom = null, radio_: RadioNet = null, controller_ := "ai", features_ = null) -> void:
@@ -420,6 +421,25 @@ func _spawn_now(kind: String, base_code: String, target_id, goal, flank := false
 	var where: String = ("toward %s" % alias(target_id)) if target_id else "to assigned area"
 	_say(u.id, "airborne from %s, vectoring %s" % [base.name, where], [u.x, u.y])
 	return u
+
+
+## Before the run: every helicopter beyond `reserve` goes out on a visual patrol,
+## one per zone in `zones` (most likely first), instead of waiting in the hangar.
+## One pursuing helicopter already catches every flagged runner it can reach
+## (docs/BALANCE.md 14): extra aircraft pay by finding runners, not by chasing.
+## When a track is flagged the surge re-tasks these patrols as flankers.
+func patrol_spares(zones: Array, reserve := 1) -> Array:
+	var out := []
+	if not spare_patrol or controller != "ai" or zones.is_empty():
+		return out
+	var i := 0
+	while stock.get("heli", 0) > reserve:
+		var z: String = zones[i % zones.size()]
+		launch("heli", null, null, HQ.ZONE_CENTRE[z])
+		law_events.append("Spare helicopter on patrol over the %s" % z)
+		out.append(z)
+		i += 1
+	return out
 
 
 func spawn_rival(near: Array, target_id: String) -> Pursuer:

@@ -143,6 +143,10 @@ func _begin() -> void:
 	ps.no_customs = plan["no_customs"]
 	if plan["patrol"] and ps.stock.get("heli", 0) > 0:
 		ps.launch("heli", null, null, HQ.ZONE_CENTRE[plan["patrol"]])
+	# spares patrol where the analysts expect the organisation, the ordered patrol zone aside
+	var expect: Dictionary = ss.pattern_exposure()
+	var zones: Array = Py.sorted_by(HQ.ZONES.filter(func(z): return z != plan["patrol"]), func(z): return -float(expect[z]))
+	ps.patrol_spares(zones)
 	# funded cutters start the night on picket off the coast, not in the harbour
 	var rng := _bot_rng
 	for i in plan["cutters"]:
