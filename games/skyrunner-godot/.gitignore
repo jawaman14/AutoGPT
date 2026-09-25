@@ -6,3 +6,5 @@ bin/*.dylib
 export/
 .tools/
 .build/
+# raw seasons (11 MB): regenerate with cli.gd -- strategic
+sim-results/strategic.json
