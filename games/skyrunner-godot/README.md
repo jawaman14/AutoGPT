@@ -25,7 +25,36 @@ New in the Godot build:
   - The boss can hit it, buy a truce or sell its route to the police.
   - The chief can send a gang unit after it.
   - Its planes fly in the 3D game as AI traffic.
+- **On foot, first person.** TAB out of a parked aircraft and walk the apron, the hangars and the three
+  headquarters. E uses what you face: the job board, the load planner at the fuel desk, the hangar
+  workbench, the boss's desk (the organisation's orders) and the map table (what you know of Los
+  Cuervos). F is a torch. The island, every building and the parked aircraft are solid; you climb
+  kerbs and terraces but can't swim.
+- **Generated islands.** `--map N` (or the lobby's island picker) grows island N: terrain, ten strips
+  sited and rated for approach, and the HQs placed where each side would want them - the villa near the
+  cove, the task force by the hub, the rival compound up in the hills. `--map 0` is the classic island.
+- **The realism layer** (found and tuned by the scenario sweeps; details in
+  [docs/BALANCE.md](docs/BALANCE.md) 14-19):
+  - *Weather and the moon.* A nightly forecast both HQs see (right 75% of the time). Cloud, rain and a
+    dark moon hide you; storms ground helicopters and the aerostat, keep cutters in port, and more than
+    double crash risk. In the air: JSBSim wind and Dryden turbulence, rain, lightning, the moon's phase.
+    Parked aircraft are tied down.
+  - *Pattern of life.* The task force's analysts learn your routine: repeat a route and they expect you
+    (up to +45% detection). Mixing your routes is the inspection game's answer.
+  - *Canary trap.* The chief can feed a bribed dispatcher a fake patrol. Swerve around it and your man is
+    arrested, so a leak is never ground truth.
+  - *Rival tempers.* Los Cuervos are tit-for-tat, grudge-holders or opportunists, and you learn which
+    from how they behave. Truces unravel as the season runs out (backward induction).
+  - *Stake-outs.* Spare police helicopters don't chase: they cover the strip your track points at.
+  - *Nerves.* Stress follows what real smuggling pilots feared. Past the Yerkes-Dodson hump the screen
+    tunnels, you hear your heartbeat and your hands shake (8-12 Hz, human hands only). A co-pilot
+    steadies you.
 - **Graphics overhaul:**
+  - chunked, LOD'd terrain with a biome splat shader (sand, grass, forest floor, dry grass, rock
+    triplanar on steep faces, normal-mapped); a depth-aware sea with shoreline foam; a procedural sky
+    with clouds, sun, stars and the moon; palm, broadleaf, conifer and bush MultiMeshes swaying in the
+    wind; hangars, terminals, fuel desks and the three HQs as real walkable buildings with lit windows
+    and lamps
   - a day/night cycle driving sun, sky and fog
   - runway edge and threshold lights, aircraft nav lights, strobes and landing lights, and police
     light bars and a searchlight at night
@@ -40,6 +69,10 @@ New in the Godot build:
 | ![load](docs/img/ui-load.png) | ![boss](docs/img/ui-boss.png) | ![desk](docs/img/ui-desk.png) |
 | **Job board** | **Chief: the task force's orders** | **Low preset** |
 | ![jobs](docs/img/ui-jobs.png) | ![chief](docs/img/ui-chief.png) | ![low](docs/img/low-preset.png) |
+| **On foot at the hangars** | **The boss's desk, inside the villa** | **The villa, sited by the generator** |
+| ![foot](docs/img/on-foot-hangar.png) | ![villa](docs/img/villa-desk.png) | ![org](docs/img/hq-org.png) |
+| **A storm night** | **Full moon** | **Generated island #7** |
+| ![storm](docs/img/storm.png) | ![moon](docs/img/full-moon.png) | ![map7](docs/img/map-seed7.png) |
 
 *(Rendered on a GPU-less box: Mesa llvmpipe with Godot's compatibility renderer under Xvfb. SSAO and
 volumetric fog need Forward+ on a real GPU.)*
@@ -52,7 +85,7 @@ GODOT=$(./tools/get_godot.sh)        # pinned Godot 4.4.1 into .tools/ (or use y
 ./tools/build_native.sh              # builds bin/libskyrunner_native.so (godot-cpp + JSBSim 1.3.1, ~10 min the first time)
 $GODOT --path .                      # lobby: pick a mode, or join a friend's game
 $GODOT --path . -- --mode campaign   # or skip the lobby with the same flags as the Python game
-./tools/test.sh                      # the test suite, headless (about 70 s)
+./tools/test.sh                      # the test suite, headless (about 2 minutes)
 ```
 
 Build needs CMake 3.20+, a C++17 compiler and Python 3 (for godot-cpp's binding generator).
@@ -70,13 +103,19 @@ Command-line flags (all optional; any flag skips the lobby):
 | `--host` / `--port 47800` | open remote seats in solo |
 | `--connect HOST:PORT --role R [--name N] [--seat3d]` | join as `copilot`, `spotter`, `boat`, `boss`, `controller`, `interceptor` (3D), `cutter` or `chief` |
 | `--hour 0-24` | time of day to start at (F2 advances it in game) |
+| `--map N` | island: 0 = classic, N = generated island N |
+| `--weather clear\|cloud\|storm[,moon]` | tonight's weather outside a season (moon 0 = new .. 1 = full) |
 | `--new`, `--seed N` | fresh save; job-board seed |
 | `--shot out.png [--frames 90]` | render and save a screenshot, then quit |
 
 Dedicated task-force server (no pilot seat): `$GODOT --headless --path . --script res://scripts/net/dedicated.gd -- --port 47800`.
 Python station clients connect to it too, because it speaks the same protocol.
 
-Controls: F1 in game. They are the Python game's keys, plus F2 for time of day and gamepad or joystick support.
+Controls: F1 in game. They are the Python game's keys, plus F2 for time of day, gamepad or joystick
+support, and on foot: TAB get out / climb in, WASD walk (Shift runs, Space jumps), mouse look, E use, F torch.
+
+Demo videos: [docs/video/](docs/video/) (`tools/tour.gd` records the on-foot and HQ tour;
+`tools/record_demo.sh` records a bot flight against the task force, optionally in weather).
 
 ## Balance tooling
 
@@ -84,6 +123,7 @@ Controls: F1 in game. They are the Python game's keys, plus F2 for time of day a
 $GODOT --headless --path . --script res://scripts/balance/cli.gd -- all --workers 4   # feasibility, tactical, strategic, report
 $GODOT --headless --path . --script res://scripts/balance/cli.gd -- strategic --n 1000
 $GODOT --headless --path . --script res://scripts/balance/cli.gd -- tune --n 100 --grid '{"rival_market": [0.3, 0.4]}'
+$GODOT --headless --path . --script res://tools/equilibrium.gd -- 500 '{"weather": false}'   # one rule set's equilibrium
 ```
 
 Results go to `sim-results/*.json` and the report to [docs/BALANCE.md](docs/BALANCE.md).

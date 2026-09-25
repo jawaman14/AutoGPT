@@ -17,7 +17,7 @@ const SAVE_DIR := "user://"
 
 var args := {"mode": "solo", "police": false, "host": false, "port": 47800, "bind": "*", "new": false, "seed": 1,
 	"players": 0, "layer": 0, "graphics": "high", "watch": false, "shot": "", "frames": 90, "hour": -1.0,
-	"map": -1, "connect": "", "role": "copilot", "name": "player", "seat3d": false, "lobby": true}
+	"map": -1, "weather": "", "connect": "", "role": "copilot", "name": "player", "seat3d": false, "lobby": true}
 
 
 func _ready() -> void:
@@ -77,6 +77,9 @@ func start() -> void:
 	if features != null:
 		opts["features"] = features
 	var sess := Session.load_or_new(save, opts)
+	if args["weather"] != "":  # --weather clear|cloud|storm[,moon 0..1]; the HQ season sets its own each night
+		var wp: PackedStringArray = str(args["weather"]).split(",")
+		sess.set_weather({"sky": wp[0], "moon": float(wp[1]) if wp.size() > 1 else 0.5})
 	if mode == Roles.CAMPAIGN:
 		Campaign.from_dict(Session.read_save(save).get("campaign")).attach(sess)
 	var server = null

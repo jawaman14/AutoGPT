@@ -19,6 +19,8 @@ run res://tools/shots/pilot_shot.gd -- high 16 "$PWD/$OUT/hq-org.png" chase org
 run res://tools/shots/pilot_shot.gd -- high 16 "$PWD/$OUT/hq-rival.png" chase rival
 run res://tools/shots/pilot_shot.gd -- high 13 "$PWD/$OUT/map-classic.png" chase overview
 run res://tools/shots/pilot_shot.gd -- high 13 "$PWD/$OUT/map-seed7.png" chase overview 7
+run res://tools/shots/pilot_shot.gd -- high 15 "$PWD/$OUT/storm.png" chase air 0 storm 0.2
+run res://tools/shots/pilot_shot.gd -- high 22 "$PWD/$OUT/full-moon.png" chase air 0 clear 1.0
 for w in load jobs hangar boss chief desk; do
   run res://tools/shots/ui_shot.gd -- $w "$PWD/$OUT/ui-$w.png"
 done
