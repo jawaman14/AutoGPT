@@ -49,7 +49,8 @@ add_library(skyrunner_native SHARED
   src/register_types.cpp
   src/jsbsim_fdm.cpp
   src/rng.cpp
-  src/terrain.cpp)
+  src/terrain.cpp
+  src/pymath.cpp)
 target_link_libraries(skyrunner_native PRIVATE godot::cpp libJSBSim)
 set_target_properties(skyrunner_native PROPERTIES
   PREFIX "lib"

@@ -1,6 +1,7 @@
 #include "jsbsim_fdm.h"
 #include "rng.h"
 #include "terrain.h"
+#include "pymath.h"
 
 #include <gdextension_interface.h>
 #include <godot_cpp/core/class_db.hpp>
@@ -15,6 +16,7 @@ static void initialize_skyrunner(ModuleInitializationLevel level) {
     GDREGISTER_CLASS(PyRandom);
     GDREGISTER_CLASS(NpRandom);
     GDREGISTER_CLASS(Terrain);
+    GDREGISTER_CLASS(PyMath);
 }
 
 static void uninitialize_skyrunner(ModuleInitializationLevel level) {}
