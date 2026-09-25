@@ -73,6 +73,17 @@ virtualenv active).
     the first minimum. `Py.sorted_by`, `Py.min_by` and `Py.max_by` reproduce both.
 13. **Tests must start after the SceneTree is the main loop.** Nodes added during `_init` or
     `_initialize` aren't inside the tree. The runner starts on the first `_process` frame.
+14. **JSBSim turbulence and respawning don't mix.** With Dryden turbulence on (`atmosphere/turb-type` 4),
+    re-running the initial conditions segfaults inside JSBSim. `FDM.spawn()` switches turbulence off
+    before the initial conditions and `Session._apply_wind()` switches it back on afterwards.
+15. **The sky shader's LIGHT0 is the first visible DirectionalLight3D.** Hiding the sun at night makes the
+    moon LIGHT0, and the sky shader then draws a daytime sky. The sun stays visible at zero energy.
+16. **CharacterBody3D doesn't step up kerbs.** `Walker._step_up()` probes with `test_move`: up, then
+    forward, then drops back down. A hit only counts as a ceiling when its normal points down
+    (`y < -0.5`). Otherwise the edge of the step itself reads as a ceiling.
+17. **New rules need a switch and their own random stream.** Everything added after the port (weather,
+    pattern of life, canary, rival tempers) is a `HQ.RULES` flag. `PYTHON_RULES` switches them all off,
+    and their draws come from `Season.xrng`, so the Python fixtures still match bit for bit.
 
 ## Where exact parity stops
 
