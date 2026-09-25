@@ -19,17 +19,17 @@ static func mat(key: String) -> StandardMaterial3D:
 	if _mats.has(key):
 		return _mats[key]
 	var specs := {
-		"stucco": [Color(0.93, 0.88, 0.78), 0.9, 0.0],
-		"stucco_pink": [Color(0.95, 0.78, 0.72), 0.9, 0.0],
+		"stucco": [Color(0.74, 0.69, 0.6), 0.9, 0.0],
+		"stucco_pink": [Color(0.78, 0.58, 0.52), 0.9, 0.0],
 		"terracotta": [Color(0.72, 0.33, 0.2), 0.8, 0.0],
-		"concrete": [Color(0.66, 0.66, 0.64), 0.92, 0.0],
+		"concrete": [Color(0.55, 0.55, 0.53), 0.92, 0.0],
 		"concrete_dark": [Color(0.42, 0.43, 0.44), 0.9, 0.0],
 		"metal": [Color(0.72, 0.74, 0.76), 0.45, 0.8],
 		"metal_rust": [Color(0.55, 0.36, 0.24), 0.7, 0.5],
 		"wood": [Color(0.46, 0.32, 0.2), 0.85, 0.0],
 		"glass": [Color(0.25, 0.35, 0.42, 0.55), 0.08, 0.2],
 		"window_lit": [Color(1.0, 0.85, 0.55), 0.3, 0.0],
-		"white": [Color(0.94, 0.94, 0.94), 0.6, 0.0],
+		"white": [Color(0.78, 0.78, 0.78), 0.6, 0.0],
 		"red": [Color(0.75, 0.12, 0.1), 0.6, 0.0],
 		"blue": [Color(0.12, 0.2, 0.55), 0.5, 0.2],
 		"black": [Color(0.06, 0.06, 0.07), 0.5, 0.3],
@@ -232,6 +232,22 @@ class Kit:
 		a.monitorable = true
 		root.add_child(a)
 
+	## A warm ceiling lamp (interiors get no bounce light in the compatibility renderer).
+	func lamp(p: Vector3, energy := 1.4, reach := 9.0) -> void:
+		var l := OmniLight3D.new()
+		l.name = "lamp"
+		l.position = p
+		l.light_color = Color(1.0, 0.86, 0.66)
+		l.light_energy = energy
+		l.omni_range = reach
+		l.omni_attenuation = 1.2
+		l.shadow_enabled = false
+		l.distance_fade_enabled = true  # only the buildings you're near pay for their lamps
+		l.distance_fade_begin = 150.0
+		l.distance_fade_length = 50.0
+		l.add_to_group("lamps")
+		root.add_child(l)
+
 	func finish() -> Node3D:
 		for key in st:
 			var t: SurfaceTool = st[key]
@@ -262,6 +278,7 @@ static func hangar(k: Kit, c: Vector3, w := 18.0, d := 20.0, with_board := true)
 		k.interact(c + Vector3(w / 2 - 1.2, 1.0, d / 2 - 1.6), "jobs", "Job board")
 		k.box(c + Vector3(-w / 2 + 2.0, 0.6, d / 2 - 1.2), Vector3(3.0, 1.2, 1.2), "wood")  # workbench
 		k.interact(c + Vector3(-w / 2 + 2.0, 1.0, d / 2 - 2.6), "hangar", "Hangar: aircraft & gear")
+	k.lamp(c + Vector3(0, w / 2 - 1.5, 2.0), 2.0, 16.0)
 
 
 static func tower(k: Kit, c: Vector3, h := 14.0) -> void:
@@ -307,6 +324,7 @@ static func terminal(k: Kit, c: Vector3, w := 36.0, d := 14.0) -> void:
 	k.box(c + Vector3(-w / 4, 1.1, 0), Vector3(6, 1.1, 1.0), "wood")  # desk inside
 	k.interact(c + Vector3(-w / 4, 1.0, -1.6), "jobs", "Freight desk: job board")
 	k.interact(c + Vector3(w / 4, 1.0, -1.6), "hangar", "Aircraft sales & gear")
+	k.lamp(c + Vector3(0, 3.0, 0.5), 1.4, 12.0)
 	k.box(c + Vector3(w / 4, 1.1, 0), Vector3(6, 1.1, 1.0), "wood")
 
 
@@ -400,6 +418,8 @@ static func _villa(k: Kit) -> void:
 	k.box(Vector3(-4.0, 0.45, 2.8), Vector3(2.6, 0.9, 1.2), "wood")
 	k.box(Vector3(-4.0, 0.6, 3.9), Vector3(0.7, 1.2, 0.7), "black")  # chair
 	k.interact(Vector3(-4.0, 1.0, 1.6), "hq_org", "The boss's desk: tonight's orders")
+	k.lamp(Vector3(-4.0, 3.0, 1.5))
+	k.lamp(Vector3(3.5, 3.0, 0.0))
 	k.box(Vector3(3.5, 0.5, 1.0), Vector3(3.0, 1.0, 2.0), "wood")
 	k.box(Vector3(3.5, 1.02, 1.0), Vector3(2.8, 0.04, 1.8), "green", false)  # the map on the table
 	k.interact(Vector3(3.5, 1.0, -0.6), "hq_rival", "Map table: what we know about Los Cuervos")
@@ -435,6 +455,7 @@ static func _task_force(k: Kit) -> void:
 	k.box(Vector3(-13.2, 8.2, -9), Vector3(1.6, 1.0, 0.04), "blue", false)
 	k.box(Vector3(-2.0, 0.55, 2.0), Vector3(4.0, 1.1, 1.2), "wood")
 	k.interact(Vector3(-2.0, 1.0, 0.6), "hq_law", "Task-force duty desk")
+	k.lamp(Vector3(-2.0, 3.0, 1.5))
 	for i in 3:  # patrol cars
 		k.box(Vector3(-6 + i * 5.5, 0.7, -12), Vector3(1.9, 1.4, 4.4), "white")
 		k.box(Vector3(-6 + i * 5.5, 1.55, -12.3), Vector3(1.8, 0.1, 0.5), "blue", false)
@@ -451,6 +472,7 @@ static func _compound(k: Kit) -> void:
 	hangar(k, Vector3(-5, 0, 6), 16, 18, false)
 	k.box(Vector3(-5, 0.8, 4), Vector3(4, 1.6, 3), "wood")  # crates
 	k.interact(Vector3(-5, 1.0, 1.2), "hq_rival", "Los Cuervos' warehouse")
+	k.lamp(Vector3(-5, 3.2, 2.0), 1.0)
 	for p in [[16, -16], [-16, 16]]:  # watchtowers
 		for sx in [-1, 1]:
 			for sz in [-1, 1]:

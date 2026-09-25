@@ -6,6 +6,7 @@ extends Node3D
 ## sun, sky and fog colours, runway/nav lights that come on at dusk, SSAO,
 ## volumetric fog and glow on the presets that can afford them.
 
+const BOUNCE := Color(0.56, 0.52, 0.45)  ## sunlit ground's bounce light
 const DAY_SKY := Color(0.55, 0.72, 0.9)
 const NIGHT_SKY := Color(0.02, 0.03, 0.07)
 const DUSK_SKY := Color(0.85, 0.5, 0.35)
@@ -63,7 +64,10 @@ func _build_environment() -> void:
 		env.background_mode = Environment.BG_SKY
 		env.sky = sky
 		env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-		env.ambient_light_sky_contribution = 0.7
+		# no GI in the compatibility renderer: half the ambient is a warm ground
+		# bounce, so shade and interiors aren't tinted pure sky-blue
+		env.ambient_light_sky_contribution = 0.5
+		env.ambient_light_color = BOUNCE
 		env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	else:
 		env.background_mode = Environment.BG_COLOR
@@ -72,7 +76,8 @@ func _build_environment() -> void:
 		env.ambient_light_color = Color(0.42, 0.45, 0.52)
 		env.ambient_light_energy = 1.0
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES if quality.shaded else Environment.TONE_MAPPER_LINEAR
-	env.tonemap_exposure = 1.0
+	env.tonemap_exposure = 1.15 if quality.shaded else 1.0
+	env.tonemap_white = 4.0 if quality.shaded else 1.0  # ACES headroom: sunlit walls keep their colour
 	if quality.ssao:
 		env.ssil_enabled = true  # Forward+: bounce light off the ground and walls
 	env.fog_enabled = true
@@ -129,14 +134,15 @@ func set_hour(h: float) -> void:
 	var day := smoothstep(-10.0, 8.0, el)  # through civil twilight to full day
 	var dusk := clampf(1.0 - absf(el - 2.0) / 9.0, 0.0, 1.0)
 	night = 1.0 - day
-	sun.light_energy = 1.1 * day
+	sun.light_energy = 1.0 * day
 	sun.visible = day > 0.01
 	sun.light_color = Color(1.0, 0.96, 0.88).lerp(Color(1.0, 0.6, 0.35), dusk)
 	moon.light_energy = 0.3 * night
 	var sky_col := NIGHT_SKY.lerp(DAY_SKY, day).lerp(DUSK_SKY, dusk * 0.45)
 	env.fog_light_color = sky_col
 	if sky_shader != null:
-		env.ambient_light_energy = lerpf(0.45, 1.0, day)
+		env.ambient_light_energy = lerpf(0.4, 0.7, day)
+		env.ambient_light_color = Color(0.1, 0.11, 0.16).lerp(BOUNCE, day)
 	else:
 		env.background_color = sky_col
 		env.ambient_light_color = Color(0.42, 0.45, 0.52).lerp(Color(0.12, 0.14, 0.22), night)

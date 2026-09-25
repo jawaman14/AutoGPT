@@ -3,6 +3,8 @@ extends SceneTree
 ##   godot --script res://tools/shots/pilot_shot.gd -- <low|medium|high> <hour> <out.png> <chase|cockpit|tower> [view] [map_seed]
 ## view: ground (default: parked at HAR) | air (climbing out near Eagle's Nest) |
 ##       org | law | rival (looking at that HQ) | overview (high above the island)
+##       foot (on foot beside the parked aircraft, looking at the hangars) |
+##       villa (on foot inside the org's villa, at the boss's desk)
 var app: PilotApp
 var n := 0
 var q := "medium"
@@ -44,8 +46,18 @@ func _init():
 		fixed_cam = [Vector3(har.x - 3000, 2600, -(har.y - 4000)), Vector3(0, 200, 0)]
 
 
+func _areas(node: Node, action: String, out: Array) -> Array:
+	if node is Area3D and node.get_meta("action", "") == action:
+		out.append(node)
+	for c in node.get_children():
+		_areas(c, action, out)
+	return out
+
+
 func _process(_d):
 	n += 1
+	if n == 2 and view in ["foot", "villa"]:
+		_on_foot()
 	if fixed_cam != null:
 		app.set_process(false)  # the app would move its camera back (processing re-enables on ready)
 		app.cam.global_position = fixed_cam[0]
@@ -56,3 +68,23 @@ func _process(_d):
 		root.get_viewport().get_texture().get_image().save_png(out)
 		print("saved ", out)
 		quit()
+
+
+## Get out and stand in front of the hangar (or the boss's desk). Runs once the tree is live.
+func _on_foot() -> void:
+	app._toggle_on_foot()
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	var w := app.walker
+	w.look_enabled = false
+	var target := "hangar" if view == "foot" else "hq_org"
+	var areas := _areas(app.scene, target, [])
+	if view == "foot":
+		areas = areas.filter(func(a): return a.get_meta("field", "") == "HAR" and str(a.get_meta("label")).begins_with("Hangar"))
+	if not areas.is_empty():
+		var p: Vector3 = areas[0].global_position
+		var back: Vector3 = areas[0].get_parent().global_transform.basis.z.normalized()
+		var dist := 48.0 if view == "foot" else 3.2
+		var spot: Vector3 = p - back * dist
+		w.place(spot.x, -spot.z, 0.0)
+		w.look_at(Vector3(p.x, w.global_position.y, p.z), Vector3.UP)
+		w.cam.rotation.x = deg_to_rad(4 if view == "foot" else -8)

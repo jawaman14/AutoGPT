@@ -13,6 +13,12 @@ run res://tools/shots/pilot_shot.gd -- medium 14 "$PWD/$OUT/runway-medium.png" c
 run res://tools/shots/pilot_shot.gd -- high 17.7 "$PWD/$OUT/dusk-high.png" chase air
 run res://tools/shots/pilot_shot.gd -- high 21 "$PWD/$OUT/night-runway.png" chase
 run res://tools/shots/pilot_shot.gd -- low 11 "$PWD/$OUT/low-preset.png" chase air
+run res://tools/shots/pilot_shot.gd -- high 10 "$PWD/$OUT/on-foot-hangar.png" chase foot
+run res://tools/shots/pilot_shot.gd -- high 15 "$PWD/$OUT/villa-desk.png" chase villa
+run res://tools/shots/pilot_shot.gd -- high 16 "$PWD/$OUT/hq-org.png" chase org
+run res://tools/shots/pilot_shot.gd -- high 16 "$PWD/$OUT/hq-rival.png" chase rival
+run res://tools/shots/pilot_shot.gd -- high 13 "$PWD/$OUT/map-classic.png" chase overview
+run res://tools/shots/pilot_shot.gd -- high 13 "$PWD/$OUT/map-seed7.png" chase overview 7
 for w in load jobs hangar boss chief desk; do
   run res://tools/shots/ui_shot.gd -- $w "$PWD/$OUT/ui-$w.png"
 done

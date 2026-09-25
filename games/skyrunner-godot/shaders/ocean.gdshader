@@ -66,8 +66,10 @@ void fragment() {
 	float foam = foam_line * smoothstep(0.35, 0.8, n2.g + breaker * 0.35) * step(0.02, depth);
 	col = mix(col, vec3(0.95, 0.97, 1.0), foam);
 	ALBEDO = col;
-	ROUGHNESS = mix(0.04, 0.6, foam);
+	// far away the sub-pixel waves average out: rougher, dimmer mirror (no white band at the horizon)
+	float far = smoothstep(400.0, 6000.0, length(wpos.xz - CAMERA_POSITION_WORLD.xz));
+	ROUGHNESS = mix(mix(0.05, 0.6, foam), 0.32, far);
 	METALLIC = 0.0;
-	SPECULAR = 0.75;
+	SPECULAR = mix(0.6, 0.3, far);
 	ALPHA = clamp(mix(0.78, 1.0, smoothstep(0.3, 4.0, depth)) + foam * 0.2, 0.0, 1.0);  // opaque when deep: no double-blend seam with the far sea
 }
