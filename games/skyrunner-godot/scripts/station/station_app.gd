@@ -40,7 +40,8 @@ var _list_keys: Array = []
 var _last_seq = null
 
 
-func setup(link_, role_: String, world_: World = null) -> StationApp:
+## vertical: map above the desk (narrow panes, e.g. the split-screen demo).
+func setup(link_, role_: String, world_: World = null, vertical := false) -> StationApp:
 	link = link_
 	role = role_
 	world = world_ if world_ != null else World.new()
@@ -49,15 +50,16 @@ func setup(link_, role_: String, world_: World = null) -> StationApp:
 	bg.color = Color(0.04, 0.05, 0.07)
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
-	var h := HBoxContainer.new()
+	var h: BoxContainer = VBoxContainer.new() if vertical else HBoxContainer.new()
 	h.set_anchors_preset(Control.PRESET_FULL_RECT)
 	h.add_theme_constant_override("separation", 10)
 	add_child(h)
 	map = StationMap.new().setup(world)
 	map.role = role
-	map.custom_minimum_size = Vector2(700, 700)
+	map.custom_minimum_size = Vector2(340, 340) if vertical else Vector2(700, 700)
 	map.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	map.size_flags_stretch_ratio = 1.15
+	map.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	map.size_flags_stretch_ratio = 1.0 if vertical else 1.15
 	map.clicked.connect(_on_map_click)
 	h.add_child(map)
 	var panel := PanelContainer.new()

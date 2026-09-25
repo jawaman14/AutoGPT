@@ -34,7 +34,15 @@ func setup(sess: Session) -> Hud:
 	status = _place(UIStyle.label("", 18), Control.PRESET_TOP_RIGHT, Vector2(-14, 10), true)
 	jobs = _place(UIStyle.label("", 15, UIStyle.CYAN, mono), Control.PRESET_TOP_RIGHT, Vector2(-14, 120), true)
 	objectives = _place(UIStyle.label("", 15, UIStyle.AMBER), Control.PRESET_TOP_RIGHT, Vector2(-14, 260), true)
-	msgs = _place(UIStyle.label("", 16), Control.PRESET_BOTTOM_LEFT, Vector2(14, -250))
+	msgs = UIStyle.label("", 16)
+	msgs.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	msgs.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	msgs.anchor_left = 0.0
+	msgs.anchor_right = 0.62
+	msgs.anchor_top = 0.45
+	msgs.anchor_bottom = 0.78
+	msgs.offset_left = 14
+	add_child(msgs)
 	intel = _place(UIStyle.label("", 14, Color(1, 0.8, 0.5), mono), Control.PRESET_BOTTOM_RIGHT, Vector2(-250, -300), true)
 	warn = _centered(UIStyle.label("", 30, UIStyle.RED), 0.2)
 	center = _centered(UIStyle.label("", 24, UIStyle.AMBER), 0.42)

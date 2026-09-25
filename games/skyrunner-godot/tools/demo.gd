@@ -47,11 +47,12 @@ func _initialize() -> void:
 	var right := _pane(h)
 	desk = StationApp.new()
 	right.add_child(desk)
-	desk.setup(LocalLink.new(s, Roles.CONTROLLER, false), Roles.CONTROLLER, s.world)
-	banner = UIStyle.label("", 18, UIStyle.AMBER)
+	desk.setup(LocalLink.new(s, Roles.CONTROLLER, false), Roles.CONTROLLER, s.world, true)
+	banner = UIStyle.label("", 15, UIStyle.AMBER)
 	banner.add_theme_stylebox_override("normal", UIStyle.panel_box(Color(0, 0, 0, 0.7)))
-	banner.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	banner.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	banner.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	banner.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	ui.add_child(banner)
 
 
@@ -69,7 +70,7 @@ func _pane(parent: Control) -> SubViewport:
 
 func _process(_dt: float) -> bool:
 	var t := s.time
-	banner.text = "SKYRUNNER (Godot)   left: the pilot   right: the task-force desk   T+%d:%02d   %s" % [int(t / 60), int(fmod(t, 60)), label]
+	banner.text = "SKYRUNNER (Godot)  left: pilot  right: task-force desk  T+%d:%02d  %s" % [int(t / 60), int(fmod(t, 60)), label]
 	if ended_at < 0 and (bot.phase == "done" or s.phase in ["busted", "crashed"] or (s.parked and s.unloading.is_empty() and s.time > 60)):
 		ended_at = t
 		print("outcome at T+%.0fs: %s" % [t, s.last_outcome if s.last_outcome else bot.outcome])
