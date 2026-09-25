@@ -416,12 +416,17 @@ class Season:
         return err
 
     def _l_recruit(self) -> str | None:
-        if self.law.informants >= INFORMANT_CAP:
+        n = self.law.informants
+        if n >= INFORMANT_CAP:
             return "Enough informants to handle."
-        err = self._spend(LAW_COSTS_K["informant"])
+        # the first informant is a free-standing tip; each one after that needs
+        # its own approach into a smaller, more guarded circle - dearer and
+        # less likely to land (see docs/BALANCE.md #10: this was the single
+        # best move in the game before the cost/odds scaled with the count).
+        err = self._spend(LAW_COSTS_K["informant"] * (1 + n))
         if not err:
             # recruiting works better when the crews are unhappy
-            if self.rng.random() < 0.85 - 0.5 * self.org.loyalty:
+            if self.rng.random() < (0.85 - 0.5 * self.org.loyalty) * (0.6 ** n):
                 self.law.informants += 1
                 self.law_log.append("New informant inside the organisation.")
             else:

@@ -90,6 +90,18 @@ CHANGELOG = [
      "investigation trio (recruit/audit/wiretap) still swings the most on ablation (+15 to +20 points each), "
      "which tracks with evidence being the task force's only win condition, but it is now measured, not "
      "accidentally doubled by dead code."),
+    ("Recruiting a second informant was still nearly free",
+     "Known limits flagged the fix above as partial: recruit's ablation stayed the single biggest number "
+     "(+20.2) because the cost and odds only depended on the informant cap, not on how many were already "
+     "in place. Stacking to the cap (2) cost the same $5k twice and succeeded at the same rate twice, so a "
+     "chief who could afford it just always went to 2 early and never felt a choice.",
+     "Recruiting cost now scales with the count already turned ($5k, then $10k for the second), and the "
+     "success chance is multiplied by 0.6 per existing informant, so the second head is a real, worse bet "
+     "rather than a free top-up. Equilibrium barely moved (0.450 -> 0.451 at 40000 seasons) because most of "
+     "recruit's value is 'have one at all' versus 'have none', which this doesn't touch - that first "
+     "informant is doing the work the task force's whole case-building game is built on. The remaining "
+     "ablation size is now read as by-design (evidence is the task force's only win path) rather than a bug, "
+     "per the note above."),
 ]
 
 
@@ -216,10 +228,10 @@ def write_report(results_dir: Path, out: Path) -> Path:
               "- Sample sizes: tactical cells have 3-9 flights each. Anything under about 15 points of "
               "difference is noise.",
               "- Recruit is nearly worthless to a random bot (+2 pts) but the single biggest ablation at "
-              "equilibrium (+20.2 pts): it only pays off as an every-night opener, so skilled play finds it "
-              "and less-skilled play doesn't. Next candidate fix if this shows up in playtests: a diminishing "
-              "recruit success rate after the first informant, so stacking to the cap costs more than the "
-              "first one did."]
+              "equilibrium (about +20 pts even after the cost/odds were scaled per informant): most of its "
+              "value is 'have one informant at all' versus 'have none', which no per-informant tuning "
+              "touches. If this reads as too strong in playtests, the next lever is the tip mechanic the "
+              "first informant grants, not the recruiting cost."]
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(lines) + "\n")
     return out
