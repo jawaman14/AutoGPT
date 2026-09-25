@@ -34,7 +34,7 @@ func _init() -> void:
 			i += 1
 		elif a == "--uncalibrated":
 			opts["calibrated"] = false
-		elif a in ["feasibility", "tactical", "strategic", "report", "all", "tune"]:
+		elif a in ["feasibility", "tactical", "strategic", "report", "all", "tune", "crew"]:
 			what = a
 		else:
 			printerr("unknown argument " + a)
@@ -42,7 +42,7 @@ func _init() -> void:
 			return
 		i += 1
 	if what == "":
-		print("usage: cli.gd -- feasibility|tactical|strategic|report|all [--workers N] [--seeds N] [--n N]")
+		print("usage: cli.gd -- feasibility|tactical|strategic|crew|report|all [--workers N] [--seeds N] [--n N]")
 		quit(2)
 		return
 	var steps := ["feasibility", "tactical", "strategic", "report"] if what == "all" else [what]
@@ -70,6 +70,17 @@ func _load(name: String):
 
 func _secs(t0: int) -> float:
 	return (Time.get_ticks_msec() - t0) / 1000.0
+
+
+func cmd_crew() -> void:
+	var t0 := Time.get_ticks_msec()
+	var r := CrewSim.sweep(opts["seeds"], opts["workers"])
+	var out := {"flights": r, "table": CrewSim.table(r), "loading_s": CrewSim.loading_times()}
+	_save("crew", out)
+	for row in out["table"]:
+		print(row)
+	print("loading: %s" % [out["loading_s"]])
+	print("%d flights in %.0f s" % [r.size(), _secs(t0)])
 
 
 func cmd_feasibility() -> void:

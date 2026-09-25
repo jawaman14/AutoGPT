@@ -21,6 +21,8 @@ static func run_one(kind: String, job: Array) -> Dictionary:
 			return Tactical.run_job(job)
 		"feasibility":
 			return Feasibility.run_job(job)
+		"crew":
+			return CrewSim.run_job(job)
 	push_error("unknown job kind " + kind)
 	return {}
 
