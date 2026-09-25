@@ -273,6 +273,7 @@ var aerostat_ready_t = null
 var _alias := {}
 var _unalias := {}
 var pending_claim := {}  ## role -> unit kind waiting to launch
+var frozen := false  ## tests: stand the task force down (Python monkeypatches tick)
 
 
 func _init(world_: World, rng_: PyRandom = null, radio_: RadioNet = null, controller_ := "ai", features_ = null) -> void:
@@ -521,6 +522,8 @@ func _ai_escalate(c: Case, level: int, sig: SensorNet.Signature) -> void:
 # ---------------------------------------------------- main tick
 ## Advance the task force. Returns {target_id: "busted" | "clean" | "hijacked"}.
 func tick(dt: float, now_: float, targets: Array) -> Dictionary:
+	if frozen:
+		return {}
 	now = now_
 	var outcomes := {}
 	var by_id := {}
