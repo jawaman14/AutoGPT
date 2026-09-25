@@ -1,4 +1,6 @@
 #include "jsbsim_fdm.h"
+#include "rng.h"
+#include "terrain.h"
 
 #include <gdextension_interface.h>
 #include <godot_cpp/core/class_db.hpp>
@@ -10,6 +12,9 @@ using namespace godot;
 static void initialize_skyrunner(ModuleInitializationLevel level) {
     if (level != MODULE_INITIALIZATION_LEVEL_SCENE) return;
     GDREGISTER_CLASS(JSBSimFDM);
+    GDREGISTER_CLASS(PyRandom);
+    GDREGISTER_CLASS(NpRandom);
+    GDREGISTER_CLASS(Terrain);
 }
 
 static void uninitialize_skyrunner(ModuleInitializationLevel level) {}

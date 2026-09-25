@@ -10,6 +10,10 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
+# No fused multiply-add: numpy/CPython/pip-JSBSim round every multiply and add
+# separately, and the port is checked against them bit for bit.
+add_compile_options($<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang>:-ffp-contract=off> $<$<COMPILE_LANG_AND_ID:C,GNU,Clang>:-ffp-contract=off>)
+
 include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
 
@@ -43,7 +47,9 @@ FetchContent_MakeAvailable(godot-cpp jsbsim)
 
 add_library(skyrunner_native SHARED
   src/register_types.cpp
-  src/jsbsim_fdm.cpp)
+  src/jsbsim_fdm.cpp
+  src/rng.cpp
+  src/terrain.cpp)
 target_link_libraries(skyrunner_native PRIVATE godot::cpp libJSBSim)
 set_target_properties(skyrunner_native PROPERTIES
   PREFIX "lib"
