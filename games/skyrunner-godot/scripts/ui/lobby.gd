@@ -2,6 +2,8 @@ class_name Lobby
 extends Control
 ## Start screen: host a game (mode, players, graphics, seed) or join one as a
 ## remote seat. Emits `start(opts)` with the same keys as the command line.
+## Fully keyboard-driven too: TAB/arrows move focus (Fly has it first), ENTER
+## presses, and the key caps at the bottom say so.
 
 signal start(opts: Dictionary)
 
@@ -17,6 +19,8 @@ var addr: LineEdit
 var role_ob: OptionButton
 var name_le: LineEdit
 var plan_lbl: Label
+var go_btn: Button
+var hints: KeyHints
 
 const MODES := [["Sandbox (solo)", "solo"], ["Campaign 1979-", "campaign"], ["Co-op: friends crew for you", "coop"],
 	["Versus: friends run the task force", "versus"], ["Task-force desk vs AI runners", "police"]]
@@ -24,23 +28,25 @@ const JOIN_ROLES := ["copilot", "spotter", "boat", "boss", "controller", "interc
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	theme = UIStyle.theme()
 	var bg := ColorRect.new()
-	bg.color = Color(0.05, 0.07, 0.1)
+	bg.color = Color(0.035, 0.045, 0.065)
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", UIStyle.panel_box())
+	panel.add_theme_stylebox_override("panel", UIStyle.box(Color(0.06, 0.07, 0.095, 0.97), 10, UIStyle.LINE, 1, Vector4(28, 22, 28, 20)))
 	center.add_child(panel)
 	var v := VBoxContainer.new()
-	v.custom_minimum_size = Vector2(620, 0)
-	v.add_theme_constant_override("separation", 8)
+	v.custom_minimum_size = Vector2(660, 0)
+	v.add_theme_constant_override("separation", 10)
 	panel.add_child(v)
-	v.add_child(UIStyle.label("SKYRUNNER", 40, UIStyle.AMBER))
+	v.add_child(UIStyle.label("SKYRUNNER", 44, UIStyle.AMBER))
 	v.add_child(UIStyle.label("Bush flying, weight & balance, and the long arm of the law.", 16, UIStyle.DIM))
+	v.add_child(UIStyle.caption("Host a game"))
 	var g := GridContainer.new()
 	g.columns = 2
 	g.add_theme_constant_override("h_separation", 14)
@@ -87,16 +93,23 @@ func _ready() -> void:
 	for c in [new_cb, watch_cb, host_cb]:
 		flags.add_child(c)
 	v.add_child(flags)
-	plan_lbl = UIStyle.label("", 14, UIStyle.CYAN, UIStyle.mono())
+	var pp := PanelContainer.new()
+	pp.add_theme_stylebox_override("panel", UIStyle.box(Color(0.3, 0.8, 1, 0.06), 6, Color(0.5, 0.9, 1, 0.25), 1, Vector4(12, 8, 12, 8)))
+	plan_lbl = UIStyle.label("", 14, UIStyle.CYAN)
 	plan_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	v.add_child(plan_lbl)
-	var go := Button.new()
-	go.text = "Fly"
-	go.custom_minimum_size = Vector2(0, 40)
-	go.pressed.connect(_go)
-	v.add_child(go)
+	pp.add_child(plan_lbl)
+	v.add_child(pp)
+	go_btn = Button.new()
+	go_btn.text = "FLY"
+	go_btn.custom_minimum_size = Vector2(0, 46)
+	go_btn.add_theme_font_size_override("font_size", 20)
+	go_btn.add_theme_stylebox_override("normal", UIStyle.box(UIStyle.ACCENT.darkened(0.35), 6, UIStyle.ACCENT, 1))
+	go_btn.add_theme_stylebox_override("hover", UIStyle.box(UIStyle.ACCENT.darkened(0.2), 6, UIStyle.ACCENT, 1))
+	go_btn.add_theme_color_override("font_color", UIStyle.WHITE)
+	go_btn.pressed.connect(_go)
+	v.add_child(go_btn)
 	v.add_child(HSeparator.new())
-	v.add_child(UIStyle.label("Join a game", 20, UIStyle.AMBER))
+	v.add_child(UIStyle.caption("Join a game"))
 	var j := HBoxContainer.new()
 	addr = LineEdit.new()
 	addr.placeholder_text = "host:47800"
@@ -109,10 +122,26 @@ func _ready() -> void:
 	var join := Button.new()
 	join.text = "Join"
 	join.pressed.connect(_join)
+	j.add_theme_constant_override("separation", 8)
 	for c in [addr, role_ob, name_le, join]:
 		j.add_child(c)
 	v.add_child(j)
+	hints = KeyHints.new()
+	hints.set_hints([["TAB", "next field", ""], ["ARROWS", "change", ""], ["ENTER", "press / fly", ""], ["F", "fly now", "fly"]])
+	hints.hint_pressed.connect(func(a):
+		if a == "fly":
+			_go())
+	v.add_child(hints)
+	addr.text_submitted.connect(func(_t): _join())
+	name_le.text_submitted.connect(func(_t): _join())
 	_plan()
+	go_btn.grab_focus.call_deferred()
+
+
+func _unhandled_key_input(ev: InputEvent) -> void:
+	if ev is InputEventKey and ev.pressed and not ev.echo and ev.keycode == KEY_F:
+		_go()
+		get_viewport().set_input_as_handled()
 
 
 func _row(g: GridContainer, text: String, c: Control) -> void:

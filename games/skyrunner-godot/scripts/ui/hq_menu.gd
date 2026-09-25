@@ -1,30 +1,30 @@
 class_name HQMenu
 extends GameMenu
 ## The organisation's orders, from the boss's desk in the villa (walk in and
-## press E). Same order list as the boss station (HQOrders): cost, effect,
-## state; LEFT/RIGHT sets it, ENTER issues it. `intel` mode is the map table:
-## what the organisation knows about Los Cuervos, tonight's plan and the news.
+## press E). The same HQBoard as the boss station: headline tiles, tonight's
+## conditions, the order table (LEFT/RIGHT sets an order, ENTER issues it).
+## `intel` mode is the map table: what the organisation knows about Los Cuervos,
+## their turf, tonight's leak and the news.
 
 var intel := false
-var orders := HQOrders.new("runner")
-var list: ItemList
-var detail: Label
-var info: Label
+var board: HQBoard
+var list: DataTable  ## the board's order table (kept for callers that drive it)
 var rows: Array = []
+var info: Label
+var turf: VBoxContainer
 
 
 func _build() -> void:
-	info = UIStyle.label("", 15, UIStyle.WHITE, UIStyle.mono())
+	board = HQBoard.new().setup("runner")
+	content.add_child(board)
+	list = board.table
+	info = UIStyle.label("", 15, UIStyle.WHITE)
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(info)
-	list = GameMenu.make_list()
-	list.item_activated.connect(func(_i): key("enter"))
-	list.item_selected.connect(func(_i): _detail())
-	content.add_child(list)
-	detail = UIStyle.label("", 15, UIStyle.DIM)
-	detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	detail.custom_minimum_size = Vector2(0, 50)
-	content.add_child(detail)
+	turf = VBoxContainer.new()
+	turf.add_theme_constant_override("separation", 6)
+	content.add_child(turf)
+	list.row_activated.connect(func(_i): key("enter"))
 
 
 func _view():
@@ -33,79 +33,80 @@ func _view():
 
 func refresh() -> void:
 	var ss = _view()
+	board.visible = ss != null and not intel
+	turf.visible = ss != null and intel
 	if ss == null:
 		title.text = "THE VILLA"
+		subtitle.text = ""
 		info.text = "No season is running: the organisation and its HQ orders come with the fifth rule layer\n(--players 5 or more, or --layer 5)."
-		list.visible = false
-		footer.text = "ESC close"
+		info.visible = true
+		hints.set_hints([["ESC", "close", "esc"]])
 		return
-	list.visible = not intel
-	var o: Dictionary = ss.org
-	var head := "NIGHT %d/%d  %s" % [int(ss.night), int(ss.nights), str(ss.phase).to_upper()]
-	var lines := [
-		"Dirty $%s   Clean $%s / $%s to retire   heat %d" % [Py.money(int(o.dirty)), Py.money(int(o.clean)),
-			Py.money(int(ss.retire_target)), int(ss.public.heat)],
-		"Case against you: %s   moves left tonight: %d%s" % [ss.evidence_rumor, int(o.actions), "   READY" if o.ready else ""],
-	]
-	lines += HQOrders.realism_lines(ss, "runner")
-	var rv = ss.get("rival")
+	var head := "NIGHT %d/%d  -  %s" % [int(ss.night), int(ss.nights), str(ss.phase).to_upper()]
 	if intel:
-		title.text = "MAP TABLE  -  " + head
-		if rv is Dictionary:
-			lines += ["", "%s: %s%s%s" % [rv.name, rv.band, ("   truce %d nights" % int(rv.truce_nights)) if rv.truce_nights else "",
-				"   OUT FOR REVENGE" if rv.grudge else ""], "Their share of each market:"]
-			for z in HQOrders.ZONES:
-				lines.append("  %-6s %s %d%%" % [z, "#".repeat(int(float(rv.turf[z]) * 20)), int(float(rv.turf[z]) * 100)])
-		else:
-			lines.append("No rival outfit on this island.")
-		if ss.get("patrol_leak"):
-			lines.append("Our man in dispatch: the patrol goes %s tonight." % ss.patrol_leak)
-		lines += ["", "NEWS:"] + ss.get("news", []).slice(-5).map(func(n): return "  " + str(n))
-		lines += ["", "LOG:"] + ss.get("log", []).slice(-6).map(func(n): return "  " + str(n))
-		info.text = "\n".join(lines)
-		footer.text = "ESC close"
+		_intel(ss, head)
 		return
-	title.text = "THE BOSS'S DESK  -  " + head
+	info.visible = false
+	title.text = "THE BOSS'S DESK"
+	subtitle.text = head
+	board.update(ss)
+	rows = board.rows
+	footer.text = ""
+	hints.set_hints([["UP/DOWN", "order", "down"], ["LEFT/RIGHT", "change it", "right"], ["ENTER", "issue", "enter"],
+		["ESC", "close", "esc"]])
+
+
+func _intel(ss: Dictionary, head: String) -> void:
+	title.text = "MAP TABLE"
+	subtitle.text = head
+	info.visible = true
+	for c in turf.get_children():
+		turf.remove_child(c)
+		c.queue_free()
+	var rv = ss.get("rival")
+	var lines := []
+	if rv is Dictionary:
+		lines.append("%s: %s%s%s" % [rv.name, rv.band, ("   -   truce %d nights" % int(rv.truce_nights)) if rv.truce_nights else "",
+			"   -   OUT FOR REVENGE" if rv.grudge else ""])
+		turf.add_child(UIStyle.caption("Their share of each market"))
+		for z in HQOrders.ZONES:
+			var t := StatTile.new().setup(z, true, 16)
+			var share := float(rv.turf[z])
+			t.set_value("%d%%" % int(share * 100), UIStyle.RED if share > 0.5 else UIStyle.AMBER, share)
+			turf.add_child(t)
+	else:
+		lines.append("No rival outfit on this island.")
+	if ss.get("patrol_leak"):
+		lines.append("Our man in dispatch: the patrol goes %s tonight." % ss.patrol_leak)
+	lines += HQOrders.realism_lines(ss, "runner")
+	lines += ["", "NEWS"] + ss.get("news", []).slice(-5).map(func(n): return "  " + str(n))
+	lines += ["", "LOG"] + ss.get("log", []).slice(-6).map(func(n): return "  " + str(n))
 	info.text = "\n".join(lines)
-	var keep := maxi(0, GameMenu.selected(list))
-	rows = orders.rows(ss)
-	list.clear()
-	for r in rows:
-		list.add_item("%-34s %s" % [r.label, r.state])
-		if r.key == "ready":
-			list.set_item_custom_fg_color(list.item_count - 1, UIStyle.GREEN)
-	list.select(mini(keep, list.item_count - 1))
-	_detail()
-	footer.text = "UP/DOWN order   LEFT/RIGHT change it   ENTER issue   ESC close"
+	hints.set_hints([["ESC", "close", "esc"]])
 
 
 func _detail() -> void:
-	var i := GameMenu.selected(list)
-	detail.text = rows[i].detail if i >= 0 and i < rows.size() else ""
+	board._detail()
 
 
 func key(k: String) -> void:
 	var ss = _view()
 	if ss == null or intel:
 		return
-	var i := GameMenu.selected(list)
 	match k:
 		"up":
-			GameMenu.list_move(list, -1)
+			list.move(-1)
 			_detail()
 			return
 		"down":
-			GameMenu.list_move(list, 1)
+			list.move(1)
 			_detail()
 			return
 		"left", "right":
-			if i >= 0:
-				orders.adjust(rows[i], 1 if k == "right" else -1, ss)
+			board.adjust(1 if k == "right" else -1, ss)
 		"enter":
-			if i >= 0:
-				var r: Dictionary = rows[i]
-				var args := {"order": r.order}
-				args.merge(r.args)
+			var args := board.command_args()
+			if not args.is_empty():
 				var res: Array = s.command(Roles.PILOT, "hq", args)
 				if not res[0]:
 					s.say(res[1])

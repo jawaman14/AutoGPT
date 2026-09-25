@@ -1,15 +1,27 @@
 class_name HangarMenu
 extends GameMenu
-## Aircraft dealer, gear shop and services (spotters, crew).
+## Aircraft dealer, gear shop and services (spotters, crew), as one table:
+## what it is, what it does, and what it costs or whether you have it.
 
-var list: ItemList
+var list: DataTable
+var detail: Label
 var rows: Array = []
 
 
 func _build() -> void:
-	list = GameMenu.make_list()
-	list.item_activated.connect(func(_i): key("enter"))
+	list = GameMenu.make_table([
+		{"title": "", "min": 90},
+		{"title": "Item", "expand": true, "ratio": 2, "min": 200},
+		{"title": "Details", "expand": true, "ratio": 3, "min": 260},
+		{"title": "Price", "align": "right", "mono": true, "min": 110},
+	])
+	list.row_activated.connect(func(_i): key("enter"))
+	list.row_selected.connect(func(_i): _detail())
 	content.add_child(list)
+	detail = UIStyle.label("", 15, UIStyle.DIM)
+	detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	detail.custom_minimum_size = Vector2(0, 44)
+	content.add_child(detail)
 
 
 func _rows() -> Array:
@@ -27,42 +39,66 @@ func _rows() -> Array:
 
 
 func refresh() -> void:
-	title.text = "HANGAR, GEAR & SERVICES"
-	var keep := maxi(0, GameMenu.selected(list))
-	list.clear()
+	title.text = "HANGAR"
+	subtitle.text = "aircraft, gear & crew  -  $%s in hand" % Py.money(s.money)
+	var keep := list.selected_row()
+	list.clear_rows()
 	rows = _rows()
 	for r in rows:
-		var text := ""
 		match r[0]:
 			"aircraft":
 				var a: Aircraft.Spec = r[1]
-				var owned := "OWNED" if s.owned.has(a.key) else "$" + Py.money(a.price)
-				text = "%-24s %10s%s   MTOW %.0f lb, %d seats, roll ~%.0f m" % [a.name, owned,
-					" (current)" if a.key == s.aircraft_key else "", a.mtow_lb, a.seat_count(), a.ground_roll_m]
+				var owned: bool = s.owned.has(a.key)
+				var cur: bool = a.key == s.aircraft_key
+				list.add_row(["AIRCRAFT", a.name + ("  (flying)" if cur else ""),
+					"MTOW %.0f lb  -  %d seats  -  roll ~%.0f m" % [a.mtow_lb, a.seat_count(), a.ground_roll_m],
+					"OWNED" if owned else "$" + Py.money(a.price)],
+					{"cell_colors": {3: UIStyle.GREEN if owned else UIStyle.WHITE, 1: UIStyle.AMBER if cur else Color(0.9, 0.92, 0.95)}})
 			"gear":
 				var g: Array = Session.GEAR[r[1]]
 				var have: bool = s.gear.has(r[1]) or (r[1] == "ferry_tank" and Py.any(s.loadout.items.values(), func(i): return i.kind == "tank"))
-				text = "%-52s %8s" % [g[1], "FITTED" if have else "$" + Py.money(g[0])]
+				list.add_row(["GEAR", str(r[1]).replace("_", " ").capitalize(), g[1], "FITTED" if have else "$" + Py.money(g[0])],
+					{"cell_colors": {3: UIStyle.GREEN if have else UIStyle.WHITE}})
 			"spotter":
 				var watching := ", ".join(s.spotters.map(func(sp): return sp.code))
-				text = "Hire a spotter to watch this strip ($%d)   [watching: %s]" % [Session.SPOTTER_FEE, watching if watching else "none"]
+				list.add_row(["CREW", "Spotter at %s" % s.location, "watching: %s" % (watching if watching else "none"),
+					"$%d" % Session.SPOTTER_FEE])
 			"copilot":
 				var who: String = {"human": "human (online)", "ai": "Rosa (AI)"}.get(s.copilot, "none")
-				text = "Co-pilot: %s  - loads 2x faster, kicks bales, pumps ferry fuel. ENTER toggles." % who
-		list.add_item(text)
-	list.select(mini(keep, list.item_count - 1))
+				list.add_row(["CREW", "Co-pilot: " + who, "loads 2x faster, kicks bales, pumps ferry fuel",
+					"ON" if s.copilot else "OFF"], {"cell_colors": {3: UIStyle.GREEN if s.copilot else UIStyle.CAPTION}})
+	list.select_near(keep if keep >= 0 else 0)
+	_detail()
 	var shop: bool = s.airfield != null and s.airfield.shop
-	footer.text = ("ENTER buy / hire / toggle   " if shop else "No aircraft dealer here (gear and services OK).   ") + "ESC close"
+	footer.text = "" if shop else "No aircraft dealer at this strip: gear and crew only."
+	hints.set_hints([["UP/DOWN", "select", "down"], ["ENTER", "buy / hire / toggle", "enter"], ["ESC", "close", "esc"]])
+
+
+func _detail() -> void:
+	var i := list.selected_row()
+	detail.text = ""
+	if i < 0 or i >= rows.size():
+		return
+	match rows[i][0]:
+		"aircraft":
+			var a: Aircraft.Spec = rows[i][1]
+			detail.text = "Owned aircraft switch for free; new ones are bought here." if a.key != s.aircraft_key else "You're flying this one."
+		"copilot":
+			detail.text = "ENTER toggles the AI co-pilot. A human co-pilot joins from the lobby (station or --seat3d)."
+		"spotter":
+			detail.text = "A spotter radios when police aircraft or cars come near this strip."
 
 
 func key(k: String) -> void:
 	match k:
 		"up":
-			GameMenu.list_move(list, -1)
+			list.move(-1)
+			_detail()
 		"down":
-			GameMenu.list_move(list, 1)
+			list.move(1)
+			_detail()
 		"enter":
-			var i := GameMenu.selected(list)
+			var i := list.selected_row()
 			if i < 0:
 				return
 			var r: Array = rows[i]

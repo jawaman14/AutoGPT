@@ -11,7 +11,9 @@ extends GameMenu
 ## Keyboard: UP/DOWN item, LEFT/RIGHT station, +/- fuel 10%, F ferry tank,
 ## A loadmaster, ESC close.
 
-var stations_lbl: Label
+var stations: DataTable
+var verdict: Chip
+var tiles := {}
 var items_box: GridContainer
 var fuel_lbl: Label
 var fuel_slider: HSlider
@@ -32,10 +34,15 @@ func _build() -> void:
 	var left := VBoxContainer.new()
 	left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.add_child(left)
-	left.add_child(UIStyle.label("Stations", 17, UIStyle.AMBER))
-	stations_lbl = UIStyle.label("", 14, UIStyle.WHITE, UIStyle.mono())
-	left.add_child(stations_lbl)
-	left.add_child(UIStyle.label("Load (pick a station for each item)", 17, UIStyle.AMBER))
+	left.add_theme_constant_override("separation", 8)
+	left.add_child(UIStyle.caption("Stations"))
+	stations = GameMenu.make_table([{"title": "Station", "min": 120}, {"title": "Arm", "align": "right", "mono": true, "min": 64},
+		{"title": "Load", "align": "right", "mono": true, "min": 110}, {"title": "Aboard", "expand": true, "min": 160}])
+	stations.focus_mode = Control.FOCUS_NONE
+	stations.size_flags_vertical = Control.SIZE_FILL
+	stations.custom_minimum_size = Vector2(0, 250)
+	left.add_child(stations)
+	left.add_child(UIStyle.caption("Cargo  -  pick a station for each item"))
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	left.add_child(scroll)
@@ -49,7 +56,21 @@ func _build() -> void:
 	right.custom_minimum_size = Vector2(400, 0)
 	right.add_theme_constant_override("separation", 6)
 	h.add_child(right)
-	right.add_child(UIStyle.label("Fuel", 17, UIStyle.AMBER))
+	var vrow := HBoxContainer.new()
+	vrow.add_theme_constant_override("separation", 8)
+	vrow.add_child(UIStyle.caption("Weight & balance"))
+	verdict = Chip.new().setup("OK")
+	vrow.add_child(verdict)
+	right.add_child(vrow)
+	var tg := GridContainer.new()
+	tg.columns = 2
+	tg.add_theme_constant_override("h_separation", 8)
+	tg.add_theme_constant_override("v_separation", 8)
+	for n in [["tow", "Take-off weight", true], ["cg", "CG (in)", false], ["endurance", "Endurance", false], ["route", "Route reserve", false]]:
+		tiles[n[0]] = StatTile.new().setup(n[1], n[2], 18)
+		tg.add_child(tiles[n[0]])
+	right.add_child(tg)
+	right.add_child(UIStyle.caption("Fuel"))
 	fuel_lbl = UIStyle.label("", 14, UIStyle.WHITE, UIStyle.mono())
 	fuel_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	right.add_child(fuel_lbl)
@@ -95,10 +116,11 @@ func _build() -> void:
 	chart = CGChart.new()
 	chart.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	right.add_child(chart)
-	readout = UIStyle.label("", 14, UIStyle.WHITE, UIStyle.mono())
+	readout = UIStyle.label("", 14, UIStyle.RED)
 	readout.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	right.add_child(readout)
-	footer.text = "UP/DOWN item  LEFT/RIGHT station  +/- fuel 10%  F ferry  A loadmaster  ESC close"
+	hints.set_hints([["UP/DOWN", "item", "down"], ["LEFT/RIGHT", "station", "right"], ["+/-", "fuel 10%", "+"],
+		["F", "fill ferry", "f"], ["A", "loadmaster", "a"], ["ESC", "close", "esc"]])
 
 
 func _items() -> Array:
@@ -109,7 +131,8 @@ func refresh() -> void:
 	var lo: Loadout = s.loadout
 	if not fuel_dragging:
 		lo.fuel_lb = s.fm.fuel_lb()
-	title.text = "LOAD PLANNER - %s" % s.spec.name
+	title.text = "LOAD PLANNER"
+	subtitle.text = "%s  -  crew loading: %d" % [s.spec.name, s.crew_count()]
 	_refresh_stations()
 	_refresh_items()
 	_refresh_fuel_and_wb()
@@ -118,7 +141,7 @@ func refresh() -> void:
 func _refresh_stations() -> void:
 	var lo: Loadout = s.loadout
 	var weights: Array = lo.station_weights(true)
-	var lines := ["crew loading: %d" % s.crew_count()]
+	stations.clear_rows()
 	for i in lo.spec.stations.size():
 		var st: Aircraft.Station = lo.spec.stations[i]
 		var who := []
@@ -129,9 +152,11 @@ func _refresh_stations() -> void:
 			who = ["You (%.0f lb)" % Loadout.PILOT_LB]
 		elif lo.copilot_aboard and i == lo.copilot_station():
 			who = ["Co-pilot (%.0f lb)" % Loadout.PILOT_LB] + who
-		var over := "  OVER!" if weights[i] > st.max_lb else ""
-		lines.append("%-16s arm %6.1f  %5.0f/%-5.0f lb  %s%s" % [st.name, st.x_in, weights[i], st.max_lb, ", ".join(who), over])
-	stations_lbl.text = "\n".join(lines)
+		var over: bool = weights[i] > st.max_lb
+		var frac: float = weights[i] / maxf(1.0, st.max_lb)
+		var col := UIStyle.RED if over else (UIStyle.AMBER if frac > 0.85 else (UIStyle.WHITE if weights[i] > 0 else UIStyle.CAPTION))
+		stations.add_row([st.name, "%.1f" % st.x_in, "%.0f/%.0f" % [weights[i], st.max_lb], ", ".join(who) + ("  OVER!" if over else "")],
+			{"cell_colors": {2: col, 3: UIStyle.RED if over else Color(0.9, 0.92, 0.95)}, "selectable": false})
 
 
 func _refresh_items() -> void:
@@ -216,17 +241,23 @@ func _refresh_fuel_and_wb() -> void:
 		details.append("%d item(s) left on the ramp" % lo.unassigned().size())
 	var cr := _cruise()
 	var hours: float = (lo.fuel_lb + ferry) / cr[0]
-	var lines := [
-		"TOW %.0f / %.0f lb   CG %.1f in (%.1f-%.1f)" % [wb.weight_lb, s.spec.mtow_lb, wb.cg_in, wb.fwd_limit_in, wb.aft_limit_in],
-		"[%s] %s" % ["OK" if wb.ok() else "OUT OF LIMITS", "; ".join(details)],
-		"Endurance %d:%02d at cruise, range ~%.0f km" % [int(hours), int(fposmod(hours * 60, 60)), hours * cr[1] * 1.852],
-	]
+	verdict.set_state("OK" if wb.ok() else "OUT OF LIMITS", UIStyle.GREEN if wb.ok() else UIStyle.RED, true)
+	var heavy: bool = wb.weight_lb > s.spec.mtow_lb
+	tiles["tow"].set_value("%.0f lb" % wb.weight_lb, UIStyle.RED if heavy else UIStyle.WHITE, wb.weight_lb / s.spec.mtow_lb,
+		"MTOW %.0f lb" % s.spec.mtow_lb)
+	tiles["cg"].set_value("%.1f" % wb.cg_in, UIStyle.WHITE if wb.in_envelope else UIStyle.RED, -1.0,
+		"limits %.1f - %.1f" % [wb.fwd_limit_in, wb.aft_limit_in])
+	tiles["endurance"].set_value("%d:%02d" % [int(hours), int(fposmod(hours * 60, 60))], UIStyle.WHITE, -1.0,
+		"range ~%.0f km at cruise" % (hours * cr[1] * 1.852))
 	var need = _route_need()
 	if need != null:
 		var margin: float = (lo.fuel_lb + ferry - need[1]) / cr[0] * 60
-		lines.append("Route %.1f km: needs ~%.0f lb, reserve %s%.0f min" % [need[0] / 1000, need[1], "" if margin >= 0 else "SHORT ", margin])
-	readout.text = "\n".join(lines)
-	readout.add_theme_color_override("font_color", UIStyle.WHITE if wb.ok() else UIStyle.RED)
+		tiles["route"].set_value("%s%.0f min" % ["SHORT " if margin < 0 else "", absf(margin)],
+			UIStyle.RED if margin < 0 else (UIStyle.AMBER if margin < 30 else UIStyle.GREEN), -1.0,
+			"%.1f km needs ~%.0f lb" % [need[0] / 1000, need[1]])
+	else:
+		tiles["route"].set_value("-", UIStyle.CAPTION, -1.0, "take a job to plan fuel")
+	readout.text = "; ".join(details)
 
 
 ## [route metres, fuel lb without reserve] for the first active job, or null.

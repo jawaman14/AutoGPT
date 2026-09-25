@@ -7,7 +7,7 @@ extends Control
 var s: Session
 var tex: ImageTexture
 var big := false
-const SMALL := 220.0
+const SMALL := 220.0  ## at 720 p; both scale with the screen height
 const BIG := 560.0
 
 
@@ -20,8 +20,13 @@ func setup(sess: Session) -> Minimap:
 	return self
 
 
+func _scale() -> float:
+	var h: float = get_parent_area_size().y if is_inside_tree() else 720.0
+	return clampf(h / 720.0, 0.8, 2.0)
+
+
 func _layout() -> void:
-	var sz := BIG if big else SMALL
+	var sz := (BIG if big else SMALL) * _scale()
 	custom_minimum_size = Vector2(sz, sz)
 	size = Vector2(sz, sz)
 	set_anchors_preset(Control.PRESET_BOTTOM_RIGHT if not big else Control.PRESET_CENTER)
@@ -44,6 +49,9 @@ func to_map(x: float, y: float) -> Vector2:
 
 
 func _process(_dt: float) -> void:
+	var want := (BIG if big else SMALL) * _scale()
+	if absf(size.x - want) > 1.0:
+		_layout()
 	if not big:
 		position = get_parent_area_size() - size - Vector2(12, 12)
 	queue_redraw()

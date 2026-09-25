@@ -22,6 +22,9 @@ var scene: WorldScene
 var cam: Camera3D
 var hud: Label
 var msg: Label
+var badge: Chip
+var hints: KeyHints
+var confirm: ConfirmBox
 var buf: Array = []  ## [arrival_s, snap]
 var nodes := {}  ## key -> Node3D
 var cam_mode := "cockpit"
@@ -44,14 +47,63 @@ func setup(link_, role_: String, graphics := "medium", world: World = null) -> R
 	cam.current = true
 	var ui := CanvasLayer.new()
 	add_child(ui)
-	hud = UIStyle.label("Connecting...", 17, Color(0.6, 1, 0.6), UIStyle.mono())
-	hud.position = Vector2(14, 10)
-	ui.add_child(hud)
-	msg = UIStyle.label("", 16)
-	msg.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	msg.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	msg.position += Vector2(14, -20)
-	ui.add_child(msg)
+	var root := Control.new()
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.theme = UIStyle.theme()
+	ui.add_child(root)
+	var top := VBoxContainer.new()
+	top.position = Vector2(14, 12)
+	top.add_theme_constant_override("separation", 6)
+	root.add_child(top)
+	badge = Chip.new().setup("")
+	badge.set_state("CO-PILOT SEAT" if role == Roles.COPILOT else "POLICE PILOT", UIStyle.CYAN if role == Roles.COPILOT else UIStyle.RED, true)
+	badge.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	top.add_child(badge)
+	var hp := PanelContainer.new()
+	hp.add_theme_stylebox_override("panel", UIStyle.box(Color(0.02, 0.03, 0.05, 0.62), 8, Color(1, 1, 1, 0.07), 1, Vector4(12, 8, 12, 8)))
+	hp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top.add_child(hp)
+	hud = UIStyle.label("Connecting...", 16, Color(0.75, 1, 0.8), UIStyle.mono())
+	hp.add_child(hud)
+	msg = UIStyle.label("", 15)
+	msg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	msg.anchor_top = 1.0
+	msg.anchor_bottom = 1.0
+	msg.anchor_right = 0.5
+	msg.offset_left = 14
+	msg.offset_top = -150
+	msg.offset_bottom = -52
+	msg.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	root.add_child(msg)
+	hints = KeyHints.new()
+	hints.alignment = FlowContainer.ALIGNMENT_CENTER
+	hints.anchor_left = 0.15
+	hints.anchor_right = 0.85
+	hints.anchor_top = 1.0
+	hints.anchor_bottom = 1.0
+	hints.offset_top = -40
+	hints.offset_bottom = -12
+	var hk := {"kick": KEY_K, "pump": KEY_V, "call_boat": KEY_O, "auto_kick": KEY_T}
+	hints.hint_pressed.connect(func(a):
+		if a == "esc":
+			confirm.ask()
+		elif a == "cam":
+			cam_mode = "chase" if cam_mode == "cockpit" else "cockpit"
+		elif hk.has(a):
+			link.send_command(a, {}))
+	if Roles.side(role) == "runner":
+		hints.set_hints([["K", "kick", "kick"], ["V", "pump", "pump"], ["O", "call boat", "call_boat"], ["T", "auto-kick", "auto_kick"],
+			["ARROWS", "look", ""], ["C", "camera", "cam"], ["ESC", "leave seat", "esc"]])
+	else:
+		hints.set_hints([["SPACE", "launch interceptor", ""], ["H", "launch helicopter", ""], ["WASD", "fly", ""], ["R/F", "throttle", ""],
+			["X", "hand back to AI", ""], ["C", "camera", "cam"], ["ESC", "leave seat", "esc"]])
+	root.add_child(hints)
+	confirm = ConfirmBox.new().setup("Leave the %s seat?" % ("co-pilot" if role == Roles.COPILOT else "police pilot"))
+	confirm.answered.connect(func(yes):
+		if yes:
+			get_tree().quit())
+	root.add_child(confirm)
 	return self
 
 
@@ -103,8 +155,12 @@ func _unhandled_input(ev: InputEvent) -> void:
 	if not (ev is InputEventKey and ev.pressed and not ev.echo):
 		return
 	var k: int = ev.physical_keycode if ev.physical_keycode else ev.keycode
+	if confirm.visible:
+		if k in [KEY_ENTER, KEY_KP_ENTER, KEY_ESCAPE]:
+			confirm.key("esc" if k == KEY_ESCAPE else "enter")
+		return
 	if k == KEY_ESCAPE:
-		get_tree().quit()
+		confirm.ask()
 	elif k == KEY_C:
 		cam_mode = "chase" if cam_mode == "cockpit" else "cockpit"
 	elif role == Roles.INTERCEPTOR:
@@ -270,7 +326,6 @@ func _hud(snap: Dictionary) -> void:
 			"W&B %.0f lb  CG %.1f  %s" % [wb.get("weight", 0), wb.get("cg", 0), "OK" if wb.get("ok") else "OUT"],
 			"XPDR %s  RADAR %s  WANTED %s" % ["on" if ac.get("transponder") else "OFF", ac.get("detector") if ac.get("detector") else "-", "*".repeat(int(ac.get("wanted", 0)))],
 			"kick queue %d  auto-kick %s" % [int(ac.get("kick_queue", 0)), "on" if ac.get("auto_kick") else "off"],
-			"K kick  V pump  O call boat  T auto-kick  arrows look  C camera",
 		]
 		var ss = snap.get("season")
 		if ss is Dictionary:
@@ -286,7 +341,6 @@ func _hud(snap: Dictionary) -> void:
 				"%s (%s)  %.0f kt  ALT %.0f ft  AGL %.0f" % [m.id, m.kind, m.speed_kts, m.z / 0.3048, m.agl / 0.3048],
 				"HDG %.0f  bank %.0f  throttle %d%%  fuel %.1f min" % [m.heading, m.roll, int(throttle * 100), m.fuel_s / 60],
 				"BUST %.0f%%   visual: %s" % [snap.get("bust_meter", 0), ", ".join(vis) if vis else "none"],
-				"WASD fly  R/F throttle  X hand back to AI  C camera",
 			]
 		else:
 			lines = ["POLICE PILOT - no aircraft", "SPACE launch an interceptor   H a helicopter" + ("   (launching...)" if snap.get("claim_pending") else "")]
