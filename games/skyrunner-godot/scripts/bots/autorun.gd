@@ -60,7 +60,7 @@ func step(dt: float) -> FlightModel.Controls:
 		if s.accept_job(job) != null:
 			return null
 	var job: Jobs.Job = s.active_jobs[0]
-	if not s.loadout.compute().ok:
+	if not s.loadout.compute().ok():
 		s.hire_loadmaster()
 	var legs := PilotBot.mission_for(s, job, s.location)
 	s.set_fuel(PilotBot.plan_fuel_lb(s, legs))

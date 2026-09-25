@@ -154,7 +154,7 @@ static func _loadout(sess: Session) -> Dictionary:
 		"stations": stations,
 		"items": items,
 		"wb": {"weight": _r(wb.weight_lb), "cg": _r(wb.cg_in, 2), "fwd": _r(wb.fwd_limit_in, 2),
-			"aft": _r(wb.aft_limit_in, 2), "ok": wb.ok, "mtow": lo.spec.mtow_lb, "overweight": _r(wb.overweight_lb)},
+			"aft": _r(wb.aft_limit_in, 2), "ok": wb.ok(), "mtow": lo.spec.mtow_lb, "overweight": _r(wb.overweight_lb)},
 		"envelope": lo.spec.envelope.map(func(p): return [p[0], p[1]]),
 		"fuel": _r(lo.fuel_lb), "fuel_cap": _r(lo.mass.fuel_capacity_lb()),
 		"crew": sess.crew_count(),

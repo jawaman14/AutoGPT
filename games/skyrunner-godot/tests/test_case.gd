@@ -12,6 +12,10 @@ func before_each() -> void:
 	pass
 
 
+func after_each() -> void:
+	pass
+
+
 func check(cond: bool, msg := "") -> bool:
 	if not cond:
 		failures.append("%s: %s" % [current, msg if msg else "check failed"])

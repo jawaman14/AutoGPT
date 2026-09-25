@@ -2,7 +2,17 @@ extends SceneTree
 ## godot --headless --script res://tests/run_tests.gd [-- filter]
 ## Runs every tests/test_*.gd; exit code is the number of failed tests.
 
-func _init() -> void:
+var _started := false
+
+
+func _process(_dt: float) -> bool:
+	if not _started:
+		_started = true
+		_run()
+	return false
+
+
+func _run() -> void:
 	var filter := ""
 	var args := OS.get_cmdline_user_args()
 	if args.size() > 0:
@@ -28,6 +38,7 @@ func _init() -> void:
 			inst.failures.clear()
 			inst.before_each()
 			inst.call(n)
+			inst.after_each()
 			if inst.failures.is_empty():
 				passed += 1
 			else:

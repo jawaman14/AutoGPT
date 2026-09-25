@@ -385,6 +385,11 @@ func _cmd_move_item(role: String, a: Dictionary):
 	var iid := int(_num(a, "item_id", -1))
 	if not loadout.items.has(iid):
 		return "No such item."
+	if a.has("station"):  # direct placement (the load screen); -1 = back to the ramp
+		var st = _num(a, "station")
+		if st == null:
+			return "Bad arguments for move_item."
+		return place_item(iid, int(st))
 	cycle_item(iid, int(_num(a, "direction", 1)))
 	return null
 
@@ -698,6 +703,29 @@ func cycle_item(item_id: int, direction := 1) -> void:
 		return
 	loadout.cycle(loadout.items[item_id], direction)
 	fm.apply_loadout(loadout)
+
+
+## Put an item at a given station (-1 = unload to the ramp). Returns an error or null.
+func place_item(item_id: int, station: int):
+	if not parked:
+		return "Loading happens on the ground, stopped."
+	if not loadout.items.has(item_id):
+		return "No such item."
+	var item: Loadout.Item = loadout.items[item_id]
+	if station < 0:
+		loadout.assignment.erase(item_id)
+		loadout.pending.erase(item_id)
+	else:
+		if station >= loadout.spec.stations.size():
+			return "No such station."
+		if not loadout.can_place(item, station):
+			return "%s won't go in %s." % [item.label, loadout.spec.stations[station].name]
+		if loadout.assignment.get(item_id) == station:
+			return null
+		loadout.assignment[item_id] = station
+		loadout.queue_move(item)
+	fm.apply_loadout(loadout)
+	return null
 
 
 ## [price per lb, lb available] at the current field.
