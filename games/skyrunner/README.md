@@ -1,4 +1,8 @@
-# Skyrunner
+# Skyrunner (legacy Python prototype)
+
+> **LEGACY / ARCHIVAL.** The game now lives in [`../skyrunner-godot/`](../skyrunner-godot/) and runs
+> entirely on Godot 4. This Python prototype is kept only as the reference that generated the
+> Godot build's frozen parity fixtures. It is not maintained.
 
 A bush-flying and smuggling game built on **[JSBSim](https://github.com/JSBSim-Team/jsbsim)**, the
 open-source flight dynamics engine used by FlightGear and many research simulators, with a

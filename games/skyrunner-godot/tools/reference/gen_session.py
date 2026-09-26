@@ -1,4 +1,7 @@
-"""Reference runs from the Python game for the port's Session/police/HQ parity tests.
+"""ARCHIVAL: the Python prototype is reference only. This script regenerates a frozen
+parity fixture; nothing in the Godot game needs it to build, play or test.
+
+Reference runs from the Python game for the port's Session/police/HQ parity tests.
 
   python3 tools/reference/gen_session.py > tests/fixtures/session_ref.json
 """

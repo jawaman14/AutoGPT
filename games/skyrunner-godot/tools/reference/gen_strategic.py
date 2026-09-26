@@ -1,4 +1,7 @@
-"""Reference output from the Python season simulator for the port's strategic parity tests.
+"""ARCHIVAL: the Python prototype is reference only. This script regenerates a frozen
+parity fixture; nothing in the Godot game needs it to build, play or test.
+
+Reference output from the Python season simulator for the port's strategic parity tests.
 
   python3 tools/reference/gen_strategic.py > tests/fixtures/strategic_ref.json
 """

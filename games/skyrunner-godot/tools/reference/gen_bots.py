@@ -1,4 +1,7 @@
-"""Reference output from the Python bots for the port's planner/flight parity tests.
+"""ARCHIVAL: the Python prototype is reference only. This script regenerates a frozen
+parity fixture; nothing in the Godot game needs it to build, play or test.
+
+Reference output from the Python bots for the port's planner/flight parity tests.
 
   python3 tools/reference/gen_bots.py  # writes tests/fixtures/bots_ref.json (JSBSim chats on stdout)
 """

@@ -1,16 +1,17 @@
 # Skyrunner (Godot 4)
 
-The Godot 4 port of [Skyrunner](../skyrunner/): bush flying, weight and balance, and the long arm of
-the law, on a fictional Caribbean island in 1979-86. It runs the same
-**[JSBSim](https://github.com/JSBSim-Team/jsbsim)** flight dynamics, now through a C++ GDExtension, and
-has everything the Python game had:
+Bush flying, weight and balance, and the long arm of the law, on a fictional Caribbean coast in
+1979-86. Godot 4 with **[JSBSim](https://github.com/JSBSim-Team/jsbsim)** flight dynamics through a C++
+GDExtension. This is the game: everything runs on Godot. (It started as a Python prototype in
+`../skyrunner/`, kept only as the archival reference that generated the frozen parity fixtures in
+`tests/fixtures/`; you never need it to build, play or test.) It has:
 - five JSBSim aircraft with every item a point mass at its station arm
 - tight strips
 - the task force and its sensors, airdrops and boats, and the campaign
 - co-op and versus seats over the network, and the two HQs' seasons
 - the pilot bot and the balance simulators
 
-New in the Godot build:
+Beyond the prototype:
 - **Load planner.** Pick the station for every item, set the fuel with a slider or presets (25/50/75%,
   full, or "route + 30 min"), and watch the take-off and zero-fuel CG move on the envelope, with
   endurance, range and the route's reserve.
@@ -151,11 +152,11 @@ cd games/skyrunner-godot
 GODOT=$(./tools/get_godot.sh)        # pinned Godot 4.4.1 into .tools/ (or use your own 4.4 install)
 ./tools/build_native.sh              # builds bin/libskyrunner_native.so (godot-cpp + JSBSim 1.3.1, ~10 min the first time)
 $GODOT --path .                      # lobby: pick a mode, or join a friend's game
-$GODOT --path . -- --mode campaign   # or skip the lobby with the same flags as the Python game
+$GODOT --path . -- --mode campaign   # or skip the lobby with flags (below)
 ./tools/test.sh                      # the test suite, headless (about 2 minutes)
 ```
 
-Build needs CMake 3.20+, a C++17 compiler and Python 3 (for godot-cpp's binding generator).
+Build needs CMake 3.20+, a C++17 compiler and Python 3 (only as godot-cpp's binding generator at build time).
 `tools/build_native.sh` fetches godot-cpp 4.4 and JSBSim 1.3.1 sources.
 
 Command-line flags (all optional; any flag skips the lobby):
@@ -170,15 +171,15 @@ Command-line flags (all optional; any flag skips the lobby):
 | `--host` / `--port 47800` | open remote seats in solo |
 | `--connect HOST:PORT --role R [--name N] [--seat3d]` | join as `copilot`, `spotter`, `boat`, `boss`, `controller`, `interceptor` (3D), `cutter` or `chief` |
 | `--hour 0-24` | time of day to start at (F2 advances it in game) |
-| `--map N` | island: 0 = classic, N = generated island N |
+| `--map city\|N` | map: `city` = Costa Brava (the default for new games), 0 = the classic island, N = generated island N |
 | `--weather clear\|cloud\|storm[,moon]` | tonight's weather outside a season (moon 0 = new .. 1 = full) |
 | `--new`, `--seed N` | fresh save; job-board seed |
 | `--shot out.png [--frames 90]` | render and save a screenshot, then quit |
 
-Dedicated task-force server (no pilot seat): `$GODOT --headless --path . --script res://scripts/net/dedicated.gd -- --port 47800`.
-Python station clients connect to it too, because it speaks the same protocol.
+Dedicated server: `$GODOT --headless --path . --script res://scripts/net/dedicated.gd -- --port 47800`.
+Every seat is run by the AI until a player claims it.
 
-Controls: F1 in game. They are the Python game's keys, plus F2 for time of day, gamepad or joystick
+Controls: F1 in game lists them; F2 for time of day, gamepad or joystick
 support, and on foot: TAB get out / climb in, WASD walk (Shift runs, Space jumps), mouse look, E use, F torch.
 
 Demo videos: [docs/video/](docs/video/):
@@ -186,6 +187,10 @@ Demo videos: [docs/video/](docs/video/):
   hangar, the HUD on a crewed airdrop, the co-pilot's desk, both HQ boards, the task-force desk
   (`tools/ui_tour.gd`)
 - [`demo-tour.mp4`](docs/video/demo-tour.mp4): on foot, the boss's desk, the three HQs (`tools/tour.gd`)
+- [`demo-city.mp4`](docs/video/demo-city.mp4): Costa Brava - fly-overs of the city, estuary and farm
+  plain, a crewed airdrop with the radar detector, the task-force desk (radar sweeps, coverage, DF
+  bearings and ellipse, the jammer), a stash run's truck, the market and the upgrade trees, the port
+  at night (`tools/city_tour.gd`)
 - [`demo-bust.mp4`](docs/video/demo-bust.mp4): a bot flight against the task force, split screen
   (`tools/record_demo.sh`, optionally in weather)
 
@@ -203,12 +208,13 @@ Results go to `sim-results/*.json` and the report to [docs/BALANCE.md](docs/BALA
 
 ## Docs
 
-- [docs/PORTING.md](docs/PORTING.md): how the port was checked against the Python game (bit-exact
-  RNGs, terrain, flights, seasons), and the traps along the way.
+- [docs/DESIGN.md](docs/DESIGN.md): roles, gadgets and counters, systems, the storyline, the ground war
+  and the seat model.
+- [docs/MULTIPLAYER.md](docs/MULTIPLAYER.md): design research for asymmetric versus play, layers,
+  hidden information, the network protocol.
+- [docs/PORTING.md](docs/PORTING.md): how the Godot build was checked bit-exact against the Python
+  prototype (RNGs, terrain, flights, seasons); that prototype is archival now.
 - [docs/BALANCE.md](docs/BALANCE.md): the Godot build's balance report, rival cartel included.
-- The design, storyline and multiplayer notes are the Python game's:
-  - [../skyrunner/docs/DESIGN.md](../skyrunner/docs/DESIGN.md)
-  - [../skyrunner/docs/MULTIPLAYER.md](../skyrunner/docs/MULTIPLAYER.md)
 
 ## Licences
 

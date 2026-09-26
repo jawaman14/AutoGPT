@@ -1,4 +1,7 @@
-"""Seeded tactical and feasibility trials from the Python sims, for exact-replay parity.
+"""ARCHIVAL: the Python prototype is reference only. This script regenerates a frozen
+parity fixture; nothing in the Godot game needs it to build, play or test.
+
+Seeded tactical and feasibility trials from the Python sims, for exact-replay parity.
 
   python3 tools/reference/gen_trials.py   # writes tests/fixtures/trials_ref.json (JSBSim chats on stdout)
 """

@@ -1,4 +1,7 @@
-"""Reference values from the Python game for the Godot port's parity tests.
+"""ARCHIVAL: the Python prototype is reference only. This script regenerates a frozen
+parity fixture; nothing in the Godot game needs it to build, play or test.
+
+Reference values from the Python game for the Godot port's parity tests.
 
   python3 tools/reference/gen_core.py > tests/fixtures/core_ref.json
 
