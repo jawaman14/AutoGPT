@@ -220,6 +220,10 @@ static func _law(sess: Session) -> Dictionary:
 		"stock": ps.stock.duplicate(),
 		"features": feats,
 		"encrypted": sess.radio.encrypted,
+		"radio_channel": sess.radio.police_channel,
+		"df": sess.radio.df_log.filter(func(d): return now - d.t < 120.0).map(func(d): return {
+			"age": _r(now - d.t), "fix": d.fix, "ellipse": d.ellipse,
+			"bearings": d.bearings.map(func(b): return [b.station, _r(b.x), _r(b.y), _r(b.deg, 1)])}),
 		"aerostat": aerostat,
 		"radars": ps.sensors.sites.map(func(s): return {"code": s.code, "x": _r(s.x), "y": _r(s.y), "range": _r(s.range_m),
 			"active": s.active, "kind": s.kind, "beam": _r(s.beam(now), 1), "period": s.period_s}),

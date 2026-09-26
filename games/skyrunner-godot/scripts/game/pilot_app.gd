@@ -37,7 +37,7 @@ On foot  TAB get out (parked) / back in    WASD walk  SHIFT run  SPACE jump  mou
          E use (job board, fuel, hangar, the boss's desk)   F torch
 Ground   J job board   L load planner & fuel   H hangar, gear, spotters, crew
 Crew     N transponder on/off   7 squawk code (1200 VFR / 7700 / 7600 / 7500)   U autopilot
-         K kick a bale   O call the boat
+         K kick a bale   O call the boat (SHIFT+O: the 1 s codeword - harder to DF)
          V ferry fuel pump   I push aircraft round (stopped)   ENTER continue   ESC close menu / quit
 Radar    fly across a radar's beam or slow and the MTI loses you; low over rough sea or in rain the
          clutter hides you; the detector shows who's painting you and from where
@@ -262,6 +262,10 @@ func _unhandled_input(ev: InputEvent) -> void:
 			return
 		if PRESS_KEYS.has(k):
 			_pressed[PRESS_KEYS[k]] = true
+		elif k == KEY_O and ev.shift_pressed:
+			var r: Array = s.command(Roles.PILOT, "call_boat", {"brief": true})  # the codeword burst
+			if not r[0]:
+				s.say(r[1])
 		elif CREW_KEYS.has(k):
 			var r: Array = s.command(Roles.PILOT, CREW_KEYS[k], {})
 			if not r[0]:

@@ -186,6 +186,24 @@ func _draw_law() -> void:
 				var ak := a - deg_to_rad(4.0 * k)
 				draw_line(w2m(r.x, r.y), w2m(r.x + sin(ak) * r.range, r.y + cos(ak) * r.range),
 					Color(0.4, 1, 0.5, 0.5 - 0.08 * k), 2.0 if k == 0 else 1.0)
+	for d in snap.get("df", []):
+		# DF: every bearing line, and the fix's 2-sigma error ellipse
+		var fade := clampf(1.0 - float(d.age) / 120.0, 0.2, 1.0)
+		for b in d.bearings:
+			var a := deg_to_rad(float(b[3]))
+			draw_line(w2m(b[1], b[2]), w2m(b[1] + sin(a) * 30000.0, b[2] + cos(a) * 30000.0), Color(0.6, 0.8, 1, 0.55 * fade), 1.0)
+		if d.fix != null and d.ellipse != null:
+			var e: Array = d.ellipse
+			var pts := PackedVector2Array()
+			var th := deg_to_rad(float(e[2]))
+			for k in 33:
+				var u := TAU * k / 32.0
+				var ax: float = e[0] * cos(u)
+				var bx: float = e[1] * sin(u)
+				# major axis along bearing th (from north)
+				pts.append(w2m(d.fix[0] + ax * sin(th) + bx * cos(th), d.fix[1] + ax * cos(th) - bx * sin(th)))
+			draw_polyline(pts, Color(0.6, 0.85, 1, 0.9 * fade), 2.0)
+			_text(d.fix[0], d.fix[1], "DF %.0fs" % float(d.age), Color(0.7, 0.9, 1))
 	for tip in snap.get("tips", []):
 		_circle(tip.x, tip.y, tip.r, Color(1, 0.8, 0.2, 0.8), 2.0)
 		_text(tip.x, tip.y, str(tip.text).substr(0, 28), Color(1, 0.85, 0.3))

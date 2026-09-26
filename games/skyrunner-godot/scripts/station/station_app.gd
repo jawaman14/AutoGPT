@@ -19,7 +19,8 @@ extends Control
 
 const RUNNER_TABS := ["Flight", "Load", "Jobs"]
 const FLIGHT_ACTIONS := [["kick", "Kick the bales", "K"], ["auto_kick", "Auto-kick over the mark", "T"],
-	["pump", "Ferry pump", "V"], ["call_boat", "Call the boat", "O"], ["spotter", "Hire a spotter", "click map"]]
+	["pump", "Ferry pump", "V"], ["call_boat", "Call the boat", "O"], ["codeword", "Codeword to the boat (1 s burst)", "B"],
+	["spotter", "Hire a spotter", "click map"]]
 
 var link  ## NetClient or LocalLink
 var role := ""
@@ -190,7 +191,7 @@ func _hints() -> Array:
 	var out := []
 	match role:
 		Roles.COPILOT:
-			out = [["1-3", "tabs", ""], ["K", "kick", "k"], ["V", "pump", "v"], ["O", "call boat", "o"], ["T", "auto-kick", "t"]]
+			out = [["1-3", "tabs", ""], ["K", "kick", "k"], ["V", "pump", "v"], ["O", "call boat", "o"], ["B", "codeword", "b"], ["T", "auto-kick", "t"]]
 			var tab: String = RUNNER_TABS[tabs.current_tab] if tabs != null else "Flight"
 			if tab == "Load":
 				out += [["LEFT/RIGHT", "move item", "right"], ["A", "loadmaster", "a"], ["+/-", "fuel 10%", "+"], ["F", "fill ferry", "f"]]
@@ -204,7 +205,7 @@ func _hints() -> Array:
 			out = [["RIGHT-CLICK", "send the go-fast there", ""]]
 		Roles.CONTROLLER:
 			out = [["CLICK", "unit, then track", ""], ["H", "heli", "h"], ["I", "interceptor", "i"], ["C", "cutter", "c"],
-				["R", "recall", "r"], ["E", "encryption", "e"], ["B", "aerostat", "b"], ["G", "coverage", "g"], ["TAB", "next unit", "tab"]]
+				["R", "recall", "r"], ["E", "encryption", "e"], ["B", "aerostat", "b"], ["G", "coverage", "g"], ["T", "tac channel", "t"], ["TAB", "next unit", "tab"]]
 		Roles.BOSS, Roles.CHIEF:
 			out = [["UP/DOWN", "order", "down"], ["LEFT/RIGHT", "change it", "right"], ["ENTER", "issue", "enter"]]
 	return out + [["ESC", "leave seat", "esc"]]
@@ -314,6 +315,9 @@ func _runner_key(k: String, snap: Dictionary) -> void:
 	if crew.has(k):
 		_cmd(crew[k])
 		return
+	if k == "b":
+		_cmd("call_boat", {"brief": true})
+		return
 	var tab: String = RUNNER_TABS[tabs.current_tab] if tabs != null else "Flight"
 	if k in ["up", "down"]:
 		GameMenu.list_move(list, 1 if k == "down" else -1)
@@ -323,6 +327,8 @@ func _runner_key(k: String, snap: Dictionary) -> void:
 		var act: String = _list_keys[i]
 		if act == "spotter":
 			status = "Click a strip on the map to put a spotter there ($%d)." % Session.SPOTTER_FEE
+		elif act == "codeword":
+			_cmd("call_boat", {"brief": true})
 		else:
 			_cmd(act)
 		return
@@ -415,6 +421,8 @@ func _law_key(k: String, snap: Dictionary) -> void:
 			_cmd("encrypt", {"on": not snap.get("encrypted", false)})
 		"b":
 			_cmd("aerostat", {"on": snap.get("aerostat") == "down"})
+		"t":
+			_cmd("radio_channel", {"channel": "police" if snap.get("radio_channel", "police") == "police_tac" else "police_tac"})
 		"g":
 			# coverage overlay: off -> blind below 150 / 500 / 1500 m AGL
 			var steps := [0.0, 150.0, 500.0, 1500.0]
@@ -631,7 +639,8 @@ func _flight_states(ac, snap: Dictionary) -> Dictionary:
 		"auto_kick": "ON" if ac.auto_kick else "off",
 		"pump": ("ON  -  %.0f lb left" % ac.ferry_fuel) if ac.pumping else ("off  -  %.0f lb in the tank" % ac.ferry_fuel if ac.ferry_fuel > 0 else "no ferry fuel"),
 		# a call is a transmission: the task force's direction finders hear it (BALANCE.md)
-		"call_boat": (str(boats[0].state).replace("_", " ") + "  -  radio: DF risk") if not boats.is_empty() else "no boat out",
+		"call_boat": (str(boats[0].state).replace("_", " ") + "  -  a ~5 s call: DF gets a tight fix") if not boats.is_empty() else "no boat out",
+		"codeword": "\"rain check\": the boat knows the mark; DF barely hears it" if not boats.is_empty() else "no boat out",
 		"spotter": "watching: " + (", ".join(snap.get("spotters", []).map(func(sp): return sp.code)) if not snap.get("spotters", []).is_empty() else "none"),
 	}
 
@@ -661,7 +670,8 @@ func _draw_law(snap: Dictionary) -> void:
 	var cases: Array = Py.sorted_by(snap.get("cases", []), func(c): return -c.suspicion)
 	var lines := [
 		"Stock:  heli %d   interceptor %d   cutter %d" % [int(snap.stock.get("heli", 0)), int(snap.stock.get("interceptor", 0)), int(snap.stock.get("cutter", 0))],
-		"Radio %s   -   Aerostat %s" % ["ENCRYPTED" if snap.encrypted else "plain (scanners can hear you)", snap.aerostat],
+		"Radio %s on %s   -   Aerostat %s" % ["ENCRYPTED" if snap.encrypted else "plain (scanners can hear you)",
+			"TACTICAL" if snap.get("radio_channel") == "police_tac" else "dispatch", snap.aerostat],
 		"Busts %d   boats %d   bales seized %d      Runners: bales in %d, escaped %d" % [int(sc.busts), int(sc.boats_seized), int(sc.bales_seized),
 			int(rs.bales_delivered), int(rs.escapes)],
 		"Selected unit: %s" % (sel_unit if sel_unit != null else "-  (click one on the map or pick it below)"), "", "CASES",

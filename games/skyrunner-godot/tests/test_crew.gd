@@ -118,6 +118,7 @@ func test_solo_kick_needs_autopilot() -> void:
 
 
 func test_scanner_and_spotter_intel() -> void:
+	RadioNet.REALISM = false  # Python's radio: the scanner hears everything (VHF range: tests/test_radio.gd)
 	var s := _sess()
 	run(s, 0.3)
 	s.money = 20000
@@ -128,6 +129,7 @@ func test_scanner_and_spotter_intel() -> void:
 	check(Py.any(s.scanner_log, func(e): return "Hawk" in e[1]), "scanner heard Hawk")
 	check(Py.any(s.intel.keys(), func(k): return k.begins_with("Hawk")), "intel on Hawk")
 
+	RadioNet.REALISM = true
 
 func test_informant_tip_marks_the_runner() -> void:
 	var s := _sess()

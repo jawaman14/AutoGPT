@@ -382,6 +382,11 @@ func reset(keep_wanted := false, tid := "runner") -> void:
 
 # ---------------------------------------------------- radio
 func _say(sender: String, text: String, pos = null) -> void:
+	if RadioNet.REALISM and pos != null:
+		# an airborne unit's radio reaches much further than one on the ground
+		var u = Py.first(units, func(u): return u.id == sender)
+		if u != null:
+			pos = [u.x, u.y, u.z]
 	radio.transmit(now, "police", sender, text, pos)
 	law_events.append("%s: %s" % [sender, text])
 

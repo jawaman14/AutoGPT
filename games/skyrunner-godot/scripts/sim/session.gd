@@ -103,6 +103,7 @@ var state: FlightModel.FlightState
 var last_outcome := ""
 var law_log: Array = []
 var scanner_log: Array = []
+var scanner_channels := ["police"]  ## what the runner's scanner is programmed for (RadioNet.REALISM)
 var intel := {}  ## unit -> [t, x, y, source]
 var spotters: Array = []
 var transponder := true
@@ -159,6 +160,7 @@ func _init(opts := {}) -> void:
 		_mass[k] = MassData.read(Aircraft.ROSTER[k].jsbsim_model)
 	bus = EventBus.new()
 	radio = RadioNet.new(_rng(seed + 7))
+	radio.world = world
 	var law := {}
 	for f in features:
 		if PoliceSystem.LAW_FEATURES.has(f):
@@ -534,7 +536,7 @@ func _cmd_pump(role: String, a: Dictionary):
 
 
 func _cmd_call_boat(role: String, a: Dictionary):
-	return call_boat()
+	return call_boat(Py.truthy(a.get("brief", false)))
 
 
 func _cmd_boat_goto(role: String, a: Dictionary):
@@ -572,12 +574,26 @@ func _cmd_chat(role: String, a: Dictionary):
 	var text := str(a.get("text", "")).substr(0, 200)
 	if Roles.side(role) == "runner":
 		say("[%s] %s" % [role, text])
+		# crew radio is real radio: from the aircraft, anyone listening can hear it
+		if RadioNet.REALISM and role in [Roles.PILOT, Roles.COPILOT] and state != null and not state.on_ground:
+			_df_on(radio.transmit(time, "runner", squawk, text, [state.x, state.y, state.alt]))
 	else:
 		law_say("[%s] %s" % [role, text])
 	return null
 
 
 # law side
+## Dispatch on the tactical channel: a scanner programmed only for dispatch goes
+## quiet. Free, unlike encryption - but a runner can program the scanner too.
+func _cmd_radio_channel(role: String, a: Dictionary):
+	var ch := str(a.get("channel", ""))
+	if not (ch in ["police", "police_tac"]):
+		return "Bad arguments for radio_channel: police or police_tac"
+	radio.police_channel = ch
+	law_say("Dispatch now on the %s channel" % ("tactical" if ch == "police_tac" else "main"))
+	return null
+
+
 func _cmd_launch(role: String, a: Dictionary):
 	var kind := str(a.get("kind", ""))
 	var goal = _point(a)
@@ -1030,19 +1046,62 @@ func _kick_one(s: FlightModel.FlightState) -> void:
 	say("Bale away! (%d left)" % left)
 
 
-func call_boat():
+## The task force's DF net on a runner transmission (RadioNet.REALISM): bearings
+## from the police strips and any DF-equipped helicopter; a fix with its error
+## ellipse becomes a track, a tip and suspicion.
+func _df_on(msg: RadioNet.RadioMsg) -> void:
+	if not features.has("df"):
+		return
+	var mobile := []
+	for u in police.units:
+		if u.kind == "heli" and u.faction() == "police" and u.state != "crashed":
+			mobile.append([u.id, u.x, u.y, u.z])
+	var df := radio.direction_find(msg, mobile)
+	if df.bearings.is_empty():
+		return
+	if df.fix == null:
+		law_say("DF: %d bearing on a runner transmission (%.0f s) - no fix" % [df.bearings.size(), msg.dur])
+		return
+	var e: Array = df.ellipse
+	law_say("DF: %d bearings, fix within %.1f x %.1f km" % [df.bearings.size(), e[0] / 1000, e[1] / 1000])
+	police.sensors.add_fix("runner", df.fix[0], df.fix[1], time, "DF")
+	police.tips.append(PoliceSystem.Tip.new(time, df.fix[0], df.fix[1], maxf(500.0, e[0]), "DF fix"))
+	var c := police.case("runner")
+	c.last_known = [df.fix[0], df.fix[1], time]
+	# a tight fix on a long call is worth more than a smear on a burst
+	c.suspicion = minf(100.0, c.suspicion + (30.0 if e[0] < 2000 else 15.0))
+
+
+func call_boat(brief := false):
 	var s := state
 	var boats := maritime.boats.filter(func(b): return b.kind == "gofast" and not (b.state in ["seized", "delivered"]))
 	if boats.is_empty():
 		return "No boat is out."
 	var b: Maritime.Boat = boats[0]
 	var pos = [s.x, s.y] if s else null
-	var msg := radio.transmit(time, "runner", squawk, "%s, come to me" % b.id, pos)
+	var msg: RadioNet.RadioMsg
+	if RadioNet.REALISM:
+		# a brevity codeword is a one-second burst the DF barely gets; a real call lasts
+		var text := "rain check" if brief else "%s, %s, come to me, over water, bales ready" % [b.id, squawk]
+		msg = radio.transmit(time, "boat", squawk, text, [s.x, s.y, s.alt] if s else null, 1.0 if brief else -1.0)
+		if msg.jammed:
+			say("Called %s - nothing but a carrier. Jammed." % b.id)
+			_df_on(msg)
+			return null
+		if s != null and not radio.can_hear([s.x, s.y, s.alt], [b.x, b.y, 2.0]):
+			say("Called %s - no answer (out of radio range: climb, or get round the hill)." % b.id)
+			_df_on(msg)
+			return null
+	else:
+		msg = radio.transmit(time, "runner", squawk, "%s, come to me" % b.id, pos)
 	var over_water := s != null and world.is_water(s.x, s.y)
 	if over_water:
 		b.goal = [s.x, s.y]
 		b.state = "to_rendezvous"
 	say("Called %s." % b.id + ("" if over_water else " (Over land: boat holds position.)"))
+	if RadioNet.REALISM:
+		_df_on(msg)
+		return null
 	var df = radio.direction_find(msg) if features.has("df") else null
 	if df and not df.bearings.is_empty():
 		law_say("DF: %d bearing(s) on a runner transmission" % df.bearings.size())
@@ -1275,7 +1334,21 @@ func _resolve_job(job: Jobs.Job, text: String) -> void:
 
 ## Scanner intercepts and spotter reports -> runner-side knowledge of police.
 func _update_intel(dt: float) -> void:
-	if gear.has("scanner") and features.has("scanner"):
+	var rx = null
+	if state != null:
+		rx = [state.x, state.y, state.alt]
+	elif location != "":
+		rx = [World.airfield(location).x, World.airfield(location).y, null]
+	if gear.has("scanner") and features.has("scanner") and RadioNet.REALISM and rx != null:
+		# the scanner hears what's in radio range of the aircraft, on its programmed channels
+		for e in radio.scanner_at(_scanner_seen, rx, scanner_channels):
+			scanner_log.append(e)
+		for m in radio.log:
+			if m.t > _scanner_seen and m.channel in scanner_channels and not m.encrypted and not m.jammed \
+					and m.x != null and radio.can_hear([m.x, m.y, m.z], rx):
+				intel[m.sender] = [m.t, m.x, m.y, "scanner"]
+		Py.keep_last(scanner_log, 30)
+	elif gear.has("scanner") and features.has("scanner"):
 		for e in radio.scanner(_scanner_seen):
 			scanner_log.append(e)
 		for m in radio.channel("police", _scanner_seen):
