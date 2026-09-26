@@ -34,6 +34,7 @@ Flight   W/S or UP/DOWN pitch     A/D or LEFT/RIGHT roll     Q/E rudder / nosewh
          Y toggle mouse yoke (mouse position = stick)   joystick / gamepad work too
 View     C cycle camera (chase / cockpit / tower)    M big map    P pause   F2 time of day
 On foot  TAB get out (parked) / back in    WASD walk  SHIFT run  SPACE jump  mouse look
+         Guns (with a ground war): 1-4 pistol / rifle / machine gun / RPG from the armoury  H holster  R reload  LMB fire
          E use (job board, fuel, hangar, the boss's desk)   F torch
 Ground   J job board   L load planner & fuel   H hangar, gear, crew (LEFT/RIGHT: upgrade trees)
 Crew     N transponder on/off   7 squawk code (1200 VFR / 7700 / 7600 / 7500)   U autopilot
@@ -82,6 +83,7 @@ var beacons: Array = []  ## [key, [nodes]]
 var _frame := 0
 var on_foot := false
 var walker: Walker = null
+var gun: Gunplay = null  ## the walker's gun (sessions with a ground war)
 var ground_body: StaticBody3D = null
 var foot_prompt: Label
 var aircraft_body: StaticBody3D = null
@@ -248,6 +250,11 @@ func _unhandled_input(ev: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 		if on_foot:
+			if gun != null:
+				var gk := OS.get_keycode_string(k).to_lower()
+				if gk in ["1", "2", "3", "4", "h", "r"] and gun.key(gk):
+					get_viewport().set_input_as_handled()
+					return
 			match k:
 				KEY_E:
 					walker.use()
@@ -334,6 +341,10 @@ func _toggle_on_foot() -> void:
 			s.say("Walk back to the aircraft to climb in (%.0f m away)." % d)
 			return
 		on_foot = false
+		if gun != null:
+			gun.teardown()
+			gun.queue_free()
+			gun = null
 		walker.queue_free()
 		walker = null
 		if aircraft_body != null:
@@ -370,10 +381,13 @@ func _toggle_on_foot() -> void:
 	walker.place(st.x + lx * (v.span_m * 0.5 + 1.2), st.y + ly * (v.span_m * 0.5 + 1.2), st.heading)
 	walker.cam.current = true
 	on_foot = true
+	if s.foot != null:
+		gun = Gunplay.new().setup(s, walker, squads, ui)
+		add_child(gun)
 	for m in menus.values():
 		m.visible = false
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	s.say("On foot. TAB to climb back in, E to use things, F for the torch.")
+	s.say("On foot. TAB to climb back in, E to use things, F for the torch%s." % (", 1-4 for a gun" if s.foot != null else ""))
 
 
 func _on_use(action: String, area: Area3D) -> void:
@@ -486,6 +500,8 @@ func _process(delta: float) -> void:
 	hud.mouse_yoke = mouse_yoke
 	var m := _active_menu()
 	hud.visible = m == null and not on_foot
+	if on_foot and s.foot != null and s.foot.down != "":
+		_foot_down()
 	if on_foot:
 		_foot_hud()
 	if m == null:
@@ -494,6 +510,20 @@ func _process(delta: float) -> void:
 		m.close()
 	elif _frame % 10 == 0:
 		m.refresh()
+
+
+## Down on foot: arrested (the bust takes over) or back at the aircraft.
+func _foot_down() -> void:
+	var how := s.foot.down
+	s.foot.down = ""
+	if how == "arrested":
+		walker.global_position = player.global_position + Vector3(2, 0, 2)
+		_toggle_on_foot()
+		return
+	var st: FlightModel.FlightState = s.state
+	var h := deg_to_rad(st.heading)
+	walker.place(st.x - cos(h) * (s.spec.visual.span_m * 0.5 + 1.2), st.y + sin(h) * (s.spec.visual.span_m * 0.5 + 1.2), st.heading)
+	gun._refresh_viewmodel()
 
 
 ## While walking the aircraft just sits: parking brake on, nothing else.

@@ -113,6 +113,7 @@ var _stash_ai_t := 0.0
 var arsenals := {}  ## "org" | "law" | "rival" -> Arsenal (Arsenal.REALISM)
 var seats: Seats  ## who holds each role: the AI, or a human (Seats)
 var _ai_defaults := {}  ## what each seat's AI was set to before a human took it
+var foot: FootCombat = null  ## the pilot on foot with a gun (sessions with a ground war)
 var chronicle: Chronicle = null  ## the news and the breaks between runs (Chronicle; live play asks for it)
 var ground: GroundWar = null  ## squads, firefights and turf on the roads (GroundWar; live play asks for it)
 var arng: PyRandom  ## gun runs and arsenal draws, off the board and parity streams
@@ -192,6 +193,8 @@ func _init(opts := {}) -> void:
 	ai_law_upgrades = opts.get("ai_law_upgrades", false)
 	if GroundWar.ENABLED and opts.get("ground_war", false):
 		ground = GroundWar.new(self, _rng(seed + 61), _rng(seed + 67))
+	if ground != null:
+		foot = FootCombat.new(self, _rng(seed + 73))
 	if Chronicle.ENABLED and opts.get("chronicle", false):
 		chronicle = Chronicle.new(self, _rng(seed + 83))
 	for side in ["runner", "law"]:
@@ -246,6 +249,7 @@ func _init(opts := {}) -> void:
 ## Break the reference cycles (night director, campaign, bus subscribers) so a
 ## finished Session is freed; batch simulators build thousands of them.
 func dispose() -> void:
+	foot = null
 	chronicle = null
 	ground = null
 	if nights != null:
@@ -1501,6 +1505,8 @@ func _update_world(dt: float) -> void:
 	police.law_events.clear()
 	_update_upgrades(dt)
 	_update_stashes(dt)
+	if foot != null and foot.active:
+		foot.update(dt)
 	_update_economy(dt)
 	if chronicle != null:
 		chronicle.update(dt)

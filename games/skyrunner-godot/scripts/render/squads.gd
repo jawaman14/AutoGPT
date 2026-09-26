@@ -33,6 +33,7 @@ var fallen: Array = []  ## [t, Vector3, faction, yaw]
 var _rng := RandomNumberGenerator.new()
 var _t := 0.0
 var _was_fighting := {}  ## squad id -> faction, last frame
+var men_pts: Array = []  ## [squad id, feet position] of every man drawn this frame (Gunplay aims at these)
 
 
 func setup(world_: World, quality: String) -> void:
@@ -194,6 +195,7 @@ func sync(squads: Array, fights: Array, cam: Vector3, now: float, dt: float) -> 
 		men_by[f] = []
 	var head_xf := []
 	var flash_xf := []
+	men_pts = []
 	var fighting := {}
 	for fx in fights:
 		fighting[fx.a] = Vector2(fx.x, fx.y)
@@ -250,6 +252,7 @@ func sync(squads: Array, fights: Array, cam: Vector3, now: float, dt: float) -> 
 			var wp: Vector3 = g3 + off
 			wp.y = world.ground(wp.x, -wp.z) + 0.3
 			men_by[d.faction].append(Transform3D(basis, wp))
+			men_pts.append([id, wp])
 			head_xf.append(Transform3D(Basis.IDENTITY, wp + Vector3(0, 1.64, 0)))
 			if fighting.has(id) and _rng.randf() < 0.35:
 				flash_xf.append(Transform3D(Basis.IDENTITY, wp + Vector3(0, 1.25, 0) + fwd * 0.9 + right * 0.12))
