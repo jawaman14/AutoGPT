@@ -16,13 +16,13 @@ extends RefCounted
 # Every number the balance simulator is allowed to move lives here.
 const RULES := {
 	"nights": 10,
-	"retire_target": 48000,  # clean $ to win (45000 -> 38000 with the cartel -> 48000 with weather; docs/BALANCE.md)
+	"retire_target": 52000,  # clean $ to win (45000 -> 38000 cartel -> 48000 weather -> 52000 airdrop fix; docs/BALANCE.md)
 	"indict_evidence": 100.0,
 	"start_dirty": 16000,
 	"start_budget_k": 15.0,
 	"actions_per_night": 3,
-	"overhead": 1000,  # per night: crew wages, hangar, "consulting"
-	"run_payout": 15000,  # base value of one run for the C172
+	"overhead": 1500,  # per night: crew wages, hangar, "consulting" (1000 until the airdrop fix; BALANCE.md)
+	"run_payout": 12000,  # base value of one run for the C172 (15000 until the airdrop fix; BALANCE.md)
 	"crew_fee": 3000,  # contract crew (AI run)
 	"crew_share": 0.6,  # organisation's share of a contract crew's load
 	"decoy_fee": 1500,
@@ -70,7 +70,7 @@ const RULES := {
 
 ## The Python game's rules (no cartel, the old retire target): parity tests run with these.
 const PYTHON_RULES := {"rivals": false, "retire_target": 45000, "weather": false, "pattern": false,
-	"canary": false, "rival_tempers": false}
+	"canary": false, "rival_tempers": false, "run_payout": 15000, "overhead": 1000}
 const REALISM := ["weather", "pattern", "canary", "rival_tempers"]
 
 ## Sky -> [chance, wind kt range, visibility factor on detection, crash factor].

@@ -623,7 +623,8 @@ func _flight_states(ac, snap: Dictionary) -> Dictionary:
 		"kick": ("kicking, %d to go" % int(ac.kick_queue)) if ac.kick_queue else ("%d bales aboard" % bales if bales else "nothing to kick"),
 		"auto_kick": "ON" if ac.auto_kick else "off",
 		"pump": ("ON  -  %.0f lb left" % ac.ferry_fuel) if ac.pumping else ("off  -  %.0f lb in the tank" % ac.ferry_fuel if ac.ferry_fuel > 0 else "no ferry fuel"),
-		"call_boat": str(boats[0].state).replace("_", " ") if not boats.is_empty() else "no boat out",
+		# a call is a transmission: the task force's direction finders hear it (BALANCE.md)
+		"call_boat": (str(boats[0].state).replace("_", " ") + "  -  radio: DF risk") if not boats.is_empty() else "no boat out",
 		"spotter": "watching: " + (", ".join(snap.get("spotters", []).map(func(sp): return sp.code)) if not snap.get("spotters", []).is_empty() else "none"),
 	}
 
