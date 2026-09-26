@@ -90,12 +90,15 @@ func _init():
 		"lieutenant", "patrol":
 			# twenty minutes into a war on the city coast
 			sess = Session.new({"seed": 5, "map_seed": MapCity.SEED, "location": "HAR", "features": Session.SANDBOX_FEATURES,
-				"ground_war": true, "chronicle": true, "agency": true, "family": true})
+				"ground_war": true, "chronicle": true, "agency": true, "family": true, "island": true})
 			sess.police.frozen = true
 			sess.money = 60000
 			sess.law_funds = 30000.0
 			for i in 1200:
 				sess.update(1.0)
+			sess.family.ai = false  # an offer on the table, and a shipment out
+			sess.family.offer("docks")
+			sess.island.ship("mules", 4)
 			var role := Roles.LIEUTENANT if what == "lieutenant" else Roles.PATROL
 			app = StationApp.new()
 			root.add_child(app)

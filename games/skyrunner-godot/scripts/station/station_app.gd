@@ -221,14 +221,14 @@ func _hints() -> Array:
 			out = [["RIGHT-CLICK", "send the go-fast there", ""]]
 		Roles.CONTROLLER:
 			out = [["CLICK", "unit, then track", ""], ["H", "heli", "h"], ["I", "interceptor", "i"], ["C", "cutter", "c"],
-				["R", "recall", "r"], ["E", "encryption", "e"], ["B", "aerostat", "b"], ["G", "coverage", "g"], ["T", "tac channel", "t"], ["J", "jam here", "j"], ["X", "raid stash", "x"], ["V", "investigate the Agency", "v"], ["O", "RICO case", "o"], ["U", "upgrades", "u"], ["TAB", "next unit", "tab"]]
+				["R", "recall", "r"], ["E", "encryption", "e"], ["B", "aerostat", "b"], ["G", "coverage", "g"], ["T", "tac channel", "t"], ["J", "jam here", "j"], ["X", "raid stash", "x"], ["V", "investigate the Agency", "v"], ["O", "RICO case", "o"], ["L", "airport crackdown", "l"], ["P", "port inspections", "p"], ["U", "upgrades", "u"], ["TAB", "next unit", "tab"]]
 			if upgrades != null and upgrades.visible:
 				out = [["U", "back to the desk", "u"], ["UP/DOWN", "select", "down"], ["ENTER", "buy", "enter"]]
 		Roles.BOSS, Roles.CHIEF:
 			out = [["UP/DOWN", "order", "down"], ["LEFT/RIGHT", "change it", "right"], ["ENTER", "issue", "enter"]]
 		Roles.LIEUTENANT, Roles.PATROL:
 			out = [["UP/DOWN", "squad", "down"]]
-			out += [["Y/N", "the Family's offer", "y"], ["P", "pay tribute", "p"]] if role == Roles.LIEUTENANT else [["O", "RICO case", "o"]]
+			out += [["Y/N", "the Family's offer", "y"], ["P", "pay tribute", "p"], ["U/I", "mules / a container", "u"], ["G", "passage", "g"]] if role == Roles.LIEUTENANT else [["O", "RICO case", "o"]]
 	var snap = link.snapshot() if link != null else null
 	if snap is Dictionary and commands_squads(snap):
 		if squad_mode:
@@ -329,7 +329,7 @@ func _key(k: String) -> void:
 		squad_mode = not squad_mode
 		status = "Squads: click one, right-click to send it" if squad_mode else ""
 		return
-	if _family_key(k, snap):
+	if _family_key(k, snap) or _island_key(k, snap):
 		return
 	if squad_mode and _squad_key(k, snap):
 		return
@@ -374,6 +374,46 @@ func _family_key(k: String, snap: Dictionary) -> bool:
 		_cmd("rico_case")
 		return true
 	return false
+
+
+## Isla Soberana (the lieutenant's desk): U four mules on the airliner, I a
+## container on the freighter, G buy the General's passage. The controller's:
+## L a crackdown at the airport, P container inspections at the port.
+func _island_key(k: String, snap: Dictionary) -> bool:
+	if snap.get("island", {}).is_empty():
+		return false
+	if role == Roles.LIEUTENANT and k in ["u", "i", "g"]:
+		if k == "g":
+			_cmd("buy_passage")
+		else:
+			_cmd("island_ship", {"method": "mules" if k == "u" else "ship", "amount": 4 if k == "u" else 500})
+		return true
+	if role == Roles.CONTROLLER and k in ["l", "p"]:
+		_cmd("airport_crackdown" if k == "l" else "port_inspections")
+		return true
+	return false
+
+
+static func island_lines(isl: Dictionary) -> Array:
+	if isl.is_empty():
+		return []
+	var out := ["ISLA SOBERANA (%s, the General's regard %d)   product $%.0f/lb" % [isl.status, int(isl.relations), float(isl.price)]]
+	out.append("  U mules on the airliner: %d%% each caught (%s)" % [int(100 * float(isl.mule_p)), ", ".join(isl.mule_why)])
+	out.append("  I a container on the freighter: %d%% found (%s)" % [int(100 * float(isl.ship_p)), ", ".join(isl.ship_why)])
+	out.append("  G safe passage: %s" % ("%d s left" % int(isl.passage_s) if int(isl.passage_s) > 0 else "$%s" % Py.money(int(isl.passage_cost))))
+	for sh in isl.get("shipments", []):
+		out.append("  %s %s, %d lb, %d s out" % [sh.id, sh.method, int(sh.lb), int(sh.eta_s)])
+	if str(isl.get("last", "")) != "":
+		out.append("  Last: %s" % isl.last)
+	return out
+
+
+static func _island_law_line(isl: Dictionary) -> String:
+	if isl.is_empty():
+		return ""
+	return "CUSTOMS: airport heat %d%%%s  port heat %d%%%s  caught %d  (L crackdown $2,000, P inspections $3,000)\n" % [
+		int(isl.airport_heat), "  CRACKDOWN %d s" % int(isl.crackdown_s) if int(isl.crackdown_s) > 0 else "", int(isl.port_heat),
+		"  INSPECTIONS %d s" % int(isl.inspections_s) if int(isl.inspections_s) > 0 else "", int(isl.caught)]
 
 
 ## The Family, as the organisation sees it: the offers on the table with what
@@ -911,6 +951,17 @@ func _draw_squads(snap: Dictionary) -> void:
 		lines.append("Funds $%s   arrests %d   officers down %d" % [Py.money(int(snap.get("law_funds", 0))), int(g.get("arrests", 0)), int(g.get("officers_down", 0))])
 	else:
 		lines.append("Cash $%s" % Py.money(int(snap.get("money", 0))))
+	if law:
+		var fl := _family_law_line(snap.get("family", {}))
+		if fl != "":
+			lines += ["", fl.strip_edges()]
+	else:
+		var fam := family_lines(snap.get("family", {}), snap.get("agency", {}))
+		if not fam.is_empty():
+			lines += [""] + fam
+		var isl := island_lines(snap.get("island", {}))
+		if not isl.is_empty():
+			lines += [""] + isl
 	lines.append("")
 	lines.append("STREETS (who's out there)")
 	var ctl: Dictionary = g.get("control", {})
@@ -925,14 +976,6 @@ func _draw_squads(snap: Dictionary) -> void:
 		lines += ["", "SHOTS FIRED"] + fights.map(func(f): return "  %s vs %s, %.0f s" % [f.a, f.b, float(f.age)])
 	lines += ["", "COMMANDER (%s)" % ("AI" if g.get("commander", {}).get("ai", true) else "you")]
 	lines += g.get("commander", {}).get("log", []).map(func(l): return "  " + str(l))
-	if law:
-		var fl := _family_law_line(snap.get("family", {}))
-		if fl != "":
-			lines += ["", fl.strip_edges()]
-	else:
-		var fam := family_lines(snap.get("family", {}), snap.get("agency", {}))
-		if not fam.is_empty():
-			lines += [""] + fam
 	var news: Array = snap.get("chronicle", {}).get("news", [])
 	if not news.is_empty():
 		lines += ["", "NEWS"] + news.slice(-4).map(func(n): return "  " + str(n.text))
@@ -962,7 +1005,7 @@ func _draw_law(snap: Dictionary) -> void:
 		"Busts %d   boats %d   bales seized %d      Runners: bales in %d, escaped %d" % [int(sc.busts), int(sc.boats_seized), int(sc.bales_seized),
 			int(rs.bales_delivered), int(rs.escapes)],
 		"Selected unit: %s" % (sel_unit if sel_unit != null else "-  (click one on the map or pick it below)"),
-		_agency_line(snap.get("agency", {})) + _family_law_line(snap.get("family", {})), "CASES",
+		_agency_line(snap.get("agency", {})) + _family_law_line(snap.get("family", {})) + _island_law_line(snap.get("island", {})), "CASES",
 	]
 	for c in cases.slice(0, 6):
 		lines.append("  %-10s suspicion %3.0f%%   %s%s" % [c.id, c.suspicion, "\u2605".repeat(int(c.wanted)) if c.wanted else "", "   TIPPED" if c.tipped else ""])

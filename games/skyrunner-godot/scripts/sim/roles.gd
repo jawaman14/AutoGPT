@@ -31,16 +31,16 @@ const _CREW_AIR := ["kick", "pump", "call_boat", "auto_kick"]
 
 static var PERMISSIONS := {
 	PILOT: _GROUND_OPS + _CREW_AIR + ["buy_aircraft", "buy_gear", "hire_spotter", "transponder", "squawk", "upgrade", "autopilot",
-		"confirm", "chat", "turn_around", "hq", "gun_mode", "sell_weapons", "buy_weapons", "family_accept", "family_decline", "pay_tribute"],
-	COPILOT: _GROUND_OPS + _CREW_AIR + ["hire_spotter", "chat", "gun_mode", "family_accept", "family_decline", "pay_tribute"],
+		"confirm", "chat", "turn_around", "hq", "gun_mode", "sell_weapons", "buy_weapons", "family_accept", "family_decline", "pay_tribute", "island_ship", "buy_passage"],
+	COPILOT: _GROUND_OPS + _CREW_AIR + ["hire_spotter", "chat", "gun_mode", "family_accept", "family_decline", "pay_tribute", "island_ship", "buy_passage"],
 	SPOTTER: ["spotter_move", "chat"],
 	BOAT: ["boat_goto", "chat"],
-	BOSS: ["hq", "chat", "gun_mode", "sell_weapons", "buy_weapons", "set_cache", "squad_order", "recruit_squad", "disband_squad", "family_accept", "family_decline", "pay_tribute"],
-	CONTROLLER: ["launch", "dispatch", "recall", "encrypt", "radio_channel", "jam", "upgrade", "raid_stash", "aerostat", "chat", "hq", "squad_order", "investigate_agency", "rico_case"],
+	BOSS: ["hq", "chat", "gun_mode", "sell_weapons", "buy_weapons", "set_cache", "squad_order", "recruit_squad", "disband_squad", "family_accept", "family_decline", "pay_tribute", "island_ship", "buy_passage"],
+	CONTROLLER: ["launch", "dispatch", "recall", "encrypt", "radio_channel", "jam", "upgrade", "raid_stash", "aerostat", "chat", "hq", "squad_order", "investigate_agency", "rico_case", "airport_crackdown", "port_inspections"],
 	INTERCEPTOR: ["claim_unit", "release_unit", "chat"],
 	CUTTER: ["cutter_goto", "chat"],
-	CHIEF: ["hq", "chat", "squad_order", "recruit_squad", "disband_squad", "investigate_agency", "rico_case"],
-	LIEUTENANT: _SQUADS + ["chat", "gun_mode", "sell_weapons", "buy_weapons", "set_cache", "family_accept", "family_decline", "pay_tribute"],
+	CHIEF: ["hq", "chat", "squad_order", "recruit_squad", "disband_squad", "investigate_agency", "rico_case", "airport_crackdown", "port_inspections"],
+	LIEUTENANT: _SQUADS + ["chat", "gun_mode", "sell_weapons", "buy_weapons", "set_cache", "family_accept", "family_decline", "pay_tribute", "island_ship", "buy_passage"],
 	PATROL: _SQUADS + ["raid_stash", "chat", "rico_case"],
 }
 

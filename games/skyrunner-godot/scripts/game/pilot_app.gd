@@ -43,6 +43,9 @@ Crew     N transponder on/off   7 squawk code (1200 VFR / 7700 / 7600 / 7500)   
          V ferry fuel pump   I push aircraft round (stopped)   ENTER continue   ESC close menu / quit
 Family   SHIFT+Y take the Morettis' newest offer   SHIFT+N turn it down   SHIFT+P pay their tribute
          (read the hint that comes with an offer: it's right most of the time, not always)
+Island   Isla Soberana is over the southern horizon (SOB): cheap loads, the General's MiGs, and the
+         task force can't follow you past the line. SHIFT+G buy passage   SHIFT+U four mules on
+         the airliner   SHIFT+I a container on the freighter (the desks show the odds)
 Radar    fly across a radar's beam or slow and the MTI loses you; low over rough sea or in rain the
          clutter hides you; the detector shows who's painting you and from where
 
@@ -278,7 +281,13 @@ func _unhandled_input(ev: InputEvent) -> void:
 					scene.set_hour(scene.hour + 3.0)
 			get_viewport().set_input_as_handled()
 			return
-		if ev.shift_pressed and k in [KEY_Y, KEY_N, KEY_P] and s.family != null:
+		if ev.shift_pressed and k in [KEY_G, KEY_U, KEY_I] and s.island != null:
+			# Isla Soberana: Shift+G the General's passage, Shift+U four mules, Shift+I a container
+			var r: Array = s.command(Roles.PILOT, "buy_passage", {}) if k == KEY_G else s.command(Roles.PILOT, "island_ship",
+				{"method": "mules" if k == KEY_U else "ship", "amount": 4 if k == KEY_U else 500})
+			if not r[0]:
+				s.say(r[1])
+		elif ev.shift_pressed and k in [KEY_Y, KEY_N, KEY_P] and s.family != null:
 			# the Family's newest offer: Shift+Y take it, Shift+N turn it down; Shift+P pay the tribute
 			var r: Array
 			if k == KEY_P:

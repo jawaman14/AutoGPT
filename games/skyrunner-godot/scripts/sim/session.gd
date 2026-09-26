@@ -116,6 +116,7 @@ var _ai_defaults := {}  ## what each seat's AI was set to before a human took it
 var remote_stick := {}  ## a remote pilot's controls {roll, pitch, throttle, rudder, brake} (the pilot seat over the wire)
 var agency: Agency = null  ## the Company: arms flights south, protection, exposure (live play asks for it)
 var family: Family = null  ## the Morettis: help that might be a trap (live play asks for it)
+var island: Island = null  ## Isla Soberana, over the horizon: cheap product, sovereign airspace (live play asks for it)
 var foot: FootCombat = null  ## the pilot on foot with a gun (sessions with a ground war)
 var chronicle: Chronicle = null  ## the news and the breaks between runs (Chronicle; live play asks for it)
 var ground: GroundWar = null  ## squads, firefights and turf on the roads (GroundWar; live play asks for it)
@@ -200,6 +201,8 @@ func _init(opts := {}) -> void:
 		foot = FootCombat.new(self, _rng(seed + 73))
 	if Agency.ENABLED and opts.get("agency", false):
 		agency = Agency.new(self, _rng(seed + 89), _rng(seed + 101))
+	if Island.ENABLED and opts.get("island", false) and not world.map.foreign.is_empty():
+		island = Island.new(self, _rng(seed + 103))
 	if Family.ENABLED and opts.get("family", false):
 		family = Family.new(self, _rng(seed + 97))
 		family.ai = not (humans.has(Roles.BOSS) or humans.has(Roles.LIEUTENANT))
@@ -213,6 +216,8 @@ func _init(opts := {}) -> void:
 		if PoliceSystem.LAW_FEATURES.has(f):
 			law[f] = true
 	police = PoliceSystem.new(world, _rng(seed + 99), radio, "human" if humans.has(Roles.CONTROLLER) else "ai", law)
+	if island != null:
+		police.territory_y = Island.TERRITORY_Y
 	radio.df_stations = []
 	for a in world.airfields:
 		if a.police:
@@ -257,6 +262,7 @@ func _init(opts := {}) -> void:
 ## Break the reference cycles (night director, campaign, bus subscribers) so a
 ## finished Session is freed; batch simulators build thousands of them.
 func dispose() -> void:
+	island = null
 	agency = null
 	family = null
 	foot = null
@@ -436,6 +442,9 @@ func _apply_wind() -> void:
 
 func refresh_board(code: String) -> void:
 	var af := World.airfield(code)
+	if af.kind == "foreign":
+		boards[code] = island.board(af) if island != null else []
+		return
 	boards[code] = Jobs.generate(af, world.airfields, rng, 6, features,
 		func(): return Maritime.random_drop_point(world, rng, maritime.cove))
 	if stash_net != null and features.has("contraband") and af.kind in ["shady", "bush"]:
@@ -858,6 +867,11 @@ func accept_job(job: Jobs.Job):
 	var pax_new := Py.count(job.items, func(i): return i.kind == "passenger")
 	if pax_now + pax_new > seats:
 		return "Not enough seats (%d free in a %s)." % [seats, spec.name]
+	if job.cost > 0:
+		if money < job.cost:
+			return "The load costs $%s up front." % Py.money(job.cost)
+		money -= job.cost
+		say("Paid $%s for the load." % Py.money(job.cost))
 	job.accepted_at = time
 	if job.kind == "fugitive":
 		police.suspicion = maxf(police.suspicion, 60.0)  # already being looked for
@@ -1543,6 +1557,8 @@ func _update_world(dt: float) -> void:
 		agency.update(dt)
 	if family != null:
 		family.update(dt)
+	if island != null:
+		island.update(dt)
 
 	# maritime: cutters go where the task force suspects a drop
 	var law_goals := []
@@ -1789,7 +1805,9 @@ func _rules(dt: float, s: FlightModel.FlightState) -> void:
 func _arrive(af: Airfield, s: FlightModel.FlightState) -> void:
 	phase = "parked"
 	location = af.code
-	if police.landing_check(s, af, carrying_hot()):
+	if af.kind == "foreign" and island != null:
+		island.on_arrive()  # the General's men, not the task force
+	elif police.landing_check(s, af, carrying_hot()):
 		_bust("arrested on landing at %s" % af.name)
 		if phase == "busted":
 			return
@@ -2081,6 +2099,42 @@ func _cmd_investigate_agency(role: String, a: Dictionary):
 	return err if err != "" else null
 
 
+func _cmd_island_ship(role: String, a: Dictionary):
+	if island == null:
+		return "No island in this game."
+	var err := island.ship(str(a.get("method", "")), int(_num(a, "amount", 0)))
+	return err if err != "" else null
+
+
+func _cmd_buy_passage(role: String, a: Dictionary):
+	if island == null:
+		return "No island in this game."
+	var err := island.buy_passage()
+	return err if err != "" else null
+
+
+func _cmd_airport_crackdown(role: String, a: Dictionary):
+	if island == null:
+		return "No island in this game."
+	if law_funds < 2000.0:
+		return "Need $2,000 in funds."
+	law_funds -= 2000.0
+	island.crackdown_until = time + 1800.0
+	law_say("Customs profile every passenger off the island flights for 30 min")
+	return null
+
+
+func _cmd_port_inspections(role: String, a: Dictionary):
+	if island == null:
+		return "No island in this game."
+	if law_funds < 3000.0:
+		return "Need $3,000 in funds."
+	law_funds -= 3000.0
+	island.inspections_until = time + 1800.0
+	law_say("Every container from Isla Soberana opened for 30 min")
+	return null
+
+
 func _cmd_family_accept(role: String, a: Dictionary):
 	if family == null or family.gone:
 		return "No Family in this game."
@@ -2135,6 +2189,8 @@ func _complete_delivery(job: Jobs.Job, af: Airfield) -> void:
 		say("Delivered '%s': %s into the organisation's armoury" % [job.title, Arsenal.describe(job.weapons)])
 		bus.emit("job_delivered", time, "", ["runner"], {"job_id": job.id, "pay": 0, "dest": af.code, "hot": true})
 		return
+	if job.defector and island != null:
+		island.defected(job)
 	var g := _grade(job)
 	money += g[0]
 	if job.hot():

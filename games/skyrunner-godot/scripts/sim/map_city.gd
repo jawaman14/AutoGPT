@@ -168,6 +168,7 @@ static func generate() -> MapLayout:
 	l.aerostat_pos = [5500.0, -13800.0]
 	l.roads = ROADS.duplicate(true)
 	l.stashes = STASHES.duplicate(true)
+	l.foreign = [Island.airfield()]  # Isla Soberana, over the southern horizon
 	return l
 
 

@@ -255,6 +255,7 @@ class Tip:
 		squawk = squawk_
 
 
+var territory_y := -INF  ## south of this the task force may not follow (Island)
 var world: World
 var rng: PyRandom
 var radio: RadioNet
@@ -650,6 +651,12 @@ func tick(dt: float, now_: float, targets: Array) -> Dictionary:
 	var seen_by := {}
 	for u in units:
 		var tgt: Target = by_id.get(u.target_id) if u.target_id else null
+		if tgt != null and tgt.sig.y < territory_y and u.faction() == "police":
+			# a foreign country's airspace: the task force's writ ends at the line
+			u.target_id = null
+			u.state = "return"
+			_say(u.id, "target's crossed into Soberana airspace - breaking off", [u.x, u.y])
+			tgt = null
 		var chase = null
 		var goal = u.goal
 		if tgt != null:
@@ -692,6 +699,8 @@ func tick(dt: float, now_: float, targets: Array) -> Dictionary:
 		for t in targets:
 			if not _can_see(u, t.sig):
 				continue
+			if t.sig.y < territory_y and u.faction() == "police":
+				continue  # seen, but out of reach
 			var c := case(t.sig.id)
 			if u.faction() == "rival":
 				if u.target_id == t.sig.id:

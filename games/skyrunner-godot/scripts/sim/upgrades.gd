@@ -55,6 +55,16 @@ const TREES := {
 			{"id": "strip_guards", "name": "Armed strip guards", "cost": 5000, "req": ["armed_boat"],
 				"desc": "Guards at your strips slow a raid: 40% of landing raids come up empty - and the ones that don't are an armed-bust case."},
 		]],
+		["trade", "The island trade", [
+			{"id": "mule_school", "name": "Trained mules", "cost": 2000, "req": [],
+				"desc": "Mules who don't sweat at customs: 1.25x less likely to be pulled aside."},
+			{"id": "forged_papers", "name": "Forged papers", "cost": 3500, "req": ["mule_school"],
+				"desc": "Clean passports and tickets: 1.3x less likely caught, and a caught mule can't name us."},
+			{"id": "baggage_handlers", "name": "Baggage handlers on the payroll", "cost": 7000, "req": ["forged_papers"],
+				"desc": "Our people on the ramp move the bags past the dogs: mules 2.2x less likely caught."},
+			{"id": "false_bottoms", "name": "False-bottomed containers", "cost": 5000, "req": [],
+				"desc": "Welded compartments under the shrimp: containers half as likely found."},
+		]],
 	],
 	"law": [
 		["sensors", "Sensors", [
@@ -90,6 +100,14 @@ const TREES := {
 				"desc": "Helicopters fly 30% faster."},
 			{"id": "fast_cutter", "name": "Fast patrol boat", "cost": 6000, "req": [],
 				"desc": "Cutters 25% faster; boardings 30% quicker."},
+		]],
+		["customs", "Customs", [
+			{"id": "sniffer_dogs", "name": "Sniffer dogs", "cost": 5000, "req": [],
+				"desc": "Dogs at the airport and the port: mules 1.6x, containers 1.15x more likely caught."},
+			{"id": "passenger_profiling", "name": "Passenger profiling", "cost": 6000, "req": ["sniffer_dogs"],
+				"desc": "Customs pull aside anyone off the island flight who fits: mules 1.4x more likely caught."},
+			{"id": "container_xray", "name": "Container X-ray", "cost": 9000, "req": [],
+				"desc": "A gantry X-ray at the port: containers 1.7x more likely found."},
 		]],
 	],
 }

@@ -140,6 +140,8 @@ static func _runner(sess: Session, role: String) -> Dictionary:
 		out["agency"] = sess.agency.view("runner")
 	if sess.family != null:
 		out["family"] = sess.family.view("runner")
+	if sess.island != null:
+		out["island"] = sess.island.view("runner")
 	if sess.stash_net != null:
 		out["stashes"] = sess.stash_net.stashes.map(func(st): return {"id": st.id, "name": st.name, "x": st.x, "y": st.y,
 			"strip": st.strip, "heat": _r(st.heat), "burned": st.burned})
@@ -251,6 +253,7 @@ static func _law(sess: Session) -> Dictionary:
 		"chronicle": sess.chronicle.view("law") if sess.chronicle != null else {},
 		"agency": sess.agency.view("law") if sess.agency != null else {},
 		"family": sess.family.view("law") if sess.family != null else {},
+		"island": sess.island.view("law") if sess.island != null else {},
 		"market": sess.econ.board(),
 		"jammed": sess.radio.jammed_zones.filter(func(z): return z.size() < 4 or z[3] > now).map(
 			func(z): return [_r(z[0]), _r(z[1]), _r(z[2])]),

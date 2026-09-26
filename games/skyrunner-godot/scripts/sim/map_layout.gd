@@ -23,6 +23,7 @@ var land_use := PackedByteArray()  ## MapCity land-use class per terrain cell (e
 var roads: Array = []  ## polylines [[x, y], ...]
 var buildings: Array = []  ## {x, y, z, w, d, h, style}
 var stashes: Array = []  ## the organisation's stash houses: {id, name, kind, x, y, strip, zone}
+var foreign: Array = []  ## strips beyond the map (Island): landable, but not the mainland's (no boards, AI or police)
 
 
 static func classic() -> MapLayout:

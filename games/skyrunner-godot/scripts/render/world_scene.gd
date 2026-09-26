@@ -46,6 +46,13 @@ func setup(world_: World, q: Quality) -> WorldScene:
 		add_child(Buildings.airfield_site(world, af))
 	for k in world.map.hqs:
 		add_child(Buildings.hq(world, world.map.hqs[k]))
+	if not world.map.foreign.is_empty():
+		var isl := IslandRender.build(world, q)  # Isla Soberana, over the horizon
+		add_child(isl)
+		for af in world.map.foreign:
+			var lights = isl.find_child("lights", true, false)
+			if lights != null:
+				field_lights.append(lights)
 	fx = WeatherFX.new().setup(self)
 	add_child(fx)
 	var aer := Models.build_aerostat()

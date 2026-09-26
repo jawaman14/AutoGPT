@@ -52,6 +52,8 @@ static func _by_code() -> Dictionary:
 	var d := {}
 	for a in AIRFIELDS:
 		d[a.code] = a
+	for a in layout.foreign:
+		d[a.code] = a
 	return d
 
 
@@ -79,12 +81,16 @@ func _init(p_seed := 7) -> void:
 		_terrain_cache[key] = t
 	terrain = _terrain_cache[key]
 	field_elev = terrain.get_field_elev()
+	for a in map.foreign:
+		field_elev[a.code] = float(a.elev)
 	if map.hqs.is_empty():
 		map.hqs = MapCity.site_hqs(self, map) if map.id == "city" else MapGen.site_hqs(self, map)
 
 
 ## Terrain height (may be negative: sea floor).
 func height(x: float, y: float) -> float:
+	if not map.foreign.is_empty() and y < -World.HALF:
+		return Island.height(x, y)
 	return terrain.height(x, y)
 
 
@@ -93,15 +99,25 @@ func ground(x: float, y: float) -> float:
 	for af in airfields:
 		if af.contains(x, y, 8.0):
 			return field_elev[af.code]
+	if not map.foreign.is_empty() and y < -World.HALF:
+		for af in map.foreign:
+			if af.contains(x, y, 8.0):
+				return field_elev[af.code]
+		return maxf(Island.height(x, y), 0.0)  # beyond the map's edge: the island, else the sea
 	return maxf(terrain.height(x, y), 0.0)
 
 
 func is_water(x: float, y: float) -> bool:
+	if not map.foreign.is_empty() and y < -World.HALF:
+		return Island.height(x, y) < 0.0
 	return terrain.height(x, y) < 0.0
 
 
 func airfield_at(x: float, y: float, margin := 0.0) -> Airfield:
 	for af in airfields:
+		if af.contains(x, y, margin):
+			return af
+	for af in map.foreign:
 		if af.contains(x, y, margin):
 			return af
 	return null

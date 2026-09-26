@@ -344,3 +344,44 @@ Storylines and jobs these suggest, some of them built next:
   customs, dogs and a crackdown after a scandal.
 - **Informant flights**: the DEA flips your pilot and wants photographs of the next pickup.
 - **The seafood front**: aid contracts that launder money until an inquiry reads the books.
+
+## 15. Isla Soberana: the island trade, the airport and the port
+
+An island republic about 23 km off San Telmo, beyond the map's southern edge (`scripts/sim/island.gd`,
+drawn by `scripts/render/island_render.gd`). Its strip (SOB) is landable but isn't one of the mainland's
+strips (`MapLayout.foreign`), so the mainland's boards, AI and police are unchanged. It is fiction
+inspired by the Ochoa affair (section 14): officers who sold cocaine drops in their waters until
+their own government tried them.
+
+- **Cheap product.** The island's board sells loads: a job with a price paid up front ($18/lb)
+  worth the street price home ($55/lb before the market). A defector wanting a ride north pays
+  well and costs the General's goodwill.
+- **Three routes home.**
+  - **Air:** the usual game, flown.
+  - **Mules:** four on the airliner (Shift+U, or U at the lieutenant's desk). Each is caught
+    independently; odds start at 10%.
+  - **A container:** 500 lb on the freighter (Shift+I / I). One roll; odds start at 8%.
+
+  Both are timed shipments, resolved on arrival against the odds then. So a crackdown ordered
+  after they left still counts.
+
+  | Factor | Mule caught | Container found |
+  |---|---|---|
+  | Heat after a catch (decays) | x(1 + heat) | x(1 + heat) |
+  | Sniffer dogs (law) | x1.6 | x1.15 |
+  | Passenger profiling (law) | x1.4 | |
+  | Container X-ray (law) | | x1.7 |
+  | Crackdown / inspections (law, 30 min) | x1.8 | x1.5 |
+  | Trained mules / forged papers / baggage handlers (ours) | /1.25, /1.3, /2.2 | |
+  | False bottoms (ours) | | /2 |
+  | The Family's docks deal (honest / a rat) | | x0.5 / x2 |
+  | A boatlift swamping the Coast Guard | | x0.7 |
+
+  A caught mule may talk (unless her papers are forged). The desks show the odds and every factor.
+- **Sovereign airspace.** South of the territorial line the task force's aircraft break off and
+  won't re-acquire. The island's MiGs may intercept a plane that hasn't bought the General's
+  passage (a "landing fee").
+- **The island's politics.** Hurricanes hold the freighters and close the strip's board; shortages
+  raise prices; a glut drops them; a boatlift swamps the Coast Guard; the General's birthday. A
+  purge (random when relations are low, or the 1989 headline) closes the island: no loads, no
+  passage, and soldiers on the ramp for whoever lands.

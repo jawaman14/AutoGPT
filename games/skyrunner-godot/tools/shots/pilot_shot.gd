@@ -6,7 +6,8 @@ extends SceneTree
 ##       city (the port city from over the harbour) | estuary | farm (map-specific: the city coast)
 ##       foot (on foot beside the parked aircraft, looking at the hangars) |
 ##       villa (on foot inside the org's villa, at the boss's desk) |
-##       gun (on foot by the hangars with a rifle from the armoury)
+##       gun (on foot by the hangars with a rifle from the armoury) |
+##       island (Isla Soberana from its approach, over the horizon) | island_strip (its runway)
 var app: PilotApp
 var n := 0
 var q := "medium"
@@ -56,6 +57,11 @@ func _init():
 	elif view == "farm":
 		var frm := World.airfield("FRM")
 		fixed_cam = [Vector3(frm.x + 1800, 520, -(frm.y - 2600)), Vector3(frm.x - 400, 120, -frm.y)]
+	elif view == "island":
+		fixed_cam = [Vector3(Island.C.x + 3800, 520, -(Island.C.y + 4600)), Vector3(Island.C.x - 400, 0, -Island.C.y)]
+	elif view == "island_strip":
+		var sob := World.airfield(Island.CODE)
+		fixed_cam = [Vector3(sob.x + 900, 60, -(sob.y + 350)), Vector3(sob.x - 200, 4, -sob.y)]
 	elif view == "overview":
 		var har := World.airfield("HAR")
 		fixed_cam = [Vector3(har.x - 3000, 2600, -(har.y - 4000)), Vector3(0, 200, 0)]

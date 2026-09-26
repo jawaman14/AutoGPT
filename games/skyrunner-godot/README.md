@@ -135,7 +135,17 @@ Beyond the prototype:
   it and it protects you: busts quashed from Washington, checkpoints told to wave your trucks
   through. Every quash leaves a trail; the task force can dig (V at the desk), and when it's
   exposed the hearings end it. Fiction, inspired by the documented Iran-Contra record
-  ([docs/DESIGN.md](docs/DESIGN.md) section 13).
+  ([docs/DESIGN.md](docs/DESIGN.md) section 13). It plays a double game too: under pressure it
+  gives your name away, lets the DEA have a flight, or "mails" your pay.
+- **The Family.** A (fictional) Cosa Nostra family whose help might be a trap. Every offer (a loan,
+  laundering, the docks' union, a gun fence, a crew of soldiers, a lawyer) comes with our people's
+  read on it, right about four times in five. It levies a street tax when you're rich, sells to
+  Los Cuervos too, and a RICO case with a rat in it turns it against you (section 14).
+- **Isla Soberana.** An island republic over the southern horizon (SOB). Product is cheap there;
+  get it home by air, as mules on the airliner, or in a container on the freighter. Customs' odds
+  depend on both sides' perks: bought baggage handlers, forged papers and false bottoms against
+  dogs, profiling, X-ray and crackdowns. The task force can't follow past the line; the General
+  sells passage past his MiGs until a purge closes the island (section 15).
 - **One UI, redesigned.** A single theme across every screen; real tables with titled columns (the job
   board colours the landing roll against the strip length); key caps in every footer that you can
   also click; readouts as tiles; a HUD laid out by what you need when (status chips, wanted stars,
@@ -180,8 +190,8 @@ Beyond the prototype:
 | ![street](docs/img/vice-street.png) | ![dusk](docs/img/vice-dusk.png) | ![night](docs/img/vice-night.png) |
 | **The lieutenant's desk** | **Take a seat: the AI plays the rest** | **A firefight at the docks** |
 | ![lieutenant](docs/img/ui-lieutenant.png) | ![seats](docs/img/ui-seats.png) | ![docks](docs/img/ground-docks.png) |
-| **The cast and the cars (Kenney CC0)** | **On foot with a rifle** | |
-| ![cast](docs/img/models-cast.png) | ![rifle](docs/img/foot-rifle.png) | |
+| **The cast and the cars (Kenney CC0)** | **On foot with a rifle** | **Isla Soberana, over the horizon** |
+| ![cast](docs/img/models-cast.png) | ![rifle](docs/img/foot-rifle.png) | ![island](docs/img/island-approach.png) |
 
 | Mid-afternoon on the runway (medium) | Dusk, climbing out near Eagle's Nest (high) | Night: edge lights on |
 |---|---|---|
