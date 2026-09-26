@@ -57,6 +57,15 @@ const EVENTS := {
 	"budget_cut": ["law", false, true, "The county cuts the task force's budget: -${cash}"],
 	"evidence_theft": ["law", false, true, "Weapons missing from the police evidence room - sold on the street"],
 	"lawsuit": ["law", false, true, "A raid on the wrong house: the lawsuit makes the task force careful"],
+	# the Family (La Cosa Nostra)
+	"bookmaker": ["family", true, false, "A Tampa bookmaker vouches for us: the Morettis' respect is up"],
+	"sitdown": ["family", true, false, "A sit-down with the Family: they lean on Los Cuervos for us"],
+	"casino_skim": ["family", false, true, "A casino count room skimmed: the Morettis are squeezed, and greedier"],
+	"wiretap": ["family", false, true, "The FBI wiretaps a social club in Ybor City: the case against the Morettis grows"],
+	"trunk": ["family", false, true, "A Moretti capo found in a car trunk at the airport: the Family is at war with itself"],
+	# the Company's double game
+	"company_tip": ["org", true, false, "A man from 'the Company' warns us: the task force is watching {stash}"],
+	"company_leak": ["law", true, false, "An anonymous caller with a government accent names {stash}"],
 }
 
 ## id -> [side, text]; checked each tick, fire once.
@@ -73,6 +82,11 @@ const MILESTONES := {
 	"officers_down": ["law", "Three officers shot: the county buys the task force a SWAT truck (+$8,000), and the heat is on"],
 	"ten_arrests": ["law", "Gang sweep: ten soldiers in custody; the organisation's crews are nervous"],
 	"cuervos_own": ["rival", "Los Cuervos own the {zone}: nobody else's product moves there"],
+	"first_loan": ["org", "In with the Morettis' shylock: the Family has its hooks in the organisation"],
+	"street_tax": ["org", "The Family wants its piece: the organisation has made it"],
+	"rat_flipped": ["law", "A made man is talking: the Moretti family has a rat"],
+	"commission_trial": ["law", "The Moretti bosses are convicted: the organised-crime squad's files are open to the task force"],
+	"agency_hangout": ["law", "A 'government source' hands over the smugglers: the Company has cut its pilots loose"],
 }
 
 ## The history the season runs through, one headline every HISTORY_EVERY_S in
@@ -88,10 +102,12 @@ const HISTORY := [
 	["interdiction", 1983, "Customs gets radar jets and Blackhawk helicopters for air interdiction"],
 	["boland_2", 1984, "Boland II: the ban tightens; the Contra supply effort goes private and covert"],
 	["crack", 1985, "Crack reaches the streets: cheap, and the demand is enormous"],
+	["pizza", 1985, "The Pizza Connection trial opens in New York: Sicilian heroin sold through pizzerias"],
 	["shootdown", 1986, "A Contra supply plane is shot down over Nicaragua; the surviving crewman is captured and talks"],
 	["iran_contra", 1986, "The Iran-Contra affair breaks: arms sold to Iran, the profits diverted to the Contras"],
 	["drug_abuse_act", 1986, "The Anti-Drug Abuse Act: mandatory minimum sentences for trafficking"],
 	["kerry", 1986, "A Senate subcommittee starts asking about drug pilots in the Contra supply lines"],
+	["commission", 1986, "The Commission trial: the heads of New York's crime families convicted under RICO"],
 ]
 
 var sess  ## Session
@@ -137,7 +153,10 @@ func update(dt: float) -> void:
 # ------------------------------------------------------------------ random events
 ## Draw one: the outfit, then good or bad, then an event that can happen now.
 func random_event() -> String:
-	var side: String = ["org", "rival", "law"][rng.randint(0, 2)]
+	var sides := ["org", "rival", "law"]
+	if sess.family != null and sess.family.active():
+		sides.append("family")
+	var side: String = sides[rng.randint(0, sides.size() - 1)]
 	var good := rng.random() < 0.5
 	var pool := []
 	for id in EVENTS:
@@ -180,6 +199,12 @@ func _can(id: String) -> bool:
 			return sess.ground != null
 		"rival_arms", "guard_rifles", "evidence_theft":
 			return sess.arsenals.has("law")
+		"bookmaker", "sitdown", "casino_skim", "wiretap", "trunk":
+			return sess.family != null and sess.family.active()
+		"company_tip":
+			return sess.agency != null and sess.agency.active() and sess.agency.trust >= 30.0 and sess.stash_net != null and not sess.stash_net.live().is_empty()
+		"company_leak":
+			return sess.agency != null and sess.agency.exposure >= 40.0 and sess.stash_net != null and not sess.stash_net.live().is_empty()
 	return true
 
 
@@ -278,6 +303,27 @@ func fire(id: String) -> String:
 			sess.arsenals.rival.add("rifle", k)
 		"lawsuit":
 			c.suspicion = maxf(0.0, c.suspicion - 10.0)
+		"bookmaker":
+			sess.family.respect = minf(100.0, sess.family.respect + 10.0)
+		"sitdown":
+			if sess.ground != null:
+				sess.ground.commanders.rival.cash = maxf(0.0, sess.ground.commanders.rival.cash - 3000.0)
+			sess.family.respect = minf(100.0, sess.family.respect + 3.0)
+		"casino_skim":
+			sess.family.greed = minf(1.0, sess.family.greed + 0.15)
+		"wiretap":
+			sess.family.rico = minf(100.0, sess.family.rico + 10.0)
+		"trunk":
+			sess.family.greed = minf(1.0, sess.family.greed + 0.1)
+			sess.family.rico = minf(100.0, sess.family.rico + 5.0)
+		"company_tip":
+			var st = _hottest_stash()
+			st.intel = maxf(0.0, st.intel - 20.0)
+			vars.stash = st.name
+		"company_leak":
+			var st = _live_stash()
+			st.intel += 20.0
+			vars.stash = st.name
 	var text := str(e[3]).format(vars)
 	_news(e[0], e[1], e[2], text)
 	return text
@@ -343,6 +389,11 @@ func history(i: int) -> String:
 		"drug_abuse_act":
 			sess.law_funds += 3000.0
 			c.suspicion = minf(100.0, c.suspicion + 10.0)
+		"pizza", "commission":
+			var fam = sess.family
+			if fam != null and fam.active():
+				fam.rico = minf(100.0, fam.rico + (10.0 if h[0] == "pizza" else 25.0))
+				fam._check_trial()
 	var text := "%d - %s" % [h[1], h[2]]
 	_news("law", true, true, text)
 	return text
@@ -364,6 +415,13 @@ func _milestones() -> void:
 	if sess.arsenals.has("org"):
 		_check("armoury_20", sess.arsenals.org.count() >= 20)
 		_check("guns_seized_20", sess.arsenals.law.seized_total >= 20)
+	if sess.family != null:
+		_check("first_loan", sess.family.loans_taken >= 1)
+		_check("street_tax", sess.family.taxed)
+		_check("rat_flipped", sess.family.rat)
+		_check("commission_trial", sess.family.gone)
+	if sess.agency != null:
+		_check("agency_hangout", sess.agency.hung_out)
 	if sess.ground != null:
 		_check("officers_down", sess.ground.officers_down >= 3)
 		_check("ten_arrests", sess.ground.arrests_total >= 10)
@@ -399,12 +457,12 @@ func _check(id: String, cond: bool, vars := {}) -> void:
 		"three_busts":
 			sess.econ.scarcity["cocaine"] = minf(0.6, sess.econ.scarcity["cocaine"] + 0.15)
 	# news that's good for its side (a milestone the other side won't enjoy)
-	_news(m[0], true, true, str(m[1]).format(vars))
+	_news(m[0], true, id != "rat_flipped", str(m[1]).format(vars))  # a rat is the task force's secret
 
 
 ## What `side` ("runner" | "law") has heard: the headlines, and its own private news.
 func view(side: String) -> Dictionary:
 	var mine := "law" if side == "law" else "org"
-	var heard := entries.filter(func(l): return l[3] or l[1] == mine)
+	var heard := entries.filter(func(l): return l[3] or l[1] == mine or (mine == "org" and l[1] == "family"))
 	return {"news": heard.slice(-8).map(func(l): return {"t": snappedf(l[0], 0.1), "side": l[1], "good": l[2], "text": l[4]}),
 		"milestones": fired.keys()}

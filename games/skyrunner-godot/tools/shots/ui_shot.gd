@@ -90,7 +90,7 @@ func _init():
 		"lieutenant", "patrol":
 			# twenty minutes into a war on the city coast
 			sess = Session.new({"seed": 5, "map_seed": MapCity.SEED, "location": "HAR", "features": Session.SANDBOX_FEATURES,
-				"ground_war": true, "chronicle": true, "agency": true})
+				"ground_war": true, "chronicle": true, "agency": true, "family": true})
 			sess.police.frozen = true
 			sess.money = 60000
 			sess.law_funds = 30000.0

@@ -115,6 +115,7 @@ var seats: Seats  ## who holds each role: the AI, or a human (Seats)
 var _ai_defaults := {}  ## what each seat's AI was set to before a human took it
 var remote_stick := {}  ## a remote pilot's controls {roll, pitch, throttle, rudder, brake} (the pilot seat over the wire)
 var agency: Agency = null  ## the Company: arms flights south, protection, exposure (live play asks for it)
+var family: Family = null  ## the Morettis: help that might be a trap (live play asks for it)
 var foot: FootCombat = null  ## the pilot on foot with a gun (sessions with a ground war)
 var chronicle: Chronicle = null  ## the news and the breaks between runs (Chronicle; live play asks for it)
 var ground: GroundWar = null  ## squads, firefights and turf on the roads (GroundWar; live play asks for it)
@@ -198,7 +199,10 @@ func _init(opts := {}) -> void:
 	if ground != null:
 		foot = FootCombat.new(self, _rng(seed + 73))
 	if Agency.ENABLED and opts.get("agency", false):
-		agency = Agency.new(self, _rng(seed + 89))
+		agency = Agency.new(self, _rng(seed + 89), _rng(seed + 101))
+	if Family.ENABLED and opts.get("family", false):
+		family = Family.new(self, _rng(seed + 97))
+		family.ai = not (humans.has(Roles.BOSS) or humans.has(Roles.LIEUTENANT))
 	if Chronicle.ENABLED and opts.get("chronicle", false):
 		chronicle = Chronicle.new(self, _rng(seed + 83))
 	for side in ["runner", "law"]:
@@ -254,6 +258,7 @@ func _init(opts := {}) -> void:
 ## finished Session is freed; batch simulators build thousands of them.
 func dispose() -> void:
 	agency = null
+	family = null
 	foot = null
 	chronicle = null
 	ground = null
@@ -646,6 +651,8 @@ func seat_driver(role: String, human: bool) -> void:
 			if nights != null and not humans.has(Roles.CHIEF):
 				nights.law_ai = null if human else "adaptive"
 		Roles.BOSS:
+			if family != null:
+				family.ai = not (human or humans.has(Roles.LIEUTENANT))
 			if nights != null:
 				if human:
 					_ai_defaults[role] = nights.runner_ai
@@ -661,6 +668,8 @@ func seat_driver(role: String, human: bool) -> void:
 		Roles.LIEUTENANT:
 			if ground != null:
 				ground.commanders["org"].ai = not human
+			if family != null:
+				family.ai = not (human or humans.has(Roles.BOSS))
 		Roles.PATROL:
 			if ground != null:
 				ground.commanders["police"].ai = not human
@@ -1098,6 +1107,9 @@ func apply_upgrades() -> void:
 			b.speed_mult = maritime.cutter_speed
 	maritime.seize_mult = (2.0 if r.has("armed_boat") else 1.0) / (1.3 if l.has("fast_cutter") else 1.0)
 	police.raid_escape = 0.4 if r.has("strip_guards") else 0.0
+	if family != null:
+		maritime.seize_mult *= family.seize_factor()  # the union at the docks (or a tip)
+		police.raid_escape = minf(0.9, police.raid_escape + family.raid_escape())  # a sergeant on the payroll
 	econ.law_kit = l.size()
 
 
@@ -1529,6 +1541,8 @@ func _update_world(dt: float) -> void:
 		chronicle.update(dt)
 	if agency != null:
 		agency.update(dt)
+	if family != null:
+		family.update(dt)
 
 	# maritime: cutters go where the task force suspects a drop
 	var law_goals := []
@@ -1686,6 +1700,8 @@ func _crash(reason: String) -> void:
 func _bust(how: String) -> void:
 	if agency != null and agency.quash(how):
 		return  # friends in Washington
+	if family != null and family.lawyer_bust(how):
+		return  # a very good lawyer
 	phase = "busted"
 	var fine := 1500 + int(maxi(0, money) * 0.25)
 	law_funds += 3000.0  # the aircraft and the cash, forfeited
@@ -2065,6 +2081,34 @@ func _cmd_investigate_agency(role: String, a: Dictionary):
 	return err if err != "" else null
 
 
+func _cmd_family_accept(role: String, a: Dictionary):
+	if family == null or family.gone:
+		return "No Family in this game."
+	var err := family.accept(str(a.get("id", "")))
+	return err if err != "" else null
+
+
+func _cmd_family_decline(role: String, a: Dictionary):
+	if family == null or family.gone:
+		return "No Family in this game."
+	var err := family.decline(str(a.get("id", "")))
+	return err if err != "" else null
+
+
+func _cmd_pay_tribute(role: String, a: Dictionary):
+	if family == null or family.gone:
+		return "No Family in this game."
+	var err := family.pay_tribute()
+	return err if err != "" else null
+
+
+func _cmd_rico_case(role: String, a: Dictionary):
+	if family == null:
+		return "No Family in this game."
+	var err := family.rico_case()
+	return err if err != "" else null
+
+
 func _cmd_raid_stash(role: String, a: Dictionary):
 	if stash_net == null:
 		return "No stash houses on this map."
@@ -2078,7 +2122,12 @@ func _complete_delivery(job: Jobs.Job, af: Airfield) -> void:
 		fuel_caches[af.code] = fuel_caches.get(af.code, 0.0) + fuel
 		say("%s lb of fuel cached at %s." % [Py.f(fuel, 0), af.name])
 	if job.agency and agency != null:
-		agency.flight_done(job)
+		if agency.flight_done(job):
+			# the Company let the DEA have this one: the strip was a sting
+			active_jobs.erase(job)
+			loadout.remove_job(job.id)
+			_bust("a DEA sting at %s - the Agency's contact never came" % af.name)
+			return
 	if Arsenal.REALISM and not job.weapons.is_empty() and job.gun_mode == "stock" and not job.agency:
 		_stock_weapons(job.weapons, "")
 		active_jobs.erase(job)

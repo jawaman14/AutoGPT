@@ -9,7 +9,7 @@ func after_each() -> void:
 
 func _sess(seed := 3, ground := true) -> Session:
 	var s := Session.new({"seed": seed, "map_seed": MapCity.SEED, "location": "QRY",
-		"features": Session.SANDBOX_FEATURES, "ground_war": ground, "chronicle": true})
+		"features": Session.SANDBOX_FEATURES, "ground_war": ground, "chronicle": true, "family": true, "agency": true})
 	s.police.frozen = true
 	if s.ground != null:
 		s.ground._started = true
@@ -107,7 +107,7 @@ func test_the_random_clock() -> void:
 	var sides := {}
 	for e in s.chronicle.entries:
 		sides[e[1]] = true
-	check(sides.size() == 3, "for all three outfits")
+	check(sides.has("org") and sides.has("rival") and sides.has("law"), "for all three outfits (and the Family: %s)" % sides.keys())
 	s.dispose()
 
 

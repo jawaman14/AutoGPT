@@ -221,13 +221,14 @@ func _hints() -> Array:
 			out = [["RIGHT-CLICK", "send the go-fast there", ""]]
 		Roles.CONTROLLER:
 			out = [["CLICK", "unit, then track", ""], ["H", "heli", "h"], ["I", "interceptor", "i"], ["C", "cutter", "c"],
-				["R", "recall", "r"], ["E", "encryption", "e"], ["B", "aerostat", "b"], ["G", "coverage", "g"], ["T", "tac channel", "t"], ["J", "jam here", "j"], ["X", "raid stash", "x"], ["V", "investigate the Agency", "v"], ["U", "upgrades", "u"], ["TAB", "next unit", "tab"]]
+				["R", "recall", "r"], ["E", "encryption", "e"], ["B", "aerostat", "b"], ["G", "coverage", "g"], ["T", "tac channel", "t"], ["J", "jam here", "j"], ["X", "raid stash", "x"], ["V", "investigate the Agency", "v"], ["O", "RICO case", "o"], ["U", "upgrades", "u"], ["TAB", "next unit", "tab"]]
 			if upgrades != null and upgrades.visible:
 				out = [["U", "back to the desk", "u"], ["UP/DOWN", "select", "down"], ["ENTER", "buy", "enter"]]
 		Roles.BOSS, Roles.CHIEF:
 			out = [["UP/DOWN", "order", "down"], ["LEFT/RIGHT", "change it", "right"], ["ENTER", "issue", "enter"]]
 		Roles.LIEUTENANT, Roles.PATROL:
 			out = [["UP/DOWN", "squad", "down"]]
+			out += [["Y/N", "the Family's offer", "y"], ["P", "pay tribute", "p"]] if role == Roles.LIEUTENANT else [["O", "RICO case", "o"]]
 	var snap = link.snapshot() if link != null else null
 	if snap is Dictionary and commands_squads(snap):
 		if squad_mode:
@@ -328,6 +329,8 @@ func _key(k: String) -> void:
 		squad_mode = not squad_mode
 		status = "Squads: click one, right-click to send it" if squad_mode else ""
 		return
+	if _family_key(k, snap):
+		return
 	if squad_mode and _squad_key(k, snap):
 		return
 	if role in [Roles.LIEUTENANT, Roles.PATROL]:
@@ -349,6 +352,65 @@ func _key(k: String) -> void:
 				_cmd("spotter_move", {"code": World.AIRFIELDS[GameMenu.selected(list)].code})
 		_:
 			_runner_key(k, snap)
+
+
+## The Family's offers (the lieutenant's and co-pilot's desks): Y takes the
+## newest, N turns it down, P pays the tribute. The law's desks: O files more
+## of the RICO case.
+func _family_key(k: String, snap: Dictionary) -> bool:
+	var fam: Dictionary = snap.get("family", {})
+	if fam.is_empty() or fam.get("gone", false):
+		return false
+	if role in [Roles.LIEUTENANT, Roles.COPILOT] and k in ["y", "n", "p"]:
+		var offers: Array = fam.get("offers", [])
+		if k == "p":
+			_cmd("pay_tribute")
+		elif offers.is_empty():
+			status = "The Family has nothing on the table."
+		else:
+			_cmd("family_accept" if k == "y" else "family_decline", {"id": offers.back().id})
+		return true
+	if role in [Roles.CONTROLLER, Roles.PATROL] and k == "o":
+		_cmd("rico_case")
+		return true
+	return false
+
+
+## The Family, as the organisation sees it: the offers on the table with what
+## our people make of them, what's owed, what it did last; the Company's news.
+static func family_lines(fam: Dictionary, ag: Dictionary) -> Array:
+	var out := []
+	if not fam.is_empty():
+		if fam.get("gone", false):
+			out.append("THE FAMILY: the Moretti bosses are in prison")
+		else:
+			out.append("THE FAMILY (respect %d)   Y take the newest offer   N turn it down" % int(fam.get("respect", 0)))
+			for o in fam.get("offers", []):
+				out.append("  %s  [%d s]" % [o.text, int(o.expires_s)])
+				out.append("      our read: %s" % o.read)
+			if int(fam.get("tribute", 0)) > 0:
+				out.append("  They want their piece: $%s within %d s (P to pay)" % [Py.money(int(fam.tribute)), int(fam.get("tribute_s", 0))])
+			var ln: Dictionary = fam.get("loan", {})
+			if not ln.is_empty():
+				out.append("  The shylock: $%s due in %d s" % [Py.money(int(ln.owed)), int(ln.due_s)])
+			if int(fam.get("docks_s", 0)) > 0:
+				out.append("  The union has the docks for %d s" % int(fam.docks_s))
+			if fam.get("lawyer", false):
+				out.append("  A lawyer on retainer")
+			if str(fam.get("last", "")) != "":
+				out.append("  Last: %s" % fam.last)
+	if not ag.is_empty() and str(ag.get("last", "")) != "":
+		out.append("THE COMPANY: %s%s" % [ag.last, "   (it cut us loose)" if ag.get("hung_out", false) else ""])
+	return out
+
+
+static func _family_law_line(fam: Dictionary) -> String:
+	if fam.is_empty():
+		return ""
+	if fam.get("gone", false):
+		return "THE MORETTIS: convicted - the files are ours\n"
+	return "THE MORETTIS: RICO case %d%%%s  (O: file more, $%d)\n" % [int(fam.get("rico", 0)), "   A MADE MAN IS TALKING" if fam.get("rat", false) else "",
+		Family.RICO_CASE_COST]
 
 
 func _runner_key(k: String, snap: Dictionary) -> void:
@@ -725,6 +787,10 @@ func _draw_runner(snap: Dictionary) -> void:
 	if snap.has("campaign"):
 		var c: Dictionary = snap.campaign
 		lines += ["", "CHAPTER %d  -  %d  %s" % [int(c.chapter), int(c.year), c.title]] + c.objectives
+	if role == Roles.COPILOT:
+		var fam := family_lines(snap.get("family", {}), snap.get("agency", {}))
+		if not fam.is_empty():
+			lines += [""] + fam
 	var tab: String = RUNNER_TABS[tabs.current_tab] if tabs != null else ("Spotter" if role == Roles.SPOTTER else "Flight")
 	var lo: Dictionary = snap.get("loadout", {})
 	if chart != null:
@@ -859,6 +925,14 @@ func _draw_squads(snap: Dictionary) -> void:
 		lines += ["", "SHOTS FIRED"] + fights.map(func(f): return "  %s vs %s, %.0f s" % [f.a, f.b, float(f.age)])
 	lines += ["", "COMMANDER (%s)" % ("AI" if g.get("commander", {}).get("ai", true) else "you")]
 	lines += g.get("commander", {}).get("log", []).map(func(l): return "  " + str(l))
+	if law:
+		var fl := _family_law_line(snap.get("family", {}))
+		if fl != "":
+			lines += ["", fl.strip_edges()]
+	else:
+		var fam := family_lines(snap.get("family", {}), snap.get("agency", {}))
+		if not fam.is_empty():
+			lines += [""] + fam
 	var news: Array = snap.get("chronicle", {}).get("news", [])
 	if not news.is_empty():
 		lines += ["", "NEWS"] + news.slice(-4).map(func(n): return "  " + str(n.text))
@@ -888,7 +962,7 @@ func _draw_law(snap: Dictionary) -> void:
 		"Busts %d   boats %d   bales seized %d      Runners: bales in %d, escaped %d" % [int(sc.busts), int(sc.boats_seized), int(sc.bales_seized),
 			int(rs.bales_delivered), int(rs.escapes)],
 		"Selected unit: %s" % (sel_unit if sel_unit != null else "-  (click one on the map or pick it below)"),
-		_agency_line(snap.get("agency", {})), "CASES",
+		_agency_line(snap.get("agency", {})) + _family_law_line(snap.get("family", {})), "CASES",
 	]
 	for c in cases.slice(0, 6):
 		lines.append("  %-10s suspicion %3.0f%%   %s%s" % [c.id, c.suspicion, "\u2605".repeat(int(c.wanted)) if c.wanted else "", "   TIPPED" if c.tipped else ""])

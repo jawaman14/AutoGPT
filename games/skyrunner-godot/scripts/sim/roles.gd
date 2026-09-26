@@ -31,17 +31,17 @@ const _CREW_AIR := ["kick", "pump", "call_boat", "auto_kick"]
 
 static var PERMISSIONS := {
 	PILOT: _GROUND_OPS + _CREW_AIR + ["buy_aircraft", "buy_gear", "hire_spotter", "transponder", "squawk", "upgrade", "autopilot",
-		"confirm", "chat", "turn_around", "hq", "gun_mode", "sell_weapons", "buy_weapons"],
-	COPILOT: _GROUND_OPS + _CREW_AIR + ["hire_spotter", "chat", "gun_mode"],
+		"confirm", "chat", "turn_around", "hq", "gun_mode", "sell_weapons", "buy_weapons", "family_accept", "family_decline", "pay_tribute"],
+	COPILOT: _GROUND_OPS + _CREW_AIR + ["hire_spotter", "chat", "gun_mode", "family_accept", "family_decline", "pay_tribute"],
 	SPOTTER: ["spotter_move", "chat"],
 	BOAT: ["boat_goto", "chat"],
-	BOSS: ["hq", "chat", "gun_mode", "sell_weapons", "buy_weapons", "set_cache", "squad_order", "recruit_squad", "disband_squad"],
-	CONTROLLER: ["launch", "dispatch", "recall", "encrypt", "radio_channel", "jam", "upgrade", "raid_stash", "aerostat", "chat", "hq", "squad_order", "investigate_agency"],
+	BOSS: ["hq", "chat", "gun_mode", "sell_weapons", "buy_weapons", "set_cache", "squad_order", "recruit_squad", "disband_squad", "family_accept", "family_decline", "pay_tribute"],
+	CONTROLLER: ["launch", "dispatch", "recall", "encrypt", "radio_channel", "jam", "upgrade", "raid_stash", "aerostat", "chat", "hq", "squad_order", "investigate_agency", "rico_case"],
 	INTERCEPTOR: ["claim_unit", "release_unit", "chat"],
 	CUTTER: ["cutter_goto", "chat"],
-	CHIEF: ["hq", "chat", "squad_order", "recruit_squad", "disband_squad", "investigate_agency"],
-	LIEUTENANT: _SQUADS + ["chat", "gun_mode", "sell_weapons", "buy_weapons", "set_cache"],
-	PATROL: _SQUADS + ["raid_stash", "chat"],
+	CHIEF: ["hq", "chat", "squad_order", "recruit_squad", "disband_squad", "investigate_agency", "rico_case"],
+	LIEUTENANT: _SQUADS + ["chat", "gun_mode", "sell_weapons", "buy_weapons", "set_cache", "family_accept", "family_decline", "pay_tribute"],
+	PATROL: _SQUADS + ["raid_stash", "chat", "rico_case"],
 }
 
 ## Roles a human can take in each mode. Everything else is AI or absent.

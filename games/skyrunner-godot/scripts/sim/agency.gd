@@ -29,6 +29,21 @@ extends RefCounted
 ##     protection is gone for good, the task force gets the budget and the
 ##     names, and the organisation's pilots are in the papers
 ##
+## And its double game (its own RNG stream, so none of the above shifts):
+##   - the limited hangout: past HANGOUT_AT exposure the Company may cut its
+##     losses and feed your name to the task force itself - protection over
+##   - a stung flight: the Agency let the DEA have this one, and the strip is a
+##     trap; its notes may say the contact changed at the last minute (a read,
+##     right about three times in four, like the Family's)
+##   - "the check's in the mail": part of a flight's pay withheld, likelier
+##     once the money has gone private
+##   - both sides: it waves Los Cuervos' planes through too
+##   - disinformation both ways: a warning that sends the task force after a
+##     ghost (the intel on your hottest stash drops), or, once it needs a
+##     scapegoat, an anonymous tip about one of yours
+##   - a favour: the Company's cash washed through the Family's casinos, with
+##     you as the go-between (a fee, and both of them like you better)
+##
 ## Off for the Python replays (Agency.ENABLED = false); built for sessions that
 ## ask (live play: agency: true).
 
@@ -39,6 +54,8 @@ const QUASH_EXPOSURE := 20.0
 const FLIGHT_EXPOSURE := 4.0
 const INVESTIGATE_COST := 3000
 const DESTS := ["Ilopango", "the Honduran border strips", "an airstrip in Costa Rica"]
+const HANGOUT_AT := 70.0
+const STING_HINT := "The contact changed at the last minute."
 
 var sess
 var rng: PyRandom
@@ -52,11 +69,18 @@ var pay_mult := 1.0  ## the Boland squeeze: private money pays more
 var offer_chance := 0.35
 var _gift_t := 0.0
 var _t := 0.0
+var drng: PyRandom = null  ## the double game's stream (null: no double game)
+var stings := {}  ## job id -> true: flights the Company let the DEA have
+var hung_out := false  ## it cut us loose to save itself
+var withheld := 0
+var last_read := ""
+var _game_t := 0.0
 
 
-func _init(sess_, rng_: PyRandom) -> void:
+func _init(sess_, rng_: PyRandom, drng_: PyRandom = null) -> void:
 	sess = sess_
 	rng = rng_
+	drng = drng_
 
 
 func active() -> bool:
@@ -82,6 +106,12 @@ func job_from(origin: Airfield, airfields: Array):
 		{"notes": "Friends in Washington. A contact flies them on to %s. Nobody will stop you - probably." % DESTS[rng.randint(0, DESTS.size() - 1)]})
 	job.weapons = {"rifle": n * 2}
 	job.agency = true
+	if drng != null:
+		var sting := drng.random() < 0.06 + exposure / 300.0
+		if sting:
+			stings[jid] = true
+		if drng.random() < (0.75 if sting else 0.12):
+			job.notes += " " + STING_HINT
 	return job
 
 
@@ -90,7 +120,11 @@ func carrying() -> bool:
 
 
 func protecting() -> bool:
-	return active() and (carrying() or sess.time < protected_until)
+	return active() and not hung_out and not _stung_aboard() and (carrying() or sess.time < protected_until)
+
+
+func _stung_aboard() -> bool:
+	return sess.active_jobs.any(func(j): return j.agency and stings.has(j.id))
 
 
 ## The task force forced us down: if the Agency covers us, the case goes away.
@@ -112,7 +146,15 @@ func waves_through(r: PyRandom) -> bool:
 	return protecting() and r.random() < 0.7
 
 
-func flight_done(job) -> void:
+## A flight landed. Returns true when it was a sting (the session busts us).
+func flight_done(job) -> bool:
+	if stings.has(job.id):
+		stings.erase(job.id)
+		protected_until = -1.0  # no call from Washington for this one
+		exposure = minf(100.0, exposure + FLIGHT_EXPOSURE)
+		last_read = "The Company gave that flight to the DEA"
+		sess.law_say("DEA sting at the strip: an arms flight walks into it. A tip from 'a friendly agency'")
+		return true
 	flights += 1
 	trust = minf(100.0, trust + 12.0)
 	protected_until = sess.time + PROTECT_S
@@ -123,7 +165,15 @@ func flight_done(job) -> void:
 		exposure = minf(100.0, exposure + 30.0)
 		sess.say("NEWS - A cargo plane carrying arms for the Contras was shot down; the surviving crewman is talking.")
 		sess.law_say("NEWS - A Contra supply plane went down; the survivor names an airline and a strip network.")
+	# the check's in the mail
+	if drng != null and drng.random() < 0.12 + (0.12 if pay_mult > 1.0 else 0.0):
+		var k := mini(maxi(0, sess.money), int(job.payout * 0.4))
+		sess.money -= k
+		withheld += k
+		last_read = "$%s of the last flight's pay is 'in the mail'" % Py.money(k)
+		sess.say("The Company: $%s of that pay is 'in the mail'. It won't come." % Py.money(k))
 	_check_exposed()
+	return false
 
 
 ## The task force digs: subpoenas, bank records, a congressional staffer.
@@ -163,6 +213,8 @@ func update(dt: float) -> void:
 		return
 	var step := _t
 	_t = 0.0
+	if drng != null:
+		_double_game(step)
 	trust = maxf(0.0, trust - 0.5 * step / 60.0)
 	_gift_t += step
 	# trust brings favours: guns for the soldiers, a burned informant
@@ -180,8 +232,50 @@ func update(dt: float) -> void:
 				sess.law_say("Our informant on %s has gone quiet. Someone warned him off." % hot.name)
 
 
+## The Company's double game (its own stream): a hangout, both sides, disinformation, a favour.
+func _double_game(step: float) -> void:
+	if not hung_out and exposure >= HANGOUT_AT and drng.random() < 0.012 * step / 10.0:
+		hung_out = true
+		protected_until = -1.0
+		trust = 0.0
+		exposure = maxf(0.0, exposure - 25.0)  # it bought itself time
+		var c = sess.police.case("runner")
+		c.suspicion = minf(100.0, c.suspicion + 30.0)
+		last_read = "The Company cut us loose and gave the task force our name"
+		sess.say("A man from the Company won't return calls. Then the task force knows things only the Company knew. We've been hung out to dry.")
+		sess.law_say("An anonymous package from a 'government source': the smuggling organisation's pilots, strips and dates")
+		sess.bus.emit("agency_hangout", sess.time, "", ["runner", "law"], {})
+	_game_t += step
+	if _game_t < 600.0:
+		return
+	_game_t = 0.0
+	var r := drng.random()
+	var live: Array = sess.stash_net.live() if sess.stash_net != null else []
+	if r < 0.25 and sess.ground != null:
+		sess.ground.commanders.rival.cash += 4000.0
+		last_read = "Los Cuervos' planes get waved through too: the Company plays both sides"
+		sess.say("Word from the strips: Los Cuervos' planes are getting waved through too.")
+	elif r < 0.45 and trust >= 40.0 and not hung_out and not live.is_empty():
+		var st = Py.max_by(live, func(s): return StashNet.suspicion(s))
+		st.intel = maxf(0.0, st.intel - 20.0)
+		last_read = "The Company sent the task force after a ghost: %s is cooler" % st.name
+		sess.say("The Company fed the task force a false lead. %s can breathe." % st.name)
+		sess.law_say("A hot lead from a 'federal source' goes nowhere: a week wasted")
+	elif r < 0.6 and (exposure >= 50.0 or hung_out) and not live.is_empty():
+		var st: Dictionary = live[drng.randint(0, live.size() - 1)]
+		st.intel += 20.0
+		last_read = "Someone with a government accent tipped the task force about %s" % st.name
+		sess.law_say("An anonymous caller with a government accent names %s" % st.name)
+	elif r < 0.7 and trust >= 50.0 and not hung_out and sess.family != null and sess.family.active():
+		sess.money += 3000
+		trust = minf(100.0, trust + 5.0)
+		sess.family.respect = minf(100.0, sess.family.respect + 5.0)
+		last_read = "We brokered the Company's cash through the Family's casinos (+$3,000)"
+		sess.say("The Company needs its cash cleaned; the Morettis' casinos oblige, and we take a fee (+$3,000).")
+
+
 func view(side: String) -> Dictionary:
 	if side == "law":
 		return {"exposure": int(exposure), "quashed": quashed, "burned": burned}
 	return {"trust": int(trust), "protected": maxi(0, int(protected_until - sess.time)) if protecting() else 0, "burned": burned,
-		"flights": flights}
+		"flights": flights, "hung_out": hung_out, "last": last_read}

@@ -82,6 +82,7 @@ class Squad:
 	var rounds := 0  ## rounds fought in this contact
 	var until := 0.0  ## a tactic's timer (sim seconds)
 	var human := false  ## ordered by a human commander (the AI leaves it alone)
+	var tag := ""  ## "family": soldiers lent by the Morettis (drawn in their suits)
 	var home := Vector2.ZERO
 
 	func pos() -> Vector2:
@@ -94,7 +95,7 @@ class Squad:
 	func dict() -> Dictionary:
 		return {"id": id, "faction": faction, "kind": kind, "men": men, "men0": men0, "x": snappedf(x, 0.1),
 			"y": snappedf(y, 0.1), "state": state, "order": order.get("type", ""), "tactic": tactic,
-			"hidden": hidden, "morale": snappedf(morale, 0.01), "loadout": loadout.duplicate(), "ammo": ammo,
+			"hidden": hidden, "morale": snappedf(morale, 0.01), "loadout": loadout.duplicate(), "ammo": ammo, "tag": tag,
 			"route": Array(route.slice(0, 12)).map(func(p): return [snappedf(p.x, 1.0), snappedf(p.y, 1.0)])}
 
 

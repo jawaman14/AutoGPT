@@ -269,7 +269,7 @@ func sync(squads: Array, fights: Array, cam: Vector3, now: float, dt: float) -> 
 		var fwd := basis * Vector3(0, 0, -1)
 		var right := basis * Vector3(1, 0, 0)
 		var guns := _guns(d.get("loadout", {}), men)
-		var look: String = "swat" if d.faction == "police" and d.kind == "truck" else d.faction
+		var look: String = "swat" if d.faction == "police" and d.kind == "truck" else ("family" if d.get("tag", "") == "family" else d.faction)
 		var anim := "holding-both"
 		if fighting.has(id):
 			anim = "holding-both-shoot"
