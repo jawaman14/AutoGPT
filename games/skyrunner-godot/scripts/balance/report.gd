@@ -69,6 +69,12 @@ const CHANGELOG := [
 	["Radio discipline: calling the boat can sink the run",
 		"Section 6: the AI co-pilot got 27% of the bales to the cove, the solo pilot 10%, and a scripted human co-pilot who radios the boat on the way in only 2%. The call is a transmission: the task force's direction finders get bearings, the case against the runner jumps, and the cutter goes where the boat is heading. The boat already knows the rendezvous; talking to it is a gift to the other side.",
 		"No rule change: the mechanic works as the designers of real smuggling ops learned it (radio silence, pre-arranged marks). The co-pilot's desk shows the DF risk on the call-the-boat row so a human learns it without losing a season to it."],
+	["Real radar and radio moved the calibration, not the balance",
+		"Requested: radar and radio realism. Radar now has the 4/3-earth horizon, sea and rain clutter, an MTI notch (a primary set cancels anything with little radial speed), per-site scan periods (4.8 s, the aerostat 12 s), probability of detection by range and aircraft size, trails, Mode C and real squawk codes. Radio has VHF line of sight over the terrain, separate channels, call length setting DF quality, and a least-squares fix with an error ellipse. Re-flying all 630 tactical flights under the new rules: detection on the low west route fell 0.47 -> 0.33 and in the north 0.67 -> 0.53 (the horizon and the notch hide low valley flying from the ground sets, as they did in reality), while the aerostat, looking down from altitude, saw more (west 0.20 -> 0.33, north 0.00 -> 0.13). intercept_k 1.35 -> 1.38, bust given intercept 0.78 -> 0.79.",
+		"No retune needed: the season model on the new calibration gives the organisation 50.2% at equilibrium over 40,000 seasons (was 50.4%), every ending between 10% and 34%, comebacks 22%. The two effects cancel: ground radar got worse at low flyers, the balloon got better, and the equilibrium strategies already route round whichever the chief bought. The aerostat is now the counter to valley flying rather than only to the sea lanes."],
+	["Upgrade trees, stash houses and markets live outside the season model",
+		"Requested: espionage, counter-surveillance and weaponry on upgrade trees; a city-coast map with stash houses; an economy where prices move with rivals, police, goods and fuel. All three act on the live game: tree nodes change sensor ranges, DF, boarding and raid odds; stash runs add a truck leg the police can stop; markets move what a load pays. The season simulator abstracts nights into zone probabilities and a fixed run value, so it doesn't see any of them.",
+		"Deliberately left out of the equilibrium: each is roughly symmetric (every runner node has a law counter - burst radio vs DF, spoofer vs the fused picture, mole vs mole hunt, armed boat vs fast cutter; a busy stash heats up and gets raided; a market the runner floods pays less), and the AI chief buys law upgrades only in live play, as forfeiture comes in. Their tests pin the mechanics (tests/test_upgrades.gd, test_city_map.gd, test_economy.gd); balancing them is a playtest job, listed under known limits."],
 ]
 
 
@@ -293,7 +299,11 @@ static func write_report(results_dir: String, out_path: String) -> String:
 		+ "equilibrium (about +20 pts even after the cost/odds were scaled per informant): most of its "
 		+ "value is 'have one informant at all' versus 'have none', which no per-informant tuning "
 		+ "touches. If this reads as too strong in playtests, the next lever is the tip mechanic the "
-		+ "first informant grants, not the recruiting cost."]
+		+ "first informant grants, not the recruiting cost.",
+		"- The upgrade trees, the city map's stash runs and the markets aren't in the season model (entry 23). "
+		+ "They're built to be symmetric, but only playtests will say whether, say, the mole or the jammer van "
+		+ "is priced right. The tactical sweep and the seasons run on the classic island; the city map shares "
+		+ "the zones and rules, not the calibration."]
 	DirAccess.make_dir_recursive_absolute(out_path.get_base_dir())
 	var f := FileAccess.open(out_path, FileAccess.WRITE)
 	f.store_string("\n".join(lines) + "\n")
