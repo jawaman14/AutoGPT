@@ -57,7 +57,7 @@ func setup(link_, role_: String, graphics := "medium", world: World = null) -> R
 	top.add_theme_constant_override("separation", 6)
 	root.add_child(top)
 	badge = Chip.new().setup("")
-	badge.set_state("CO-PILOT SEAT" if role == Roles.COPILOT else "POLICE PILOT", UIStyle.CYAN if role == Roles.COPILOT else UIStyle.RED, true)
+	badge.set_state({Roles.COPILOT: "CO-PILOT SEAT", Roles.PILOT: "PILOT (REMOTE)"}.get(role, "POLICE PILOT"), UIStyle.RED if role == Roles.INTERCEPTOR else UIStyle.CYAN, true)
 	badge.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	top.add_child(badge)
 	var hp := PanelContainer.new()
@@ -99,7 +99,7 @@ func setup(link_, role_: String, graphics := "medium", world: World = null) -> R
 		hints.set_hints([["SPACE", "launch interceptor", ""], ["H", "launch helicopter", ""], ["WASD", "fly", ""], ["R/F", "throttle", ""],
 			["X", "hand back to AI", ""], ["C", "camera", "cam"], ["ESC", "leave seat", "esc"]])
 	root.add_child(hints)
-	confirm = ConfirmBox.new().setup("Leave the %s seat?" % ("co-pilot" if role == Roles.COPILOT else "police pilot"))
+	confirm = ConfirmBox.new().setup("Leave the %s seat?" % {Roles.COPILOT: "co-pilot", Roles.PILOT: "pilot"}.get(role, "police pilot"))
 	confirm.answered.connect(func(yes):
 		if yes:
 			get_tree().quit())
@@ -195,14 +195,18 @@ func _process(delta: float) -> void:
 		hud.text = "Connecting..." if link.error == null else "Disconnected: %s" % link.error
 		return
 	_push(snap)
-	if role == Roles.INTERCEPTOR:
+	if role in [Roles.INTERCEPTOR, Roles.PILOT]:
 		var roll := _axis([KEY_A, KEY_LEFT], [KEY_D, KEY_RIGHT])
 		var pitch := _axis([KEY_W, KEY_UP], [KEY_S, KEY_DOWN])
 		throttle = clampf(throttle + _axis([KEY_F], [KEY_R]) * 0.5 * dt, 0.0, 1.0)
 		var now := Time.get_ticks_msec() / 1000.0
 		if now - _last_input > 1.0 / 30:
 			_last_input = now
-			link.send_input(roll, pitch, throttle)
+			if role == Roles.PILOT:
+				# the host's aircraft: W/S pitch (W nose down, like the host's keys), Q/E rudder, B brakes
+				link.send_input(roll, -pitch, throttle, _axis([KEY_Q], [KEY_E]), 1.0 if Input.is_physical_key_pressed(KEY_B) else 0.0)
+			else:
+				link.send_input(roll, pitch, throttle)
 	else:
 		look.x += _axis([KEY_D, KEY_RIGHT], [KEY_A, KEY_LEFT]) * 90 * dt
 		look.y = clampf(look.y + _axis([KEY_S, KEY_DOWN], [KEY_W, KEY_UP]) * 60 * dt, -60, 40)
@@ -305,7 +309,7 @@ func _camera(me: Node3D) -> void:
 		return
 	if cam_mode == "cockpit":
 		me.visible = false
-		var side := 0.35 if role == Roles.COPILOT else 0.0  # right seat
+		var side := 0.35 if role == Roles.COPILOT else (-0.35 if role == Roles.PILOT else 0.0)  # right seat / left seat
 		cam.global_transform = me.global_transform * Transform3D(
 			Basis.from_euler(Vector3(deg_to_rad(look.y), deg_to_rad(look.x), 0), EULER_ORDER_YXZ), MeshBuilder.to_godot([side, 1.2, 1.1]))
 	else:

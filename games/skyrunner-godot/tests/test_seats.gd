@@ -226,3 +226,36 @@ func test_the_lieutenant_and_patrol_desks() -> void:
 		st._key("q")
 		check(st.squad_mode, role + ": Q doesn't leave the squads")
 		st.free()
+
+
+func test_the_ai_takes_the_stick_and_hands_it_back() -> void:
+	var app := PilotApp.new()
+	Engine.get_main_loop().root.add_child(app)
+	app.setup(sess, "low")
+	app._process(1.0 / 30)
+	check(app.bot == null, "the host flies")
+	app.toggle_ai_pilot()
+	app._process(1.0 / 30)
+	check_eq(sess.seats.who(Roles.PILOT), "ai", "F3: the seat is the AI's")
+	check(app.bot != null, "the pilot bot has the controls")
+	app.toggle_ai_pilot()
+	app._process(1.0 / 30)
+	check(app.bot == null and sess.seats.human(Roles.PILOT), "F3 again: yours")
+	app.free()
+
+
+func test_a_remote_pilot_flies_the_host_aircraft() -> void:
+	_serve()
+	sess.seats.release(Roles.PILOT)  # the host steps out of the pilot's seat
+	var p := _client("Ace")
+	check(_pump_until(func(): return not p.seats.is_empty()), "roster")
+	p.claim(Roles.PILOT)
+	check(_pump_until(func(): return p.role == Roles.PILOT and p.latest != null), "Ace takes the pilot's seat")
+	check(p.latest.has("aircraft"), "and sees the aircraft")
+	p.send_input(0.5, 0.2, 0.9, -0.3, 0.0)
+	check(_pump_until(func(): return not sess.remote_stick.is_empty()), "the stick reaches the host")
+	var c := sess.remote_controls()
+	check_near(c.aileron, 0.5, 1e-3, "roll")
+	check_near(c.elevator, -0.2, 1e-3, "pitch up is elevator up")
+	check_near(c.throttle, 0.9, 1e-3, "throttle")
+	check_near(c.rudder, -0.3, 1e-3, "rudder")

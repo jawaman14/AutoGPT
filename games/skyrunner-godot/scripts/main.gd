@@ -135,7 +135,7 @@ func _join() -> void:
 
 
 func _seat(link: NetClient, role: String) -> void:
-	if role == Roles.INTERCEPTOR or (role == Roles.COPILOT and args["seat3d"]):
+	if role in [Roles.INTERCEPTOR, Roles.PILOT] or (role == Roles.COPILOT and args["seat3d"]):
 		var seat := RemoteSeat.new()
 		add_child(seat)
 		seat.setup(link, role, args["graphics"])

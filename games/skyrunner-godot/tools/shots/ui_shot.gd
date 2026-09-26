@@ -1,5 +1,5 @@
 extends SceneTree
-## Menu/station screenshot: godot --script res://tools/shots/ui_shot.gd -- <load|jobs|market|hangar|upgrades|boss|chief|desk|lawtree|copilot|hud|lobby> <out.png>
+## Menu/station screenshot: godot --script res://tools/shots/ui_shot.gd -- <load|jobs|market|hangar|upgrades|boss|chief|desk|lawtree|copilot|hud|lobby|lieutenant|patrol|seats> <out.png>
 var n := 0
 var what := "load"
 var out := ""
@@ -87,6 +87,40 @@ func _init():
 		"lobby":
 			app = Lobby.new()
 			root.add_child(app)
+		"lieutenant", "patrol":
+			# twenty minutes into a war on the city coast
+			sess = Session.new({"seed": 5, "map_seed": MapCity.SEED, "location": "HAR", "features": Session.SANDBOX_FEATURES,
+				"ground_war": true, "chronicle": true, "agency": true})
+			sess.police.frozen = true
+			sess.money = 60000
+			sess.law_funds = 30000.0
+			for i in 1200:
+				sess.update(1.0)
+			var role := Roles.LIEUTENANT if what == "lieutenant" else Roles.PATROL
+			app = StationApp.new()
+			root.add_child(app)
+			app.setup(LocalLink.new(sess, role), role, sess.world)
+			app._key("down")
+		"seats":
+			sess = Session.new({"seed": 5, "mode": Roles.VERSUS, "map_seed": MapCity.SEED, "ground_war": true})
+			var link := NetClient.new()
+			link._closed = true  # a stand-in roster: no socket
+			link.seats = sess.seats.roster()
+			for r in link.seats:
+				if r.role == Roles.LIEUTENANT:
+					r.who = "human"
+					r.name = "Manny"
+				elif r.role == Roles.CONTROLLER:
+					r.who = "human"
+					r.name = "Hart"
+			link.players = [{"name": "host", "role": Roles.PILOT}, {"name": "Manny", "role": Roles.LIEUTENANT},
+				{"name": "Hart", "role": Roles.CONTROLLER}, {"name": "Rosa", "role": ""}]
+			link.chat_log = [{"from": "Manny", "text": "I've got the streets - somebody take patrol so it's a fair fight"},
+				{"from": "Hart", "text": "the desk is mine. good luck, flyboy"}]
+			root.add_child(link)
+			app = SeatPicker.new()
+			root.add_child(app)
+			app.setup(link)
 		"desk", "lawtree":
 			sess = Session.new({"seed": 9, "mode": Roles.POLICE, "humans": {Roles.CONTROLLER: "me"},
 				"upgrades": {"law": ["doppler", "heli_df"] if what == "lawtree" else []}})

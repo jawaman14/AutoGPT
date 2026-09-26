@@ -33,6 +33,7 @@ Flight   W/S or UP/DOWN pitch     A/D or LEFT/RIGHT roll     Q/E rudder / nosewh
          G flaps down   T flaps up   [ / ] pitch trim   B or SPACE brakes
          Y toggle mouse yoke (mouse position = stick)   joystick / gamepad work too
 View     C cycle camera (chase / cockpit / tower)    M big map    P pause   F2 time of day
+Seats    F3 hand the aircraft to the AI (take another seat from a station) / take it back
 On foot  TAB get out (parked) / back in    WASD walk  SHIFT run  SPACE jump  mouse look
          Guns (with a ground war): 1-4 pistol / rifle / machine gun / RPG from the armoury  H holster  R reload  LMB fire
          E use (job board, fuel, hangar, the boss's desk)   F torch
@@ -83,7 +84,8 @@ var beacons: Array = []  ## [key, [nodes]]
 var _frame := 0
 var on_foot := false
 var walker: Walker = null
-var gun: Gunplay = null  ## the walker's gun (sessions with a ground war)
+var gun: Gunplay = null
+var _auto_bot := false  ## the AI took the stick because nobody's in the pilot seat  ## the walker's gun (sessions with a ground war)
 var ground_body: StaticBody3D = null
 var foot_prompt: Label
 var aircraft_body: StaticBody3D = null
@@ -313,6 +315,8 @@ func _unhandled_input(ev: InputEvent) -> void:
 		elif k == KEY_F2:
 			scene.set_hour(scene.hour + 3.0)
 			s.say("Time %02d:00" % int(scene.hour))
+		elif k == KEY_F3:
+			toggle_ai_pilot()
 
 
 func _unhandled_key_input(_ev: InputEvent) -> void:
@@ -486,8 +490,11 @@ func _process(delta: float) -> void:
 			_build_player()
 		if server != null:
 			server.pump(s)
+		_pilot_seat()
 		var inp := _gather_input() if not on_foot else _foot_input()
-		s.update(dt, inp, bot.step(dt) if bot != null and not on_foot else null)
+		var remote: bool = s.seats.human(Roles.PILOT) and s.seats.seats[Roles.PILOT].token != ""
+		var bc = bot.step(dt) if bot != null and not on_foot else (s.remote_controls() if remote else null)
+		s.update(dt, inp, bc)
 		nerves.update(s, dt)
 		if server != null:
 			server.publish(s)
@@ -510,6 +517,27 @@ func _process(delta: float) -> void:
 		m.close()
 	elif _frame % 10 == 0:
 		m.refresh()
+
+
+## Who flies: the host, a remote pilot, or (nobody in the seat) the AI.
+func _pilot_seat() -> void:
+	var who := s.seats.who(Roles.PILOT)
+	if who == "ai" and bot == null:
+		bot = AutoRunner.new(s)
+		_auto_bot = true
+		s.say("The AI has the controls. [F3] to take them back.")
+	elif who != "ai" and _auto_bot:
+		bot = null
+		_auto_bot = false
+
+
+## F3: hand the aircraft to the AI (so you can take another seat's job), or take it back.
+func toggle_ai_pilot() -> void:
+	if s.seats.who(Roles.PILOT) == "ai":
+		s.seats.claim(Roles.PILOT, "host", "")
+		s.say("You have the controls.")
+	elif s.seats.human(Roles.PILOT) and s.seats.seats[Roles.PILOT].token == "":
+		s.seats.release(Roles.PILOT)
 
 
 ## Down on foot: arrested (the bust takes over) or back at the aircraft.

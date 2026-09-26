@@ -134,10 +134,10 @@ func send_command(cmd: String, args := {}) -> int:
 
 
 ## Police pilot stick: fire-and-forget, the latest one wins.
-func send_input(roll: float, pitch: float, throttle: float) -> void:
+func send_input(roll: float, pitch: float, throttle: float, rudder := 0.0, brake := 0.0) -> void:
 	if not _closed and peer.get_status() == StreamPeerTCP.STATUS_CONNECTED:
 		peer.put_data(HostServer.line({"t": "input", "roll": snappedf(roll, 0.001), "pitch": snappedf(pitch, 0.001),
-			"throttle": snappedf(throttle, 0.001)}))
+			"throttle": snappedf(throttle, 0.001), "rudder": snappedf(rudder, 0.001), "brake": snappedf(brake, 0.001)}))
 
 
 func snapshot():

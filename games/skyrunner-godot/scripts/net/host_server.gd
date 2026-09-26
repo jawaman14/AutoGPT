@@ -222,6 +222,12 @@ func _message(c: Conn, msg: Dictionary) -> void:
 		for k in raw.keys().slice(0, 8):
 			args[str(k).substr(0, 32)] = raw[k]
 		inbox.append([c.role, int(msg.get("seq", 0)), str(msg.get("name", "")).substr(0, 32), args])
+	elif msg.get("t") == "input" and c.role == Roles.PILOT:
+		var st := {}
+		for k in ["roll", "pitch", "throttle", "rudder", "brake"]:
+			var x = msg.get(k, 0.0)
+			st[k] = clampf(float(x), -1.0 if k in ["roll", "pitch", "rudder"] else 0.0, 1.0) if (x is float or x is int) else 0.0
+		sess.remote_stick = st
 	elif msg.get("t") == "input" and c.role == Roles.INTERCEPTOR:
 		var v := []
 		for k in ["roll", "pitch", "throttle"]:  # latest stick position wins; no queueing, no acks

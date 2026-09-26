@@ -113,6 +113,7 @@ var _stash_ai_t := 0.0
 var arsenals := {}  ## "org" | "law" | "rival" -> Arsenal (Arsenal.REALISM)
 var seats: Seats  ## who holds each role: the AI, or a human (Seats)
 var _ai_defaults := {}  ## what each seat's AI was set to before a human took it
+var remote_stick := {}  ## a remote pilot's controls {roll, pitch, throttle, rudder, brake} (the pilot seat over the wire)
 var agency: Agency = null  ## the Company: arms flights south, protection, exposure (live play asks for it)
 var foot: FootCombat = null  ## the pilot on foot with a gun (sessions with a ground war)
 var chronicle: Chronicle = null  ## the news and the breaks between runs (Chronicle; live play asks for it)
@@ -668,6 +669,14 @@ func seat_driver(role: String, human: bool) -> void:
 	var text := ("%s %s %s." % [name, who, role]) if human else ("%s is back on the AI." % role)
 	say(text)
 	law_say(text)
+
+
+## A remote pilot's stick as flight controls (pitch +1 = nose up).
+func remote_controls() -> FlightModel.Controls:
+	var r := remote_stick
+	return FlightModel.Controls.make({"aileron": float(r.get("roll", 0.0)), "elevator": -float(r.get("pitch", 0.0)),
+		"throttle": float(r.get("throttle", 0.0)), "rudder": float(r.get("rudder", 0.0)), "brake": float(r.get("brake", 0.0)),
+		"flaps": fm.controls.flaps if fm != null else 0.0})
 
 
 ## The cutter captain: send a cutter (the one at sea, or launch one) to x, y.
