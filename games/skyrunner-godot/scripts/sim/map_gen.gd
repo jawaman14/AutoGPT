@@ -44,10 +44,12 @@ static func _clear_approach(t: Terrain, x: float, y: float, ux: float, uy: float
 
 ## [score, heading] for a strip at (x, y); score < 0 = unusable.
 static func _rate(t: Terrain, x: float, y: float, length: float, width: float, setting: String, min_elev: float,
-		elev_override = null) -> Array:
+		elev_override = null, headings: Array = []) -> Array:
 	var best := [-1.0, 0.0]
 	for hi in 18:
 		var hdg := hi * 10.0
+		if not headings.is_empty() and not (hdg in headings):
+			continue
 		var ux := sin(deg_to_rad(hdg))
 		var uy := cos(deg_to_rad(hdg))
 		var lo := 1e9

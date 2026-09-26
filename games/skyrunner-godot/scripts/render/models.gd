@@ -46,6 +46,7 @@ static func terrain_colors(world: World, step := 1) -> PackedColorArray:
 	var dry := Vector3(0.55, 0.52, 0.30)
 	var rock := Vector3(0.45, 0.42, 0.40)
 	var sand := Vector3(0.83, 0.77, 0.55)
+	var lu := world.map.land_use
 	for j in range(0, G, step):
 		for i in range(0, G, step):
 			var z: float = h[j * G + i]
@@ -60,6 +61,13 @@ static func terrain_colors(world: World, step := 1) -> PackedColorArray:
 			col = col.lerp(sand, clampf((6 - z) / 4, 0, 1))
 			if z < -2:
 				col = Vector3(0.55, 0.60, 0.45)
+			if not lu.is_empty() and z >= 0 and MapCity.TINT.has(lu[j * G + i]):
+				var tint: Array = MapCity.TINT[lu[j * G + i]]
+				var tc: Color = tint[0]
+				if lu[j * G + i] == MapCity.FARM:  # a patchwork of fields: crops, fallow, stubble
+					var f := MapCity.field_shade(-World.HALF + i * World.CELL, -World.HALF + j * World.CELL)
+					tc = tc.lerp(Color(0.62, 0.55, 0.30) if f > 0.66 else Color(0.34, 0.48, 0.20), absf(f - 0.5) * 1.4)
+				col = col.lerp(Vector3(tc.r + jit, tc.g + jit, tc.b + jit), float(tint[1]))
 			out.append(Color(clampf(col.x, 0, 1), clampf(col.y, 0, 1), clampf(col.z, 0, 1)))
 	return out
 
@@ -304,8 +312,23 @@ static func minimap_image(world: World, size := 256) -> Image:
 				img.set_pixel(px, py, Color(0.12, 0.3, 0.5))
 			else:
 				var col: Color = cols[row * G + c]
-				var shade := 0.85 + 0.15 * minf(1.0, z / 900)
+				# hillshade, lit from the north-west
+				var dzx: float = h[row * G + mini(c + 1, G - 1)] - h[row * G + maxi(c - 1, 0)]
+				var dzy: float = h[mini(row + 1, G - 1) * G + c] - h[maxi(row - 1, 0) * G + c]
+				var shade := clampf(0.9 + 0.15 * minf(1.0, z / 900) + (-dzx + dzy) / (2 * World.CELL) * 0.9, 0.55, 1.25)
 				img.set_pixel(px, py, Color(col.r * shade, col.g * shade, col.b * shade))
+	# roads (the city map): thin dark lines
+	for r in world.map.roads:
+		for k in r.size() - 1:
+			var a := Vector2(r[k][0], r[k][1])
+			var b := Vector2(r[k + 1][0], r[k + 1][1])
+			var n := int(a.distance_to(b) / (World.SIZE_M / size) * 2.0) + 1
+			for q in n + 1:
+				var p := a.lerp(b, float(q) / n)
+				var px := int((p.x + World.HALF) / World.SIZE_M * (size - 1))
+				var py := size - 1 - int((p.y + World.HALF) / World.SIZE_M * (size - 1))
+				if px >= 0 and px < size and py >= 0 and py < size:
+					img.set_pixel(px, py, Color(0.86, 0.8, 0.62) if size >= 384 else Color(0.3, 0.29, 0.27))
 	return img
 
 

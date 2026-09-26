@@ -106,6 +106,8 @@ var scanner_log: Array = []
 var scanner_channels := ["police"]  ## what the runner's scanner is programmed for (RadioNet.REALISM)
 var upgrades := {"runner": {}, "law": {}}  ## bought tree nodes (Upgrades)
 var law_funds := 8000.0  ## the task force's upgrade money: a budget plus forfeiture from busts and seizures
+var stash_net: StashNet = null  ## the organisation's stash houses (maps that have them)
+var _stash_ai_t := 0.0
 var ai_law_upgrades := false  ## the AI chief buys law upgrades as money comes in (live play; off in sims and tests)
 var urng: PyRandom  ## upgrade draws (spoiled tips, leaks), off the parity streams
 var _ai_buy_t := 0.0
@@ -168,6 +170,8 @@ func _init(opts := {}) -> void:
 	radio = RadioNet.new(_rng(seed + 7))
 	radio.world = world
 	urng = _rng(seed + 31)
+	if not world.map.stashes.is_empty():
+		stash_net = StashNet.new(world.map.stashes, _rng(seed + 41))
 	ai_law_upgrades = opts.get("ai_law_upgrades", false)
 	for side in ["runner", "law"]:
 		for id in opts.get("upgrades", {}).get(side, []):
@@ -392,6 +396,10 @@ func refresh_board(code: String) -> void:
 	var af := World.airfield(code)
 	boards[code] = Jobs.generate(af, world.airfields, rng, 6, features,
 		func(): return Maritime.random_drop_point(world, rng, maritime.cove))
+	if stash_net != null and features.has("contraband") and af.kind in ["shady", "bush"]:
+		var sj = stash_net.job_from(af, rng)
+		if sj != null:
+			boards[code].append(sj)
 
 
 # ================================================================ commands
@@ -1397,6 +1405,7 @@ func _update_world(dt: float) -> void:
 			say("[mole] " + e)  # the man in dispatch hears every order, encrypted or not
 	police.law_events.clear()
 	_update_upgrades(dt)
+	_update_stashes(dt)
 
 	# maritime: cutters go where the task force suspects a drop
 	var law_goals := []
@@ -1636,6 +1645,9 @@ func _arrive(af: Airfield, s: FlightModel.FlightState) -> void:
 		_bust("arrested on landing at %s" % af.name)
 		return
 	var delivered := active_jobs.filter(func(j): return j.dest == af.code)
+	for job in delivered.filter(func(j): return j.stash != "" and stash_net != null):
+		_truck_out(job, af)
+	delivered = delivered.filter(func(j): return j.stash == "")
 	var hot_here := delivered.filter(func(j): return j.hot() and af.kind in ["bush", "shady"])
 	if not hot_here.is_empty():
 		# the buyers count it before they pay: sit tight and hope nobody followed you in
@@ -1653,6 +1665,65 @@ func _arrive(af: Airfield, s: FlightModel.FlightState) -> void:
 		say("Parked at %s." % af.name)
 	bus.emit("landed", time, "", ["runner"], {"code": af.code})
 	save()
+
+
+## A stash job landed: the load goes on the crew's truck, graded for the flight
+## now and paid when (if) the truck reaches the stash.
+func _truck_out(job: Jobs.Job, af: Airfield) -> void:
+	var g := _grade(job)
+	var c := police.case("runner")
+	var risk := (0.15 if af.police else 0.0) + (0.1 if (c.tipped or c.wanted) else 0.0)
+	var t := stash_net.dispatch(job, af, time, g[0], risk)
+	active_jobs.erase(job)
+	loadout.remove_job(job.id)
+	say("Load's on the truck to %s: about %d min by road." % [stash_net.get_stash(job.stash).name, int(ceil(t.dur / 60.0))])
+	bus.emit("truck_out", time, "", ["runner"], {"job_id": job.id, "stash": job.stash})
+
+
+func _update_stashes(dt: float) -> void:
+	if stash_net == null:
+		return
+	for r in stash_net.update(dt, time, police.units.filter(func(u): return u.faction() == "police")):
+		var t: StashNet.Truck = r[0]
+		var st: Dictionary = stash_net.get_stash(t.stash)
+		if r[1] == "delivered":
+			money += t.pay
+			say("Truck in at %s: +$%s" % [st.name, Py.money(t.pay)])
+			bus.emit("job_delivered", time, "", ["runner"], {"job_id": t.job_id, "pay": t.pay, "dest": t.stash, "hot": true})
+		else:
+			say("The truck to %s was stopped (%s). The load is gone." % [st.name, r[2]])
+			law_say("Truck stopped on the road to %s: %d crates seized" % [st.name, t.items])
+			law_funds += 2000.0 + 300.0 * t.items
+			police.case("runner").suspicion = minf(100.0, police.case("runner").suspicion + 15.0)
+			bus.emit("truck_seized", time, "", ["runner", "law"], {"stash": t.stash})
+	# the AI task force raids a stash it knows is busy
+	if police.controller == "ai" and time >= _stash_ai_t:
+		_stash_ai_t = time + 60.0
+		for st in stash_net.known():
+			if not st.burned and st.heat >= 55.0 and urng.random() < 0.3:
+				_raid(st.id)
+				break
+
+
+func _raid(id: String):
+	var why := stash_net.raid(id)
+	if why != "":
+		return why
+	var st: Dictionary = stash_net.get_stash(id)
+	var taken := stash_net.trucks_to(id)
+	for t in taken:
+		stash_net.trucks.erase(t)
+	law_funds += 2000.0 + 1500.0 * taken.size()
+	law_say("Raid on %s: burned%s" % [st.name, (", %d truck(s) taken at the door" % taken.size()) if taken else ""])
+	say("The police raided %s. It's burned%s." % [st.name, " - and the truck with it" if taken else ""])
+	bus.emit("stash_raided", time, "", ["runner", "law"], {"stash": id})
+	return null
+
+
+func _cmd_raid_stash(role: String, a: Dictionary):
+	if stash_net == null:
+		return "No stash houses on this map."
+	return _raid(str(a.get("id", "")))
 
 
 func _complete_delivery(job: Jobs.Job, af: Airfield) -> void:

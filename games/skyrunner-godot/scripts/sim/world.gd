@@ -16,6 +16,7 @@ static var layout: MapLayout = MapLayout.classic()
 static var AIRFIELDS: Array = layout.airfields
 static var AIRFIELD_BY_CODE: Dictionary = _by_code()
 static var _terrain_cache := {}
+static var _layouts := {}  ## map seed -> MapLayout (the city's post-pass data lives on it)
 
 var seed: int
 var airfields: Array = AIRFIELDS
@@ -35,11 +36,15 @@ static func use_layout(l: MapLayout) -> void:
 	SensorNet.AEROSTAT_POS = l.aerostat_pos
 
 
-## The map for a seed: 0 = the classic island, anything else is generated.
+## The map for a seed: 0 = the classic island, MapCity.SEED the city coast,
+## anything else is generated.
 static func use_map(map_seed: int) -> MapLayout:
 	if map_seed == layout.map_seed:
 		return layout
-	use_layout(MapLayout.classic() if map_seed == 0 else MapGen.generate(map_seed))
+	if not _layouts.has(map_seed):
+		_layouts[map_seed] = MapLayout.classic() if map_seed == 0 else (MapCity.generate() if map_seed == MapCity.SEED
+			else MapGen.generate(map_seed))
+	use_layout(_layouts[map_seed])
 	return layout
 
 
@@ -67,13 +72,15 @@ func _init(p_seed := 7) -> void:
 			dicts.append(a.to_dict())
 		if generated:
 			t.generate_custom(seed, map.params, dicts)
+			if map.post:
+				MapCity.post(t, map)
 		else:
 			t.generate(seed, dicts)
 		_terrain_cache[key] = t
 	terrain = _terrain_cache[key]
 	field_elev = terrain.get_field_elev()
 	if map.hqs.is_empty():
-		map.hqs = MapGen.site_hqs(self, map)
+		map.hqs = MapCity.site_hqs(self, map) if map.id == "city" else MapGen.site_hqs(self, map)
 
 
 ## Terrain height (may be negative: sea floor).

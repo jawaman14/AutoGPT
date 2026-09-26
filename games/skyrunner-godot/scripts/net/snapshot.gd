@@ -32,6 +32,10 @@ static func build(sess: Session, role: String, seq := 0) -> Dictionary:
 	return snap
 
 
+static func _xy(p: Array) -> Dictionary:
+	return {"x": _r(p[0]), "y": _r(p[1])}
+
+
 static func _pose(x, y, z, heading, pitch := 0.0, roll := 0.0) -> Dictionary:
 	return {"x": _r(x), "y": _r(y), "z": _r(z), "heading": _r(heading), "pitch": _r(pitch), "roll": _r(roll)}
 
@@ -125,6 +129,11 @@ static func _runner(sess: Session, role: String) -> Dictionary:
 	out["intel"] = intel
 	out["scanner"] = sess.scanner_log.slice(-8).map(func(m): return m[1]) if sess.gear.has("scanner") else null
 	out["upgrades"] = sess.upgrades["runner"].keys()
+	if sess.stash_net != null:
+		out["stashes"] = sess.stash_net.stashes.map(func(st): return {"id": st.id, "name": st.name, "x": st.x, "y": st.y,
+			"strip": st.strip, "heat": _r(st.heat), "burned": st.burned})
+		out["trucks"] = sess.stash_net.trucks.map(func(t): return _with({"stash": t.stash, "title": t.title,
+			"eta": _r(maxf(0.0, t.t0 + t.dur - sess.time))}, _xy(t.pos(sess.time))))
 	out["spotters"] = sess.spotters.map(func(sp): return {"code": sp.code, "moving_to": sp.moving_to})
 	if role == Roles.SPOTTER:
 		for sp in sess.spotters:
@@ -223,6 +232,8 @@ static func _law(sess: Session) -> Dictionary:
 		"encrypted": sess.radio.encrypted,
 		"radio_channel": sess.radio.police_channel,
 		"upgrades": sess.upgrades["law"].keys(),
+		"stashes": [] if sess.stash_net == null else sess.stash_net.known().map(func(st): return {"id": st.id, "name": st.name,
+			"x": st.x, "y": st.y, "heat": _r(st.heat), "burned": st.burned}),
 		"law_funds": int(sess.law_funds),
 		"jammed": sess.radio.jammed_zones.filter(func(z): return z.size() < 4 or z[3] > now).map(
 			func(z): return [_r(z[0]), _r(z[1]), _r(z[2])]),

@@ -8,6 +8,7 @@ extends Node
 ##   godot -- --police                       # play the task force against AI runners
 ##   godot -- --players 6                    # seats and rule layers for a table of six
 ##   godot -- --watch --graphics low         # the AI flies the career; you watch
+##   godot -- --map city                     # Costa Brava, the city coast (the default for new games)
 ##   godot -- --map 42                       # a generated island (0 = the classic one)
 ##   godot -- --shot out.png --frames 90     # render N frames, save a screenshot, quit
 ##
@@ -29,6 +30,8 @@ func _ready() -> void:
 			args[k] = true
 		elif args.has(k) and i + 1 < a.size():
 			var v: String = a[i + 1]
+			if k == "map" and v == "city":
+				v = str(MapCity.SEED)
 			args[k] = int(v) if args[k] is int else (float(v) if args[k] is float else v)
 			i += 1
 		else:
@@ -62,7 +65,8 @@ func start() -> void:
 			features["hq"] = true
 		features = features.keys()
 	if args["police"]:  # offline task-force desk against AI runners
-		var ps := Session.new({"mode": Roles.POLICE, "seed": args["seed"], "humans": {Roles.CONTROLLER: args["name"]}})
+		var ps := Session.new({"mode": Roles.POLICE, "seed": args["seed"], "humans": {Roles.CONTROLLER: args["name"]},
+			"map_seed": args["map"] if args["map"] >= 0 else MapCity.SEED})
 		var desk := StationApp.new()
 		add_child(desk)
 		desk.setup(LocalLink.new(ps, Roles.CONTROLLER), Roles.CONTROLLER, ps.world)
@@ -74,6 +78,8 @@ func start() -> void:
 	var opts := {"seed": args["seed"], "mode": mode, "ai_law_upgrades": true}  # the AI chief shops as forfeiture comes in
 	if args["map"] >= 0:  # --map 0 = classic island, --map N = generated island N
 		opts["map_seed"] = args["map"]
+	elif not FileAccess.file_exists(save):
+		opts["map_seed"] = MapCity.SEED  # a new game starts on the city coast; old saves keep their island
 	if features != null:
 		opts["features"] = features
 	var sess := Session.load_or_new(save, opts)
