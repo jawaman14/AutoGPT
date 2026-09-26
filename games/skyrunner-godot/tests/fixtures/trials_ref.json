@@ -1,0 +1,87 @@
+{
+ "tactical": [
+  {
+   "zone": "west",
+   "law": "standard",
+   "tactic": "high",
+   "aircraft": "c172p",
+   "seed": 100,
+   "detected": true,
+   "flagged": false,
+   "intercepted": false,
+   "busted": false,
+   "crashed": false,
+   "delivered": true,
+   "boat_seized": false,
+   "outcome": "landed",
+   "minutes": 10.511666666669198,
+   "first_detect_s": 42.400000000000155
+  },
+  {
+   "zone": "sea",
+   "law": "all_in",
+   "tactic": "evasive",
+   "aircraft": "c172p",
+   "seed": 101,
+   "detected": true,
+   "flagged": true,
+   "intercepted": true,
+   "busted": true,
+   "crashed": false,
+   "delivered": false,
+   "boat_seized": true,
+   "outcome": "BUSTED (forced down by police). Fine and impound -$2,250. Cargo seized.",
+   "minutes": 7.9166666666693715,
+   "first_detect_s": 99.23333333333026
+  },
+  {
+   "zone": "north",
+   "law": "tipped",
+   "tactic": "low",
+   "aircraft": "c172p",
+   "seed": 102,
+   "detected": true,
+   "flagged": true,
+   "intercepted": true,
+   "busted": true,
+   "crashed": false,
+   "delivered": false,
+   "boat_seized": false,
+   "outcome": "BUSTED (forced down by police). Fine and impound -$2,250. Cargo seized.",
+   "minutes": 4.758333333333525,
+   "first_detect_s": 141.59999999999454
+  }
+ ],
+ "feasibility": [
+  {
+   "aircraft": "c172p",
+   "field": "QRY",
+   "load": "half",
+   "test": "takeoff",
+   "ok": false,
+   "outcome": "CRASH: Flew into terrain. Repairs -$2,500.",
+   "weight_lb": 2141.998362221948,
+   "seconds": 75.7333333333316
+  },
+  {
+   "aircraft": "c172p",
+   "field": "EGL",
+   "load": "light",
+   "test": "landing",
+   "ok": true,
+   "outcome": "landed",
+   "weight_lb": 1790.9983801887495,
+   "seconds": 240.03333333332228
+  },
+  {
+   "aircraft": "c310",
+   "field": "PNR",
+   "load": "max",
+   "test": "takeoff",
+   "ok": false,
+   "outcome": "CRASH: Ran off the strip into rough ground. Repairs -$28,800.",
+   "weight_lb": 5499.997682156141,
+   "seconds": 91.46666666666404
+  }
+ ]
+}

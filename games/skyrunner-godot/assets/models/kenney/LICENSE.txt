@@ -1,0 +1,16 @@
+Kenney game assets - Creative Commons Zero (CC0 1.0)
+http://creativecommons.org/publicdomain/zero/1.0/
+
+Created and distributed by Kenney (www.kenney.nl). "You can use this content
+for personal, educational, and commercial purposes." Crediting is not required;
+we credit Kenney anyway.
+
+Kits used here (unmodified .glb files and their colour-map textures):
+  characters/  Blocky Characters (character-a..r, a subset)
+  cars/        Car Kit
+  weapons/     Weapon Pack
+  boats/       Watercraft Kit
+  nature/      Nature Kit (the palms)
+
+Fetched from the CC0 mirror of the Kenney library at
+https://github.com/shorepine/kenney (3d/<kit>/).
