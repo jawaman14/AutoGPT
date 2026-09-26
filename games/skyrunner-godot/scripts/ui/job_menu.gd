@@ -79,6 +79,11 @@ func _market() -> void:
 		heat.append("%s: police %s, rivals %d%%" % [m, ("quiet" if b.heat[m] < 0.1 else ("around" if b.heat[m] < 0.4 else ("thick" if b.heat[m] < 0.9 else "everywhere"))),
 			int(b.rival[m] * 100)])
 	footer.text = "   ".join(heat) + ("\nNews: " + " / ".join(b.events) if not b.events.is_empty() else "")
+	if s.arsenals.has("org"):
+		var a: Arsenal = s.arsenals["org"]
+		footer.text += "\nArmoury (%s): %s, %d rounds - worth $%s to the fence" % [
+			"the club" if a.cache == "" else s.stash_net.get_stash(a.cache).name, Arsenal.describe(a.stock), a.ammo,
+			Py.money(int(a.value(s.econ.mult("guns", "town") * 0.8)))]
 	hints.set_hints([["LEFT/RIGHT", "job board", "left"], ["ESC", "close", "esc"]])
 
 
@@ -111,7 +116,7 @@ func refresh() -> void:
 	_show_detail()
 	footer.text = ""
 	hints.set_hints([["UP/DOWN", "select", "down"], ["ENTER", "accept / drop", "enter"], ["LEFT/RIGHT", "market", "right"],
-		["L", "load & fuel", ""], ["ESC", "close", "esc"]])
+		["G", "sell / keep guns", ""], ["L", "load & fuel", ""], ["ESC", "close", "esc"]])
 
 
 func _sep(text: String) -> void:
@@ -158,6 +163,8 @@ func _show_detail() -> void:
 	if j.hot() and Economy.REALISM:
 		var now := int(round(j.payout * s.econ.job_mult(j) / maxf(0.05, j.price_mult)))
 		facts.append("street now $%s" % Py.money(now))
+	if not j.weapons.is_empty():
+		facts.append("on delivery: %s [G]" % ("SELL" if j.gun_mode == "sell" else "KEEP for the armoury"))
 	card_facts.text = "   ".join(facts)
 	detail.text = j.notes if j.notes else ("Paid per bale landed at the cove." if j.is_airdrop() else "")
 
@@ -176,6 +183,12 @@ func key(k: String) -> void:
 		"down":
 			list.move(1)
 			_show_detail()
+		"g":
+			var i := list.selected_row()
+			if i >= 0 and rows[i] != null and not rows[i][1].weapons.is_empty():
+				var j: Jobs.Job = rows[i][1]
+				j.gun_mode = "stock" if j.gun_mode == "sell" else "sell"
+				_show_detail()
 		"enter":
 			var i := list.selected_row()
 			if i < 0 or rows[i] == null:

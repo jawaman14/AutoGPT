@@ -35,6 +35,8 @@ class Truck:
 	var pay: int
 	var items: int
 	var stop_at := -1.0  ## fraction of the route where a roadblock waits, -1 none
+	var weapons := {}  ## a gun run's weapons (Arsenal)
+	var gun_mode := "sell"
 
 	func frac(now: float) -> float:
 		return clampf((now - t0) / dur, 0.0, 1.0)
@@ -112,6 +114,8 @@ func dispatch(job: Jobs.Job, af: Airfield, now: float, pay: int, risk := 0.0) ->
 	t.dur = TRUCK_LOAD_S + PyMath.hypot(st.x - af.x, st.y - af.y) * 1.3 / TRUCK_MS  # roads wind: 1.3x the crow's line
 	t.pay = pay
 	t.items = job.items.size()
+	t.weapons = job.weapons
+	t.gun_mode = job.gun_mode
 	var p := clampf(0.04 + float(st.heat) / 300.0 + risk, 0.0, 0.85)
 	if st.burned:
 		p = 1.0

@@ -110,6 +110,8 @@ var econ: Economy  ## the markets: what each good is worth where (Economy)
 var _news_seen := 0
 var stash_net: StashNet = null  ## the organisation's stash houses (maps that have them)
 var _stash_ai_t := 0.0
+var arsenals := {}  ## "org" | "law" | "rival" -> Arsenal (Arsenal.REALISM)
+var arng: PyRandom  ## gun runs and arsenal draws, off the board and parity streams
 var ai_law_upgrades := false  ## the AI chief buys law upgrades as money comes in (live play; off in sims and tests)
 var urng: PyRandom  ## upgrade draws (spoiled tips, leaks), off the parity streams
 var _ai_buy_t := 0.0
@@ -173,6 +175,14 @@ func _init(opts := {}) -> void:
 	radio.world = world
 	urng = _rng(seed + 31)
 	econ = Economy.new(_rng(seed + 51))
+	arng = _rng(seed + 71)
+	if Arsenal.REALISM:
+		for side in ["org", "law", "rival"]:
+			arsenals[side] = Arsenal.new(side)
+		var saved: Dictionary = opts.get("arsenal", {})
+		if not saved.is_empty():
+			arsenals["org"] = Arsenal.from_dict(saved)
+			arsenals["org"].side = "org"
 	if not world.map.stashes.is_empty():
 		stash_net = StashNet.new(world.map.stashes, _rng(seed + 41))
 	ai_law_upgrades = opts.get("ai_law_upgrades", false)
@@ -404,6 +414,10 @@ func refresh_board(code: String) -> void:
 		var sj = stash_net.job_from(af, rng)
 		if sj != null:
 			boards[code].append(sj)
+	if Arsenal.REALISM and stash_net != null and features.has("contraband") and af.kind in ["shady", "bush"] and arng.random() < 0.5:
+		var gj = Arsenal.gun_run(af, world.airfields, stash_net, arng)
+		if gj != null:
+			boards[code].append(gj)
 	if Economy.REALISM:
 		for j in boards[code]:  # today's prices
 			j.price_mult = econ.job_mult(j)
@@ -1482,6 +1496,7 @@ func _maritime_event(kind: String, data: Dictionary) -> void:
 		econ.record_seizure("marijuana", "sea")
 		if upgrades["runner"].has("armed_boat"):
 			law_funds += 1500.0
+			_seize_weapons({"rifle": 2}, data["boat"])
 			law_say("Firearms aboard %s: a federal charge on top" % data["boat"])
 		if job:
 			_resolve_job(job, "Coast Guard took %s! Job lost." % data["boat"])
@@ -1575,6 +1590,7 @@ func _bust(how: String) -> void:
 	for j in active_jobs:
 		if j.hot():
 			econ.record_seizure(Economy.good_of(j), Economy.job_market(j))
+			_seize_weapons(Arsenal.weapons_of(j), "the aircraft")
 	if upgrades["runner"].has("strip_guards"):
 		fine = int(fine * 1.5)  # an armed-bust case
 		how += ", with the armed guards"
@@ -1700,16 +1716,21 @@ func _update_stashes(dt: float) -> void:
 	for r in stash_net.update(dt, time, police.units.filter(func(u): return u.faction() == "police")):
 		var t: StashNet.Truck = r[0]
 		var st: Dictionary = stash_net.get_stash(t.stash)
-		if r[1] == "delivered":
+		if r[1] == "delivered" and not t.weapons.is_empty() and t.gun_mode == "stock" and Arsenal.REALISM:
+			_stock_weapons(t.weapons, st.id)
+			say("Truck in at %s: %s into the armoury here" % [st.name, Arsenal.describe(t.weapons)])
+			bus.emit("job_delivered", time, "", ["runner"], {"job_id": t.job_id, "pay": 0, "dest": t.stash, "hot": true})
+		elif r[1] == "delivered":
 			money += t.pay
-			econ.record_delivery("cocaine", st.zone)
+			econ.record_delivery("guns" if not t.weapons.is_empty() else "cocaine", st.zone)
 			say("Truck in at %s: +$%s" % [st.name, Py.money(t.pay)])
 			bus.emit("job_delivered", time, "", ["runner"], {"job_id": t.job_id, "pay": t.pay, "dest": t.stash, "hot": true})
 		else:
 			say("The truck to %s was stopped (%s). The load is gone." % [st.name, r[2]])
 			law_say("Truck stopped on the road to %s: %d crates seized" % [st.name, t.items])
 			law_funds += 2000.0 + 300.0 * t.items
-			econ.record_seizure("cocaine", st.zone)
+			econ.record_seizure("guns" if not t.weapons.is_empty() else "cocaine", st.zone)
+			_seize_weapons(t.weapons, "the truck")
 			police.case("runner").suspicion = minf(100.0, police.case("runner").suspicion + 15.0)
 			bus.emit("truck_seized", time, "", ["runner", "law"], {"stash": t.stash})
 	# the AI task force raids a stash it knows is busy
@@ -1756,9 +1777,103 @@ func _raid(id: String):
 		stash_net.trucks.erase(t)
 	law_funds += 2000.0 + 1500.0 * taken.size()
 	econ.record_seizure("cocaine", st.zone)
+	for t in taken:
+		_seize_weapons(t.weapons, "the truck at the door")
+	if Arsenal.REALISM and arsenals.has("org") and arsenals["org"].cache == id and not arsenals["org"].is_empty():
+		var moved: Dictionary = arsenals["org"].seize_into(arsenals["law"])
+		arsenals["org"].cache = ""
+		econ.record_seizure("guns", st.zone)
+		law_say("The armoury at %s: %s seized - issued to the patrols" % [st.name, Arsenal.describe(moved)])
+		say("They found the armoury at %s: %s gone to the police." % [st.name, Arsenal.describe(moved)])
 	law_say("Raid on %s: burned%s" % [st.name, (", %d truck(s) taken at the door" % taken.size()) if taken else ""])
 	say("The police raided %s. It's burned%s." % [st.name, " - and the truck with it" if taken else ""])
 	bus.emit("stash_raided", time, "", ["runner", "law"], {"stash": id})
+	return null
+
+
+# ================================================================ arsenals and gun running
+## Weapons taken by the police go into their arsenal and arm their patrols.
+func _seize_weapons(weapons: Dictionary, where: String) -> void:
+	if not Arsenal.REALISM or weapons.is_empty() or not arsenals.has("law"):
+		return
+	var n: int = arsenals["law"].take_seized(weapons)
+	if n > 0:
+		law_say("Weapons recovered from %s: %s - into the arsenal" % [where, Arsenal.describe(weapons)])
+		bus.emit("weapons_seized", time, "", ["law"], {"weapons": weapons, "where": where})
+
+
+func _stock_weapons(weapons: Dictionary, stash_id: String) -> void:
+	var org: Arsenal = arsenals["org"]
+	org.add_all(weapons)
+	if stash_id != "":
+		org.cache = stash_id  # the guns sit where the truck left them
+	bus.emit("weapons_stocked", time, "", ["runner"], {"weapons": weapons, "cache": org.cache})
+
+
+## The fence's price for one weapon (a cut under the street) and the dealer's (a mark-up).
+func weapon_price(tier: String, buying: bool) -> int:
+	var m := econ.mult("guns", "town")
+	return int(Arsenal.TIERS[tier].price * m * (1.4 if buying else 0.8))
+
+
+func _cmd_gun_mode(role: String, a: Dictionary):
+	var job = find_job(int(_num(a, "job_id", -1)))
+	if job == null:
+		job = Py.first(active_jobs, func(j): return not j.weapons.is_empty())
+	if job == null or job.weapons.is_empty():
+		return "No gun run to set."
+	var m := str(a.get("mode", "stock" if job.gun_mode == "sell" else "sell"))
+	if not m in ["sell", "stock"]:
+		return "Sell or stock."
+	job.gun_mode = m
+	for t in stash_net.trucks if stash_net != null else []:
+		if t.job_id == job.id:
+			t.gun_mode = m
+	say("Gun run: %s on delivery." % ("sell them" if m == "sell" else "keep them for our soldiers"))
+	return null
+
+
+func _cmd_sell_weapons(role: String, a: Dictionary):
+	if not Arsenal.REALISM:
+		return "No arsenal."
+	var tier := str(a.get("tier", ""))
+	var n := int(_num(a, "n", 1))
+	if not Arsenal.TIERS.has(tier) or n <= 0:
+		return "Sell what?"
+	var k: int = arsenals["org"].take(tier, n)
+	if k == 0:
+		return "None of those in the armoury."
+	var pay := weapon_price(tier, false) * k
+	money += pay
+	econ.record_delivery("guns", "town")
+	say("Sold %d %s to the fence: +$%s" % [k, Arsenal.TIERS[tier].name.to_lower(), Py.money(pay)])
+	return null
+
+
+func _cmd_buy_weapons(role: String, a: Dictionary):
+	if not Arsenal.REALISM:
+		return "No arsenal."
+	var tier := str(a.get("tier", ""))
+	var n := int(_num(a, "n", 1))
+	if not Arsenal.TIERS.has(tier) or n <= 0:
+		return "Buy what?"
+	var cost := weapon_price(tier, true) * n
+	if money < cost:
+		return "Need $%s." % Py.money(cost)
+	money -= cost
+	arsenals["org"].add(tier, n)
+	say("Bought %d %s from a dealer: -$%s" % [n, Arsenal.TIERS[tier].name.to_lower(), Py.money(cost)])
+	return null
+
+
+func _cmd_set_cache(role: String, a: Dictionary):
+	if not Arsenal.REALISM:
+		return "No arsenal."
+	var id := str(a.get("stash", ""))
+	if id != "" and (stash_net == null or stash_net.get_stash(id) == null or stash_net.get_stash(id).burned):
+		return "No such stash."
+	arsenals["org"].cache = id
+	say("The guns are kept at %s now." % ("the club" if id == "" else stash_net.get_stash(id).name))
 	return null
 
 
@@ -1774,6 +1889,13 @@ func _complete_delivery(job: Jobs.Job, af: Airfield) -> void:
 		var fuel := Py.sum_by(drums, func(i): return i.weight_lb) * 0.9
 		fuel_caches[af.code] = fuel_caches.get(af.code, 0.0) + fuel
 		say("%s lb of fuel cached at %s." % [Py.f(fuel, 0), af.name])
+	if Arsenal.REALISM and not job.weapons.is_empty() and job.gun_mode == "stock":
+		_stock_weapons(job.weapons, "")
+		active_jobs.erase(job)
+		loadout.remove_job(job.id)
+		say("Delivered '%s': %s into the organisation's armoury" % [job.title, Arsenal.describe(job.weapons)])
+		bus.emit("job_delivered", time, "", ["runner"], {"job_id": job.id, "pay": 0, "dest": af.code, "hot": true})
+		return
 	var g := _grade(job)
 	money += g[0]
 	if job.hot():
@@ -1851,6 +1973,8 @@ func save() -> void:
 		"upgrades": Py.sorted_by(upgrades["runner"].keys(), func(k): return k),
 		"map_seed": map_seed,
 	}
+	if arsenals.has("org"):
+		data["arsenal"] = arsenals["org"].to_dict()
 	if campaign != null:
 		data["campaign"] = campaign.to_dict()
 	var f := FileAccess.open(save_path, FileAccess.WRITE)
@@ -1880,5 +2004,7 @@ static func load_or_new(path: String, opts := {}) -> Session:
 	o["location"] = data.location if World.AIRFIELD_BY_CODE.has(data.get("location", "")) else START_FIELD
 	o["gear"] = (data.get("gear", []) as Array).filter(func(k): return GEAR.has(k))
 	o["upgrades"] = {"runner": (data.get("upgrades", []) as Array).filter(func(k): return Upgrades.side_of(k) == "runner")}
+	if data.get("arsenal") is Dictionary:
+		o["arsenal"] = data["arsenal"]
 	o["save_path"] = path
 	return Session.new(o)

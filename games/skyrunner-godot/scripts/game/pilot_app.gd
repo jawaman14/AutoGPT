@@ -24,7 +24,7 @@ const HELD_KEYS := {
 const CREW_KEYS := {KEY_N: "transponder", KEY_U: "autopilot", KEY_K: "kick", KEY_O: "call_boat", KEY_V: "pump", KEY_I: "turn_around"}
 const PRESS_KEYS := {KEY_G: "flaps_down", KEY_T: "flaps_up", KEY_X: "throttle_cut", KEY_Z: "throttle_full", KEY_ENTER: "confirm", KEY_KP_ENTER: "confirm"}
 const MENU_KEYS := {KEY_UP: "up", KEY_DOWN: "down", KEY_LEFT: "left", KEY_RIGHT: "right", KEY_ENTER: "enter",
-	KEY_KP_ENTER: "enter", KEY_A: "a", KEY_PLUS: "+", KEY_EQUAL: "+", KEY_KP_ADD: "+", KEY_MINUS: "-", KEY_KP_SUBTRACT: "-", KEY_F: "f"}
+	KEY_KP_ENTER: "enter", KEY_A: "a", KEY_PLUS: "+", KEY_EQUAL: "+", KEY_KP_ADD: "+", KEY_MINUS: "-", KEY_KP_SUBTRACT: "-", KEY_F: "f", KEY_G: "g"}
 
 const HELP_TEXT := """SKYRUNNER - controls
 

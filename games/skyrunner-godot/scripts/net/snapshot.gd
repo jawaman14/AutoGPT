@@ -130,6 +130,8 @@ static func _runner(sess: Session, role: String) -> Dictionary:
 	out["scanner"] = sess.scanner_log.slice(-8).map(func(m): return m[1]) if sess.gear.has("scanner") else null
 	out["upgrades"] = sess.upgrades["runner"].keys()
 	out["market"] = sess.econ.board()
+	if sess.arsenals.has("org"):
+		out["arsenal"] = sess.arsenals["org"].to_dict()
 	if sess.stash_net != null:
 		out["stashes"] = sess.stash_net.stashes.map(func(st): return {"id": st.id, "name": st.name, "x": st.x, "y": st.y,
 			"strip": st.strip, "heat": _r(st.heat), "burned": st.burned})
@@ -189,7 +191,7 @@ static func _job(sess: Session, j: Jobs.Job) -> Dictionary:
 	return {"id": j.id, "title": j.title, "dest": j.dest_label(), "x": _r(xy[0]), "y": _r(xy[1]), "payout": j.payout,
 		"hot": j.hot(), "airdrop": j.is_airdrop(), "bales": j.bales_total, "weight": _r(j.weight_lb()),
 		"pax": Py.count(j.items, func(i): return i.kind == "passenger"), "notes": j.notes,
-		"time_left": _r(tl) if tl != null else null}
+		"time_left": _r(tl) if tl != null else null, "weapons": j.weapons, "gun_mode": j.gun_mode}
 
 
 static func _law(sess: Session) -> Dictionary:
@@ -236,6 +238,7 @@ static func _law(sess: Session) -> Dictionary:
 		"stashes": [] if sess.stash_net == null else sess.stash_net.known().map(func(st): return {"id": st.id, "name": st.name,
 			"x": st.x, "y": st.y, "heat": _r(st.heat), "burned": st.burned}),
 		"law_funds": int(sess.law_funds),
+		"arsenal": sess.arsenals["law"].to_dict() if sess.arsenals.has("law") else {},
 		"market": sess.econ.board(),
 		"jammed": sess.radio.jammed_zones.filter(func(z): return z.size() < 4 or z[3] > now).map(
 			func(z): return [_r(z[0]), _r(z[1]), _r(z[2])]),

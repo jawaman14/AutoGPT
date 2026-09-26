@@ -48,6 +48,8 @@ class Job:
 	var resolved := false
 	var price_mult := 1.0  ## the market multiplier baked into `payout` when the board was drawn (Economy)
 	var stash := ""  ## stash jobs (StashNet): land at `dest`, then the crew trucks it to this stash
+	var weapons := {}  ## gun runs (Arsenal): tier -> count
+	var gun_mode := "sell"  ## gun runs: "sell" at the street price, or "stock" the organisation's arsenal
 
 	func _init(id_: int, title_: String, kind_: String, origin_: String, dest_: String, items_: Array, payout_: int, opts := {}) -> void:
 		id = id_

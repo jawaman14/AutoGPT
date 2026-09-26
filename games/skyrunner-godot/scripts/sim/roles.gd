@@ -28,11 +28,11 @@ const _CREW_AIR := ["kick", "pump", "call_boat", "auto_kick"]
 
 static var PERMISSIONS := {
 	PILOT: _GROUND_OPS + _CREW_AIR + ["buy_aircraft", "buy_gear", "hire_spotter", "transponder", "squawk", "upgrade", "autopilot",
-		"confirm", "chat", "turn_around", "hq"],
-	COPILOT: _GROUND_OPS + _CREW_AIR + ["hire_spotter", "chat"],
+		"confirm", "chat", "turn_around", "hq", "gun_mode", "sell_weapons", "buy_weapons"],
+	COPILOT: _GROUND_OPS + _CREW_AIR + ["hire_spotter", "chat", "gun_mode"],
 	SPOTTER: ["spotter_move", "chat"],
 	BOAT: ["boat_goto", "chat"],
-	BOSS: ["hq", "chat"],
+	BOSS: ["hq", "chat", "gun_mode", "sell_weapons", "buy_weapons", "set_cache"],
 	CONTROLLER: ["launch", "dispatch", "recall", "encrypt", "radio_channel", "jam", "upgrade", "raid_stash", "aerostat", "chat", "hq"],
 	INTERCEPTOR: ["claim_unit", "release_unit", "chat"],
 	CUTTER: ["cutter_goto", "chat"],
