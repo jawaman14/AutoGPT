@@ -104,6 +104,38 @@ Beyond the prototype:
   sell), fuel (a price of its own that passes through to fares, freight and fuel drums), storms and
   the news. Contraband is paid at the street price on delivery; legal work as agreed. J, then
   LEFT/RIGHT, shows the market.
+- **Gun running and arsenals.** The organisation, the task force and Los Cuervos each hold weapons
+  (pistols, rifles, machine guns, RPGs) and ammunition. Gun runs bring crates in: on delivery sell
+  them at the street price or keep them for your soldiers (G on the job board). The fence buys, a
+  dealer sells. Whatever the police seize - a busted load, a stopped truck, a raided stash, the
+  guns off men arrested in a firefight - goes into the police arsenal and arms their patrols.
+- **The ground war.** Soldiers, Los Cuervos' crews and narcotics squads on foot, in cars and trucks,
+  driving the city's roads. Firefights are Lanchester's square law on weapons, cover and nerve.
+  The organisation and Los Cuervos fight as guerrillas (ambushes at chokepoints, hit and run,
+  melting into the barrio, the jungle and the mangroves, decoy cars, harassment); the task force
+  fights like a narcotics unit (stakeouts, tailing a truck home, informants' controlled buys,
+  buy-busts, a cordon before the raid, checkpoints, saturation patrols, SWAT, and restraint: it
+  doesn't fire first and it prefers arrests). Trucks run the roads past checkpoints, with escorts.
+  Who's on the streets moves the markets and, night by night, Los Cuervos' turf. The AI commands
+  every side until a human takes the **lieutenant** or **patrol commander** seat; the boss, chief
+  and controller can take over too (Q at their desk).
+- **On foot with a gun.** Out of the aircraft, 1-4 draw a pistol, rifle, machine gun or RPG from the
+  armoury; the left button fires (walls stop rounds). Squads who have it in for you shoot back.
+  Go down near the police and you're arrested; elsewhere it's a doctor's bill and the gun.
+- **Every seat is the AI's until someone takes it.** Join a game mid-way, see the live seat list,
+  and take any role the AI is playing: pilot, co-pilot, spotter, boat, boss, lieutenant,
+  controller, police pilot, cutter, chief or patrol. Leave, and the AI takes it back; drop, and
+  the seat waits 30 s for your reconnect token. Table talk to everyone or your side. F3 hands the
+  aircraft to the AI so the host can sit at another desk. ([docs/MULTIPLAYER.md](docs/MULTIPLAYER.md) section 7)
+- **The news.** Breaks and bad luck for all three outfits, some random and some milestones (the
+  first delivery, a burned stash, officers down, flash money that gets noticed), each changing
+  something real, run as headlines by the island's papers and radio. A timeline of real
+  1979-86 headlines runs too, from the Mariel boatlift to Iran-Contra.
+- **The Agency.** A covert arms pipeline to the Contras runs through the island's strips. Fly for
+  it and it protects you: busts quashed from Washington, checkpoints told to wave your trucks
+  through. Every quash leaves a trail; the task force can dig (V at the desk), and when it's
+  exposed the hearings end it. Fiction, inspired by the documented Iran-Contra record
+  ([docs/DESIGN.md](docs/DESIGN.md) section 13).
 - **One UI, redesigned.** A single theme across every screen; real tables with titled columns (the job
   board colours the landing roll against the strip length); key caps in every footer that you can
   also click; readouts as tiles; a HUD laid out by what you need when (status chips, wanted stars,
@@ -135,6 +167,8 @@ Beyond the prototype:
 | **Dusk on the boulevard** | **Sunset over San Telmo** | **The city at night** |
 |---|---|---|
 | ![street](docs/img/vice-street.png) | ![dusk](docs/img/vice-dusk.png) | ![night](docs/img/vice-night.png) |
+| **The lieutenant's desk** | **Take a seat: the AI plays the rest** | **A firefight at the docks** |
+| ![lieutenant](docs/img/ui-lieutenant.png) | ![seats](docs/img/ui-seats.png) | ![docks](docs/img/ground-docks.png) |
 
 | Mid-afternoon on the runway (medium) | Dusk, climbing out near Eagle's Nest (high) | Night: edge lights on |
 |---|---|---|
@@ -181,7 +215,7 @@ Command-line flags (all optional; any flag skips the lobby):
 | `--graphics low\|medium\|high` | quality preset |
 | `--watch` | the pilot bot flies the career; you watch |
 | `--host` / `--port 47800` | open remote seats in solo |
-| `--connect HOST:PORT --role R [--name N] [--seat3d]` | join as `copilot`, `spotter`, `boat`, `boss`, `controller`, `interceptor` (3D), `cutter` or `chief` |
+| `--connect HOST:PORT [--role R] [--name N] [--seat3d]` | join; `--role pick` (or none from the lobby) opens the live seat list; or sit straight down as `pilot` (3D), `copilot`, `spotter`, `boat`, `boss`, `lieutenant`, `controller`, `interceptor` (3D), `cutter`, `chief` or `patrol` |
 | `--hour 0-24` | time of day to start at (F2 advances it in game) |
 | `--map city\|N` | map: `city` = Costa Brava (the default for new games), 0 = the classic island, N = generated island N |
 | `--weather clear\|cloud\|storm[,moon]` | tonight's weather outside a season (moon 0 = new .. 1 = full) |
