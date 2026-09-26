@@ -53,6 +53,35 @@ New in the Godot build:
   - *Nerves.* Stress follows what real smuggling pilots feared. Past the Yerkes-Dodson hump the screen
     tunnels, you hear your heartbeat and your hands shake (8-12 Hz, human hands only). A co-pilot
     steadies you.
+- **Radar and radio that behave like the real thing:**
+  - *Radar.* 4/3-earth horizon, sea clutter that rises with the wind, rain clutter, and an MTI notch:
+    cross the beam or fly slow and a primary radar cancels you as clutter. Every site turns at its own
+    rate (ASR 4.8 s, the aerostat 12 s); detection falls off with range and the aircraft's size. Tracks
+    keep a trail and, with a transponder on, Mode C altitude. Squawk codes are real: 1200 VFR, and 7700,
+    7600 and 7500 get a response from Center (key 7). The desk shades each site's blind valleys (G).
+  - *Radio.* VHF line of sight over the terrain; police dispatch and tactical channels, the runner crew
+    and the boat. The length of a call sets how well it DFs (SHIFT+O sends a one-second codeword), and a
+    least-squares fix draws its error ellipse on the desk's map. Crew chat is radio too.
+- **Upgrade trees for both sides** (hangar LEFT/RIGHT for the runner; U at the task-force desk):
+  | Runner | |
+  |---|---|
+  | Electronics & counter-surveillance | scanner -> programmable scanner -> burst transmitter; radar detector -> direction-finding detector -> transponder spoofer |
+  | Espionage | lookouts; bug sweeps -> mole in dispatch -> double agent |
+  | Airframe | ferry tank; low-visibility paint -> quiet propeller; heavy-duty gear |
+  | Weaponry | armed boat crew -> armed strip guards |
+
+  | Task force | |
+  |---|---|
+  | Sensors | Doppler processing -> airborne early warning; coastal radar |
+  | Signals | encrypted radios; helicopter DF -> intercept runner channels -> jammer van (J) |
+  | Intelligence | informant network -> undercover agent; mole hunt |
+  | Interdiction | armed helicopter -> Blackhawk; fast patrol boat |
+
+  The runner pays from their money. The task force pays from its funds: a budget of $40 a minute plus
+  asset forfeiture ($3,000 a bust, $1,500 + $100 a bale for a seized boat, more when the crew was
+  armed). With no human at the desk the AI chief buys the cheapest thing it can afford as the money
+  comes in. Weaponry is abstract: it changes chases, boardings and raids, never shows a wound, and it
+  raises the stakes.
 - **One UI, redesigned.** A single theme across every screen; real tables with titled columns (the job
   board colours the landing roll against the strip length); key caps in every footer that you can
   also click; readouts as tiles; a HUD laid out by what you need when (status chips, wanted stars,
@@ -86,6 +115,8 @@ New in the Godot build:
 | ![storm](docs/img/storm.png) | ![moon](docs/img/full-moon.png) | ![map7](docs/img/map-seed7.png) |
 | **The HUD, crewed airdrop** | **Co-pilot's desk** | **Lobby** |
 | ![hud](docs/img/ui-hud.png) | ![copilot](docs/img/ui-copilot.png) | ![lobby](docs/img/ui-lobby.png) |
+| **Runner upgrades (hangar)** | **Task-force upgrades (desk, U)** | |
+| ![upgrades](docs/img/ui-upgrades.png) | ![lawtree](docs/img/ui-lawtree.png) | |
 
 *(Rendered on a GPU-less box: Mesa llvmpipe with Godot's compatibility renderer under Xvfb. SSAO and
 volumetric fog need Forward+ on a real GPU.)*

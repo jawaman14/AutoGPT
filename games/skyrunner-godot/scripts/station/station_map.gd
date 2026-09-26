@@ -204,6 +204,9 @@ func _draw_law() -> void:
 				pts.append(w2m(d.fix[0] + ax * sin(th) + bx * cos(th), d.fix[1] + ax * cos(th) - bx * sin(th)))
 			draw_polyline(pts, Color(0.6, 0.85, 1, 0.9 * fade), 2.0)
 			_text(d.fix[0], d.fix[1], "DF %.0fs" % float(d.age), Color(0.7, 0.9, 1))
+	for z in snap.get("jammed", []):
+		_circle(z[0], z[1], z[2], Color(1, 0.3, 0.9, 0.85), 2.0)
+		_text(z[0], z[1], "JAMMED", Color(1, 0.45, 0.95))
 	for tip in snap.get("tips", []):
 		_circle(tip.x, tip.y, tip.r, Color(1, 0.8, 0.2, 0.8), 2.0)
 		_text(tip.x, tip.y, str(tip.text).substr(0, 28), Color(1, 0.85, 0.3))

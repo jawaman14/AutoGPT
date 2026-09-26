@@ -1,5 +1,5 @@
 extends SceneTree
-## Menu/station screenshot: godot --script res://tools/shots/ui_shot.gd -- <load|jobs|hangar|boss|chief|desk|copilot|hud|lobby> <out.png>
+## Menu/station screenshot: godot --script res://tools/shots/ui_shot.gd -- <load|jobs|hangar|upgrades|boss|chief|desk|lawtree|copilot|hud|lobby> <out.png>
 var n := 0
 var what := "load"
 var out := ""
@@ -10,8 +10,10 @@ func _init():
 	what = a[0]
 	out = a[1]
 	match what:
-		"load", "jobs", "hangar":
-			sess = Session.new({"seed": 1, "location": "FRM"})
+		"load", "jobs", "hangar", "upgrades":
+			sess = Session.new({"seed": 1, "location": "FRM", "upgrades": {"runner": ["bug_sweep", "detector", "dark_paint"]}})
+			if what == "upgrades":
+				sess.money = 9000
 			sess.update(1.0 / 30)
 			app = PilotApp.new()
 			root.add_child(app)
@@ -25,6 +27,10 @@ func _init():
 				app._toggle_menu("j")
 			else:
 				app._toggle_menu("h")
+				if what == "upgrades":
+					app.menus["h"].key("right")
+					for i in 9:
+						app.menus["h"].key("down")
 		"boss", "chief":
 			sess = Session.new({"seed": 9, "location": "FRM", "mode": Roles.VERSUS, "features": Session.SANDBOX_FEATURES + ["hq"]})
 			sess.update(1.0 / 30)
@@ -73,18 +79,24 @@ func _init():
 		"lobby":
 			app = Lobby.new()
 			root.add_child(app)
-		"desk":
-			sess = Session.new({"seed": 9, "mode": Roles.POLICE, "humans": {Roles.CONTROLLER: "me"}})
+		"desk", "lawtree":
+			sess = Session.new({"seed": 9, "mode": Roles.POLICE, "humans": {Roles.CONTROLLER: "me"},
+				"upgrades": {"law": ["doppler", "heli_df"] if what == "lawtree" else []}})
 			for i in 30 * 90:
 				sess.update(1.0 / 30)
 			sess.police.launch("heli", "HAR")
 			app = StationApp.new()
 			root.add_child(app)
 			app.setup(LocalLink.new(sess, Roles.CONTROLLER), Roles.CONTROLLER, sess.world)
+			if what == "lawtree":
+				app._key("u")
 func _process(_d):
 	n += 1
 	if n == 3 and what in ["boss", "chief"]:
 		app.list.select(2)
+	if n == 5 and what == "lawtree":
+		for i in 5:
+			app._key("down")
 	if what == "hud" and app is PilotApp:
 		app.set_process(n < 20)  # let the HUD settle, then hold the frame
 	if n == 30:

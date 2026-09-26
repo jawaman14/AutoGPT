@@ -49,6 +49,8 @@ var status := ""
 var _pending: Array = []
 var _list_kind := ""
 var _list_keys: Array = []
+var upgrades: UpgradeTree  ## the controller's upgrade trees (U)
+var _upg_sig := ""
 var _last_seq = null
 
 
@@ -134,6 +136,13 @@ func setup(link_, role_: String, world_: World = null, vertical := false) -> Sta
 		info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		scroll.add_child(info)
 		list.size_flags_vertical = Control.SIZE_FILL
+		if role == Roles.CONTROLLER:
+			upgrades = UpgradeTree.new().setup("law")
+			upgrades.visible = false
+			upgrades.custom_minimum_size = Vector2(0, 360)
+			upgrades.buy.connect(func(id): _cmd("upgrade", {"id": id}))
+			body.add_child(upgrades)
+			body.move_child(upgrades, list.get_index())
 	buttons = HFlowContainer.new()  # extra buttons (the key caps below are clickable too)
 	buttons.add_theme_constant_override("h_separation", 6)
 	buttons.add_theme_constant_override("v_separation", 6)
@@ -205,7 +214,9 @@ func _hints() -> Array:
 			out = [["RIGHT-CLICK", "send the go-fast there", ""]]
 		Roles.CONTROLLER:
 			out = [["CLICK", "unit, then track", ""], ["H", "heli", "h"], ["I", "interceptor", "i"], ["C", "cutter", "c"],
-				["R", "recall", "r"], ["E", "encryption", "e"], ["B", "aerostat", "b"], ["G", "coverage", "g"], ["T", "tac channel", "t"], ["TAB", "next unit", "tab"]]
+				["R", "recall", "r"], ["E", "encryption", "e"], ["B", "aerostat", "b"], ["G", "coverage", "g"], ["T", "tac channel", "t"], ["J", "jam here", "j"], ["U", "upgrades", "u"], ["TAB", "next unit", "tab"]]
+			if upgrades != null and upgrades.visible:
+				out = [["U", "back to the desk", "u"], ["UP/DOWN", "select", "down"], ["ENTER", "buy", "enter"]]
 		Roles.BOSS, Roles.CHIEF:
 			out = [["UP/DOWN", "order", "down"], ["LEFT/RIGHT", "change it", "right"], ["ENTER", "issue", "enter"]]
 	return out + [["ESC", "leave seat", "esc"]]
@@ -403,6 +414,26 @@ func _hq_key(k: String, snap: Dictionary) -> void:
 
 func _law_key(k: String, snap: Dictionary) -> void:
 	var pos = map.mouse_world()
+	if k == "u":
+		upgrades.visible = not upgrades.visible
+		_upg_sig = ""
+		return
+	if upgrades.visible:
+		if k in ["up", "down"]:
+			upgrades.move(1 if k == "down" else -1)
+		elif k == "enter":
+			upgrades.activate()
+		return
+	if k == "j":
+		# the jammer van: at the mouse, else on the latest DF fix
+		var fixes: Array = snap.get("df", []).filter(func(d): return d.fix != null)
+		if pos == null and not fixes.is_empty():
+			pos = Vector2(float(fixes.back().fix[0]), float(fixes.back().fix[1]))
+		if pos == null:
+			status = "Point at the map (or take a DF fix) to place the jammer."
+		else:
+			_cmd("jam", {"x": pos.x, "y": pos.y})
+		return
 	var units: Array = snap.get("units", []).filter(func(u): return u.state != "crashed")
 	match k:
 		"tab":
@@ -682,6 +713,14 @@ func _draw_law(snap: Dictionary) -> void:
 		lines.append("  (quiet)")
 	lines += ["", "RADIO / ALERTS"] + snap.get("messages", []).slice(-8).map(func(m): return "  " + str(m))
 	info.text = "\n".join(lines)
+	subtitle.text = "%s  -  funds $%s" % [snap.mode, Py.money(int(snap.get("law_funds", 0)))]
+	if upgrades.visible:
+		list.visible = false
+		var sig := "%s|%d" % [snap.get("upgrades", []), int(snap.get("law_funds", 0))]
+		if sig != _upg_sig:
+			_upg_sig = sig
+			upgrades.update(snap.get("upgrades", []), int(snap.get("law_funds", 0)))
+		return
 	var units: Array = snap.get("units", [])
 	var colors := {}
 	for n in units.size():

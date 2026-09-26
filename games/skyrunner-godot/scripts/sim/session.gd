@@ -104,6 +104,12 @@ var last_outcome := ""
 var law_log: Array = []
 var scanner_log: Array = []
 var scanner_channels := ["police"]  ## what the runner's scanner is programmed for (RadioNet.REALISM)
+var upgrades := {"runner": {}, "law": {}}  ## bought tree nodes (Upgrades)
+var law_funds := 8000.0  ## the task force's upgrade money: a budget plus forfeiture from busts and seizures
+var ai_law_upgrades := false  ## the AI chief buys law upgrades as money comes in (live play; off in sims and tests)
+var urng: PyRandom  ## upgrade draws (spoiled tips, leaks), off the parity streams
+var _ai_buy_t := 0.0
+var _lookout_seen := {}
 var intel := {}  ## unit -> [t, x, y, source]
 var spotters: Array = []
 var transponder := true
@@ -161,6 +167,11 @@ func _init(opts := {}) -> void:
 	bus = EventBus.new()
 	radio = RadioNet.new(_rng(seed + 7))
 	radio.world = world
+	urng = _rng(seed + 31)
+	ai_law_upgrades = opts.get("ai_law_upgrades", false)
+	for side in ["runner", "law"]:
+		for id in opts.get("upgrades", {}).get(side, []):
+			upgrades[side][id] = true
 	var law := {}
 	for f in features:
 		if PoliceSystem.LAW_FEATURES.has(f):
@@ -178,6 +189,13 @@ func _init(opts := {}) -> void:
 	log = FlightLog.new()
 	squawk = "N%d%s" % [rng.randint(100, 999), rng.choice(Array("ABCDEFGHJK".split("")))]
 	copilot = "human" if humans.has(Roles.COPILOT) else null
+	for g in gear:
+		if g in Upgrades.GEAR_NODES:
+			upgrades["runner"][g] = true
+	for g in ["scanner", "detector"]:  # boxes on the panel (the ferry tank is a loadout item)
+		if upgrades["runner"].has(g):
+			gear[g] = true
+	apply_upgrades()
 	if features.has("hq"):
 		# no human boss: the pilot runs the organisation (AI only when nobody flies);
 		# no human chief: a human controller runs the budget, else the AI chief does
@@ -489,6 +507,23 @@ func _cmd_squawk(role: String, a: Dictionary):
 	return null
 
 
+func _cmd_upgrade(role: String, a: Dictionary):
+	return buy_upgrade(Roles.side(role), str(a.get("id", "")))
+
+
+## The jammer van (law upgrade): a 5 km zone for three minutes around a point.
+func _cmd_jam(role: String, a: Dictionary):
+	if not upgrades["law"].has("jammer"):
+		return "No jammer van (a Signals upgrade)."
+	var p = _point(a)
+	if p == null:
+		return "Bad arguments for jam: need x and y"
+	radio.jammed_zones = radio.jammed_zones.filter(func(z): return z.size() < 4 or z[3] > time)
+	radio.jammed_zones.append([p[0], p[1], 5000.0, time + 180.0])
+	law_say("Jammer van on station at %.1f, %.1f km: 5 km, three minutes" % [p[0] / 1000, p[1] / 1000])
+	return null
+
+
 func _cmd_transponder(role: String, a: Dictionary):
 	var on = a.get("on")
 	transponder = (not transponder) if on == null else Py.truthy(on)
@@ -576,7 +611,8 @@ func _cmd_chat(role: String, a: Dictionary):
 		say("[%s] %s" % [role, text])
 		# crew radio is real radio: from the aircraft, anyone listening can hear it
 		if RadioNet.REALISM and role in [Roles.PILOT, Roles.COPILOT] and state != null and not state.on_ground:
-			_df_on(radio.transmit(time, "runner", squawk, text, [state.x, state.y, state.alt]))
+			_df_on(radio.transmit(time, "runner", squawk, text, [state.x, state.y, state.alt],
+				1.0 if upgrades["runner"].has("burst_radio") else -1.0))
 	else:
 		law_say("[%s] %s" % [role, text])
 	return null
@@ -710,8 +746,11 @@ func accept_job(job: Jobs.Job):
 
 
 func _informant_roll(job: Jobs.Job) -> void:
+	_spy_roll(job)
 	if not features.has("informants") or nights != null:
 		return  # with HQs, informants are the Task Force's to recruit
+	if upgrades["runner"].has("bug_sweep") and urng.random() < 0.5:
+		return  # the sweep found the wire
 	var chance := 1 - (1 - INFORMANT_BASE) * (1 - SPOTTER_LEAK) ** spotters.size()
 	if rng.random() < chance:
 		var p := job_xy(job)
@@ -719,6 +758,20 @@ func _informant_roll(job: Jobs.Job) -> void:
 		var y: float = p[1] + rng.uniform(-1500, 1500)
 		var where := "a drop at sea" if job.is_airdrop() else World.airfield(job.dest).name
 		police.add_tip(x, y, 3000, "informant: load moving tonight, %s, aircraft %s" % [where, squawk], squawk, "runner")
+
+
+## Espionage on a hot job: the task force's undercover agent may leak the exact
+## destination; the organisation's double agent feeds them a false one.
+func _spy_roll(job: Jobs.Job) -> void:
+	if upgrades["law"].has("undercover") and urng.random() < 0.5:
+		var p := job_xy(job)
+		police.add_tip(p[0], p[1], 800, "undercover: the load goes to %s" % (World.airfield(job.dest).name if not job.is_airdrop() else "a drop at sea"),
+			squawk, "runner")
+	if upgrades["runner"].has("double_agent"):
+		var decoys: Array = world.airfields.filter(func(a): return a.code != job.dest and a.kind in ["bush", "shady"])
+		if not decoys.is_empty():
+			var af: Airfield = decoys[urng.randint(0, decoys.size() - 1)]
+			police.add_tip(af.x, af.y, 2500, "informant: a load lands at %s tonight" % af.name, "", null)
 
 
 ## The ramp crew's idea of loading: first free spot from the front.
@@ -859,6 +912,90 @@ func fill_ferry(lb: float):
 	return null
 
 
+# ================================================================ upgrade trees
+func has_upgrade(id: String) -> bool:
+	return upgrades["runner"].has(id) or upgrades["law"].has(id)
+
+
+## Buy a tree node for `side` (Upgrades): the runner pays from the pilot's money,
+## the task force from its funds. The old hangar gear goes through buy_gear.
+func buy_upgrade(side: String, id: String):
+	if not upgrades.has(side):
+		return "Bad side."
+	var funds := money if side == "runner" else int(law_funds)
+	var why := Upgrades.blocker(side, id, upgrades[side], funds)
+	if why != "":
+		return why
+	var n := Upgrades.node(side, id)
+	if side == "runner" and id in Upgrades.GEAR_NODES:
+		var err = buy_gear(id)
+		if err:
+			return err
+	elif side == "runner":
+		money -= int(n.cost)
+		say("Upgrade: %s (-$%s)" % [n.name, Py.money(int(n.cost))])
+	else:
+		law_funds -= float(n.cost)
+		law_say("Upgrade: %s (-$%s)" % [n.name, Py.money(int(n.cost))])
+	upgrades[side][id] = true
+	if id == "counter_mole" and upgrades["runner"].has("mole"):
+		upgrades["runner"].erase("mole")
+		say("Your man in dispatch has been found and fired.")
+		law_say("Mole hunt: the leak in dispatch is found and fired")
+	apply_upgrades()
+	bus.emit("upgrade", time, "", [Roles.side(Roles.PILOT) if side == "runner" else "law"], {"side": side, "id": id})
+	return null
+
+
+## Push every owned node's effect into the systems (idempotent: defaults when not owned).
+func apply_upgrades() -> void:
+	var r: Dictionary = upgrades["runner"]
+	var l: Dictionary = upgrades["law"]
+	scanner_channels = ["police", "police_tac"] if r.has("prog_scanner") else ["police"]
+	police.sensors.mti_min = SensorNet.MTI_MIN_MS * (0.5 if l.has("doppler") else 1.0)
+	if l.has("coastal_radar"):
+		var cp: Array = maritime.cove
+		police.sensors.add_site(SensorNet.RadarSite.new("CST", "Coastal radar", cp[0], cp[1], world.ground(cp[0], cp[1]) + 60.0, 25000.0))
+	if l.has("aew"):
+		var c: Array = HQ.ZONE_CENTRE["sea"]
+		police.sensors.add_site(SensorNet.RadarSite.new("AEW", "Airborne early warning", c[0], c[1], 3000.0, 60000.0,
+			{"floor_base": 15.0, "floor_per_m": 0.002, "kind": "aew", "period_s": 10.0}))
+	for f in Upgrades.FEATURE_NODES:
+		if l.has(f):
+			police.features[Upgrades.FEATURE_NODES[f]] = true
+			features[Upgrades.FEATURE_NODES[f]] = true
+	police.heli_bust_mult = 1.3 if l.has("armed_heli") else 1.0
+	police.heli_speed_mult = 1.3 if l.has("blackhawk") else 1.0
+	for u in police.units:
+		if u.kind == "heli":
+			u.speed_mult = police.heli_speed_mult
+	maritime.cutter_speed = 1.25 if l.has("fast_cutter") else 1.0
+	for b in maritime.boats:
+		if b.kind == "cutter":
+			b.speed_mult = maritime.cutter_speed
+	maritime.seize_mult = (2.0 if r.has("armed_boat") else 1.0) / (1.3 if l.has("fast_cutter") else 1.0)
+	police.raid_escape = 0.4 if r.has("strip_guards") else 0.0
+
+
+## Law funds and the AI chief's shopping, plus the runner's lookouts.
+func _update_upgrades(dt: float) -> void:
+	law_funds += dt * 40.0 / 60.0  # the budget line: ~$2,400 an hour
+	if ai_law_upgrades and police.controller == "ai" and time >= _ai_buy_t:
+		_ai_buy_t = time + 90.0
+		var id := Upgrades.ai_pick(upgrades["law"], int(law_funds))
+		if id != "":
+			buy_upgrade("law", id)
+	if upgrades["runner"].has("lookouts"):
+		var here = [state.x, state.y] if state != null else null
+		for u in police.units:
+			if _lookout_seen.has(u.id) or u.faction() != "police":
+				continue
+			_lookout_seen[u.id] = true
+			if here != null and PyMath.hypot(u.x - here[0], u.y - here[1]) < 12000:
+				var brg := UIStyle.bearing_to(here[0], here[1], u.x, u.y)
+				say("Lookout: police %s up, %.0f km, bearing %03.0f" % [u.kind, PyMath.hypot(u.x - here[0], u.y - here[1]) / 1000, brg])
+
+
 func buy_gear(name: String):
 	if not GEAR.has(name):
 		return "Unknown gear."
@@ -883,6 +1020,8 @@ func buy_gear(name: String):
 	else:
 		gear[name] = true
 	money -= price
+	if name in Upgrades.GEAR_NODES:
+		upgrades["runner"][name] = true
 	say("Fitted: %s (-$%s)" % [GEAR[name][1], Py.money(price)])
 	fm.apply_loadout(loadout)
 	return null
@@ -1053,12 +1192,17 @@ func _df_on(msg: RadioNet.RadioMsg) -> void:
 	if not features.has("df"):
 		return
 	var mobile := []
-	for u in police.units:
-		if u.kind == "heli" and u.faction() == "police" and u.state != "crashed":
-			mobile.append([u.id, u.x, u.y, u.z])
+	if upgrades["law"].has("heli_df"):
+		for u in police.units:
+			if u.kind == "heli" and u.faction() == "police" and u.state != "crashed":
+				mobile.append([u.id, u.x, u.y, u.z])
 	var df := radio.direction_find(msg, mobile)
 	if df.bearings.is_empty():
 		return
+	if upgrades["law"].has("intercept"):
+		# they heard the words, not just the carrier
+		law_say("[intercept] %s: %s" % [msg.sender, msg.text])
+		police.case("runner").suspicion = minf(100.0, police.case("runner").suspicion + 10.0)
 	if df.fix == null:
 		law_say("DF: %d bearing on a runner transmission (%.0f s) - no fix" % [df.bearings.size(), msg.dur])
 		return
@@ -1083,7 +1227,8 @@ func call_boat(brief := false):
 	if RadioNet.REALISM:
 		# a brevity codeword is a one-second burst the DF barely gets; a real call lasts
 		var text := "rain check" if brief else "%s, %s, come to me, over water, bales ready" % [b.id, squawk]
-		msg = radio.transmit(time, "boat", squawk, text, [s.x, s.y, s.alt] if s else null, 1.0 if brief else -1.0)
+		var burst: bool = brief or upgrades["runner"].has("burst_radio")
+		msg = radio.transmit(time, "boat", squawk, text, [s.x, s.y, s.alt] if s else null, 1.0 if burst else -1.0)
 		if msg.jammed:
 			say("Called %s - nothing but a carrier. Jammed." % b.id)
 			_df_on(msg)
@@ -1196,6 +1341,9 @@ func runner_signature() -> SensorNet.Signature:
 	var sig := SensorNet.Signature.new("runner", s.x, s.y, s.alt, agl, s.vx, s.vy, "air", transponder, squawk)
 	sig.code = squawk_code
 	sig.rcs = float(SensorNet.RCS.get(spec.key, 1.0))
+	var r: Dictionary = upgrades["runner"]
+	sig.visual = 0.7 if r.has("quiet_prop") else (0.8 if r.has("dark_paint") else 1.0)
+	sig.spoofed = transponder and r.has("spoofer")
 	return sig
 
 
@@ -1245,7 +1393,10 @@ func _update_world(dt: float) -> void:
 	police.events.clear()
 	for e in police.law_events:
 		law_say(e)
+		if upgrades["runner"].has("mole") and not e.begins_with("Upgrade"):
+			say("[mole] " + e)  # the man in dispatch hears every order, encrypted or not
 	police.law_events.clear()
+	_update_upgrades(dt)
 
 	# maritime: cutters go where the task force suspects a drop
 	var law_goals := []
@@ -1308,6 +1459,10 @@ func _maritime_event(kind: String, data: Dictionary) -> void:
 		police.score["boats_seized"] += 1
 		police.score["bales_seized"] += data["count"]
 		law_say("%s seized %s with %d bales" % [data["cutter"], data["boat"], data["count"]])
+		law_funds += 1500.0 + 100.0 * data["count"]  # asset forfeiture
+		if upgrades["runner"].has("armed_boat"):
+			law_funds += 1500.0
+			law_say("Firearms aboard %s: a federal charge on top" % data["boat"])
 		if job:
 			_resolve_job(job, "Coast Guard took %s! Job lost." % data["boat"])
 		bus.emit("boat_seized", time, "", ["runner", "law"], data)
@@ -1396,6 +1551,10 @@ func _crash(reason: String) -> void:
 func _bust(how: String) -> void:
 	phase = "busted"
 	var fine := 1500 + int(maxi(0, money) * 0.25)
+	law_funds += 3000.0  # the aircraft and the cash, forfeited
+	if upgrades["runner"].has("strip_guards"):
+		fine = int(fine * 1.5)  # an armed-bust case
+		how += ", with the armed guards"
 	money -= fine
 	last_outcome = "BUSTED (%s). Fine and impound -$%s. Cargo seized." % [how, Py.money(fine)]
 	say(last_outcome)
@@ -1444,7 +1603,8 @@ func _rules(dt: float, s: FlightModel.FlightState) -> void:
 		var fpm := -fm.last_touchdown_fpm
 		lg.last_touchdown_fpm = fpm
 		lg.max_touchdown_fpm = maxf(lg.max_touchdown_fpm, fpm)
-		var limit := spec.gear_limit_fpm * (0.75 if loadout.compute(null, false).overweight_lb > 0 else 1.0)
+		var limit := spec.gear_limit_fpm * (0.75 if loadout.compute(null, false).overweight_lb > 0 else 1.0) \
+			* (1.5 if upgrades["runner"].has("heavy_gear") else 1.0)
 		if fpm > limit:
 			_crash("Gear collapsed on a %s fpm touchdown" % Py.f(fpm, 0))
 			return
@@ -1567,6 +1727,7 @@ func save() -> void:
 		"aircraft": aircraft_key,
 		"location": location if parked else (log.departed_from if log.departed_from else START_FIELD),
 		"gear": g,
+		"upgrades": Py.sorted_by(upgrades["runner"].keys(), func(k): return k),
 		"map_seed": map_seed,
 	}
 	if campaign != null:
@@ -1597,5 +1758,6 @@ static func load_or_new(path: String, opts := {}) -> Session:
 	o["aircraft_key"] = data.aircraft if Aircraft.ROSTER.has(data.get("aircraft", "")) else "c172p"
 	o["location"] = data.location if World.AIRFIELD_BY_CODE.has(data.get("location", "")) else START_FIELD
 	o["gear"] = (data.get("gear", []) as Array).filter(func(k): return GEAR.has(k))
+	o["upgrades"] = {"runner": (data.get("upgrades", []) as Array).filter(func(k): return Upgrades.side_of(k) == "runner")}
 	o["save_path"] = path
 	return Session.new(o)

@@ -85,7 +85,7 @@ var df_stations: Array = []  ## [[code, x, y]]
 var df_enabled := false
 var world: World  ## REALISM: terrain for line of sight
 var police_channel := "police"  ## where dispatch talks (switching to tactical dodges a basic scanner)
-var jammed_zones: Array = []  ## [[x, y, radius]]
+var jammed_zones: Array = []  ## [[x, y, radius(, until t)]]
 var df_log: Array = []  ## recent DFResults for the controller's map
 
 
@@ -113,7 +113,7 @@ func transmit(t: float, channel: String, sender: String, text: String, pos = nul
 		m.dur = dur if dur > 0 else clampf(1.0 + text.split(" ").size() / 2.5, 1.0, 8.0)
 		if m.x != null:
 			for z in jammed_zones:
-				if PyMath.hypot(m.x - z[0], m.y - z[1]) < z[2]:
+				if PyMath.hypot(m.x - z[0], m.y - z[1]) < z[2] and (z.size() < 4 or t < z[3]):
 					m.jammed = true
 	log.append(m)
 	Py.keep_last(log, 300)

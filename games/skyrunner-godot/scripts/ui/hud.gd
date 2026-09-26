@@ -297,7 +297,7 @@ func _chip_row(st: FlightModel.FlightState, c: FlightModel.Controls) -> void:
 
 ## The strongest painter as "HAR ↗": which site, and which way it is from the nose.
 func _painter_text(st: FlightModel.FlightState) -> String:
-	var ps: Array = s.police.painters() if s.gear.has("detector") else []
+	var ps: Array = s.police.painters() if s.gear.has("detector") and s.has_upgrade("bearing_detector") else []
 	if ps.is_empty():
 		return ""
 	var p: Dictionary = ps[0]

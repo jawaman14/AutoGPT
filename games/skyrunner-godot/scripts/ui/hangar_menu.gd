@@ -1,11 +1,15 @@
 class_name HangarMenu
 extends GameMenu
 ## Aircraft dealer, gear shop and services (spotters, crew), as one table:
-## what it is, what it does, and what it costs or whether you have it.
+## what it is, what it does, and what it costs or whether you have it. LEFT/
+## RIGHT turns to the second page: the upgrade trees (electronics and counter-
+## surveillance, espionage, the airframe, weaponry).
 
 var list: DataTable
 var detail: Label
 var rows: Array = []
+var tree: UpgradeTree
+var page := 0  ## 0 the shop, 1 the upgrade trees
 
 
 func _build() -> void:
@@ -22,6 +26,14 @@ func _build() -> void:
 	detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	detail.custom_minimum_size = Vector2(0, 44)
 	content.add_child(detail)
+	tree = UpgradeTree.new().setup("runner")
+	tree.buy.connect(func(id):
+		var err = s.buy_upgrade("runner", id)
+		if err:
+			s.say(err)
+		refresh())
+	tree.visible = false
+	content.add_child(tree)
 
 
 func _rows() -> Array:
@@ -39,6 +51,16 @@ func _rows() -> Array:
 
 
 func refresh() -> void:
+	list.visible = page == 0
+	detail.visible = page == 0
+	tree.visible = page == 1
+	if page == 1:
+		title.text = "UPGRADES"
+		subtitle.text = "counter-surveillance, espionage, airframe, weaponry  -  $%s in hand" % Py.money(s.money)
+		tree.update(s.upgrades["runner"], s.money)
+		footer.text = "A node needs the one above it. Gear is fitted on the ground; the rest takes effect at once."
+		hints.set_hints([["LEFT/RIGHT", "shop", "left"], ["UP/DOWN", "select", "down"], ["ENTER", "buy", "enter"], ["ESC", "close", "esc"]])
+		return
 	title.text = "HANGAR"
 	subtitle.text = "aircraft, gear & crew  -  $%s in hand" % Py.money(s.money)
 	var keep := list.selected_row()
@@ -71,7 +93,8 @@ func refresh() -> void:
 	_detail()
 	var shop: bool = s.airfield != null and s.airfield.shop
 	footer.text = "" if shop else "No aircraft dealer at this strip: gear and crew only."
-	hints.set_hints([["UP/DOWN", "select", "down"], ["ENTER", "buy / hire / toggle", "enter"], ["ESC", "close", "esc"]])
+	hints.set_hints([["LEFT/RIGHT", "upgrades", "right"], ["UP/DOWN", "select", "down"], ["ENTER", "buy / hire / toggle", "enter"],
+		["ESC", "close", "esc"]])
 
 
 func _detail() -> void:
@@ -90,6 +113,16 @@ func _detail() -> void:
 
 
 func key(k: String) -> void:
+	if k in ["left", "right"]:
+		page = 1 - page
+		refresh()
+		return
+	if page == 1:
+		if k in ["up", "down"]:
+			tree.move(1 if k == "down" else -1)
+		elif k == "enter":
+			tree.activate()
+		return
 	match k:
 		"up":
 			list.move(-1)

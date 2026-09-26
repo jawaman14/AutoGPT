@@ -45,6 +45,8 @@ class Signature:
 	var squawk := ""
 	var code := "1200"  ## the 4-digit transponder code (Mode A)
 	var rcs := 1.0
+	var visual := 1.0  ## how far police crews can see it, relative (paint, propeller upgrades)
+	var spoofed := false  ## transponder spoofer: a borrowed identity
 
 	func _init(id_: String, x_: float, y_: float, z_: float, agl_: float, vx_ := 0.0, vy_ := 0.0, kind_ := "air",
 			transponder_ := false, squawk_ := "") -> void:
@@ -113,7 +115,7 @@ class RadarSite:
 		return d * d / (2.0 * K_FACTOR * EARTH_R)
 
 	## The realistic look: [painted, can_detect, probability of detection].
-	func check_real(world: World, sig: Signature, wx: Dictionary) -> Array:
+	func check_real(world: World, sig: Signature, wx: Dictionary, mti_min := MTI_MIN_MS) -> Array:
 		if not active or sig.kind != "air":
 			return [false, false, 0.0]
 		var d := PyMath.hypot(sig.x - x, sig.y - y)
@@ -132,7 +134,7 @@ class RadarSite:
 		if sig.agl - drop < floor_:
 			return [true, false, 0.0]
 		var radial := absf(sig.vx * (sig.x - x) + sig.vy * (sig.y - y)) / maxf(d, 1.0)
-		if radial < MTI_MIN_MS and d > 600.0:
+		if radial < mti_min and d > 600.0:
 			return [true, false, 0.0]  # the MTI notch: crossing the beam, or too slow
 		var r50 := reach * 0.9 * pow(sig.rcs, 0.25)
 		var pd := 1.0 / (1.0 + pow(d / r50, 8.0))
@@ -192,6 +194,7 @@ var rng: PyRandom
 var sites: Array
 var tracks := {}
 var weather := {"sky": "clear", "wind_kt": 8.0}
+var mti_min := MTI_MIN_MS  ## Doppler processing upgrade halves it
 var xrng: PyRandom  ## REALISM draws (Pd), its own stream so the parity stream never moves
 var _last := {}  ## site code -> {signature id: [painted, detected]} from its last turn
 
@@ -211,6 +214,13 @@ func _init(world_: World, rng_: PyRandom = null) -> void:
 		# stagger the antennas so they don't all look at once
 		st.phase = fposmod(float(st.code.hash() % 360), 360.0)
 		st.next_scan = st.phase / 360.0 * st.period_s
+
+
+## A new site (upgrades: coastal radar, airborne early warning); its first turn is now.
+func add_site(st: RadarSite) -> void:
+	if site(st.code) == null:
+		sites.append(st)
+		_coverage.clear()
 
 
 func site(code: String) -> RadarSite:
@@ -253,7 +263,7 @@ func _sweep_real(sigs: Array, now: float) -> Dictionary:
 			var mem: Dictionary = _last.get(st.code, {})
 			var r: Array = mem.get(sig.id, [false, false])
 			if turning.has(st):
-				var look: Array = st.check_real(world, sig, weather)
+				var look: Array = st.check_real(world, sig, weather, mti_min)
 				var hit: bool = look[1] and xrng.random() < look[2]
 				r = [look[0], hit]
 				mem[sig.id] = r

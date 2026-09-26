@@ -89,7 +89,7 @@ static func _runner(sess: Session, role: String) -> Dictionary:
 			"phase": sess.phase, "location": sess.location, "parked": sess.parked, "on_ground": s.on_ground,
 			"transponder": sess.transponder, "squawk": sess.squawk, "code": sess.squawk_code, "autopilot": sess.autopilot.engaged,
 			"detector": sess.police.detector() if sess.gear.has("detector") else null,
-			"painters": sess.police.painters() if sess.gear.has("detector") else [],
+			"painters": sess.police.painters() if sess.gear.has("detector") and sess.has_upgrade("bearing_detector") else [],
 			"pumping": sess.pumping, "kick_queue": sess.kick_queue, "auto_kick": sess.auto_kick,
 			"copilot": sess.copilot, "wanted": sess.police.wanted, "suspicion": _r(sess.police.suspicion),
 			"outcome": sess.last_outcome if sess.phase in ["crashed", "busted"] else "",
@@ -124,6 +124,7 @@ static func _runner(sess: Session, role: String) -> Dictionary:
 				intel.append({"unit": c.id, "x": _r(c.x), "y": _r(c.y), "age": 0.0, "source": "visual"})
 	out["intel"] = intel
 	out["scanner"] = sess.scanner_log.slice(-8).map(func(m): return m[1]) if sess.gear.has("scanner") else null
+	out["upgrades"] = sess.upgrades["runner"].keys()
 	out["spotters"] = sess.spotters.map(func(sp): return {"code": sp.code, "moving_to": sp.moving_to})
 	if role == Roles.SPOTTER:
 		for sp in sess.spotters:
@@ -221,6 +222,10 @@ static func _law(sess: Session) -> Dictionary:
 		"features": feats,
 		"encrypted": sess.radio.encrypted,
 		"radio_channel": sess.radio.police_channel,
+		"upgrades": sess.upgrades["law"].keys(),
+		"law_funds": int(sess.law_funds),
+		"jammed": sess.radio.jammed_zones.filter(func(z): return z.size() < 4 or z[3] > now).map(
+			func(z): return [_r(z[0]), _r(z[1]), _r(z[2])]),
 		"df": sess.radio.df_log.filter(func(d): return now - d.t < 120.0).map(func(d): return {
 			"age": _r(now - d.t), "fix": d.fix, "ellipse": d.ellipse,
 			"bearings": d.bearings.map(func(b): return [b.station, _r(b.x), _r(b.y), _r(b.deg, 1)])}),

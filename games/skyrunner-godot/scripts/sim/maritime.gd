@@ -115,6 +115,7 @@ class Boat:
 	var goal = null
 	var home := [0.0, 0.0]
 	var cargo: Array = []  ## bale ids aboard
+	var speed_mult := 1.0  ## fast patrol boat upgrade
 	var job_id = null
 	var work_t := 0.0
 	var seize_meter := 0.0
@@ -133,7 +134,7 @@ class Boat:
 		return "law" if kind == "cutter" else "runner"
 
 	func max_speed() -> float:
-		return BOAT_TYPES[kind] * KT
+		return BOAT_TYPES[kind] * KT * speed_mult
 
 	## Head for goal while keeping to water. Returns remaining distance.
 	func steer(dt: float, world: World, goal_: Array, speed_frac := 1.0) -> float:
@@ -183,6 +184,8 @@ var rng: PyRandom
 var boats: Array = []
 var bales: Array = []
 var events: Array = []  ## [[kind, data]]
+var seize_mult := 1.0  ## upgrades: an armed boat crew slows a boarding, a fast patrol boat speeds it
+var cutter_speed := 1.0  ## fast patrol boat
 var boats_return := true  ## a go-fast that fled empty goes back out once the cutter's gone (Godot-only)
 var cove: Array
 var cg_station: Array
@@ -222,6 +225,7 @@ func new_cutter(goal = null, at = null) -> Boat:
 	var g = goal if goal != null else (at if at != null else null)
 	var b := Boat.new("Cutter-%d" % _serial, "cutter", p[0], p[1], {"home": cg_station, "goal": g,
 		"state": "patrol" if (goal != null or at != null) else "standby"})
+	b.speed_mult = cutter_speed
 	boats.append(b)
 	return b
 
@@ -344,7 +348,7 @@ func _cutter(c: Boat, dt: float, floating: Array, law_goals: Array) -> void:
 		var d := c.steer(dt, world, [tgt.x + tgt.vx * 20, tgt.y + tgt.vy * 20])
 		if d < SEIZE_RADIUS_M:
 			tgt.seize_meter += dt
-			if tgt.seize_meter >= SEIZE_TIME_S:
+			if tgt.seize_meter >= SEIZE_TIME_S * seize_mult:
 				tgt.state = "seized"
 				events.append(["boat_seized", {"boat": tgt.id, "job_id": tgt.job_id, "count": tgt.cargo.size(), "cutter": c.id}])
 		else:

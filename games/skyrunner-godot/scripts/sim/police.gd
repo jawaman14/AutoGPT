@@ -62,6 +62,7 @@ class Pursuer:
 	var chatter_t := -1e9
 	var had_visual := false
 	var flank := false  ## surge unit: cut the runner off (long lead) instead of tailing it
+	var speed_mult := 1.0  ## upgrades (Blackhawk)
 	var fuel_s := -1.0  ## seconds of flying left; set at launch
 	var pilot = null  ## a human flying it (role name); null = AI
 	var stick := [0.0, 0.0, 0.6]  ## roll, pitch (+ = climb), throttle
@@ -99,7 +100,7 @@ class Pursuer:
 			_fly_manual(dt, world)
 			return
 		var sp := spec()
-		var vmax: float = sp[0] * KT
+		var vmax: float = sp[0] * KT * speed_mult
 		var turn: float = sp[1]
 		var climb: float = sp[2]
 		var look: float = sp[3]
@@ -157,7 +158,7 @@ class Pursuer:
 	## what a human adds is judgement, not performance.
 	func _fly_manual(dt: float, world: World) -> void:
 		var sp := spec()
-		var vmax: float = sp[0] * KT
+		var vmax: float = sp[0] * KT * speed_mult
 		var turn: float = sp[1]
 		var climb: float = sp[2]
 		var roll_in := maxf(-1.0, minf(1.0, stick[0]))
@@ -283,6 +284,11 @@ var pending_claim := {}  ## role -> unit kind waiting to launch
 var frozen := false  ## tests: stand the task force down (Python monkeypatches tick)
 var surge := true  ## spare helicopters join the chase and close units box the runner in (Godot-only)
 var spare_patrol := true  ## the AI flies spare helicopters on patrol before the run (Godot-only)
+# upgrade effects (Upgrades; all 1.0 / 0.0 = the base game)
+var heli_bust_mult := 1.0  ## armed helicopter: warning shots force a runner down faster
+var heli_speed_mult := 1.0  ## Blackhawk
+var raid_escape := 0.0  ## armed strip guards: chance a landing raid comes up empty
+var mrng: PyRandom  ## upgrade draws, off the parity streams
 
 
 func _init(world_: World, rng_: PyRandom = null, radio_: RadioNet = null, controller_ := "ai", features_ = null) -> void:
@@ -294,6 +300,8 @@ func _init(world_: World, rng_: PyRandom = null, radio_: RadioNet = null, contro
 	var srng := PyRandom.new()
 	srng.seed_float(rng.random())
 	sensors = SensorNet.new(world, srng)
+	mrng = PyRandom.new()
+	mrng.seed(777)
 	if radio_ != null:
 		radio = radio_
 	else:
@@ -425,6 +433,8 @@ func _spawn_now(kind: String, base_code: String, target_id, goal, flank := false
 	var u := Pursuer.new(kind, base.x, base.y, world.airfield_elev(base) + 60, base.heading, [base.x, base.y], {
 		"speed": UNIT_TYPES[kind][0] * KT * 0.5, "id": "%s-%d" % [CALLSIGNS[kind], _serial],
 		"target_id": target_id, "goal": goal, "state": "pursuit" if target_id else "goto", "flank": flank})
+	if kind == "heli":
+		u.speed_mult = heli_speed_mult
 	units.append(u)
 	for role in pending_claim.keys():
 		if pending_claim[role] == kind:
@@ -737,6 +747,8 @@ func tick(dt: float, now_: float, targets: Array) -> Dictionary:
 		var n_close: int = seen_by.get(tid, []).filter(func(u): return u.dist_to(t.sig) < BUST_RANGE_M).size()
 		# boxed in: every extra aircraft on your tail closes an escape (+50% each)
 		var box := 1.0 + 0.5 * (n_close - 1) if surge and n_close > 1 else 1.0
+		if heli_bust_mult != 1.0 and seen_by.get(tid, []).any(func(u): return u.kind == "heli" and u.dist_to(t.sig) < BUST_RANGE_M):
+			box *= heli_bust_mult
 		c.bust_meter = minf(100.0, c.bust_meter + 22 * dt * box) if n_close > 0 else maxf(0.0, c.bust_meter - 12 * dt)
 		if c.bust_meter >= 100:
 			c.bust_meter = 0.0
@@ -784,7 +796,7 @@ func _close_case(tid: String, hot: bool) -> void:
 func _can_see(u: Pursuer, sig: SensorNet.Signature) -> bool:
 	if u.state == "crashed":
 		return false
-	if u.dist_to(sig) > SIGHT_RANGE_M * visibility:
+	if u.dist_to(sig) > SIGHT_RANGE_M * visibility * sig.visual:
 		return false
 	return world.line_of_sight([u.x, u.y, u.z], [sig.x, sig.y, sig.z], 100)
 
@@ -845,8 +857,8 @@ func _classify(t: Target, dt: float) -> void:
 		# transponder. Suspicion comes from a sustained track and from behaviour
 		# (tuned by the tactical sim; see docs/BALANCE.md).
 		var rate := PRIMARY_RATE + PRIMARY_RATE_NEAR * (1 - d / site.range_m)
-		if sig.transponder and not c.tipped:
-			rate = 0.0  # identified, filed traffic
+		if sig.transponder and (not c.tipped or sig.spoofed):
+			rate = 0.0  # identified, filed traffic (or a borrowed identity the tip doesn't name)
 		elif sig.transponder:
 			rate *= 0.5
 		elif sig.agl < 150 and sig.speed_kts() > 100 and _inbound_from_sea(sig):
@@ -916,6 +928,9 @@ func landing_check(s, field_: Airfield, carrying_hot: bool, tid := "runner") -> 
 	var c := case(tid)
 	for u in units:
 		if u.faction() == "police" and u.target_id == tid and u.state != "crashed" and u.dist_to(s) < LANDING_BUST_RANGE_M:
+			if raid_escape > 0.0 and not field_.police and mrng.random() < raid_escape:
+				events.append("Your guards hold the police at the gate - get the load out!")
+				return false
 			return true
 	if field_.police and c.wanted > 0:
 		return true
