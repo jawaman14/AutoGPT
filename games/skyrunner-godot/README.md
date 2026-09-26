@@ -178,6 +178,16 @@ Beyond the prototype:
     organisation's AI runs your payroll when nobody sits the boss's or lieutenant's chair.
 
   See [docs/DESIGN.md](docs/DESIGN.md) section 17.
+- **Sound.** Synthesized, so nothing to license:
+  - the engine and propeller, pitched by JSBSim's RPM;
+  - the wind, the stall horn and the tyres;
+  - the radio's squelch;
+  - gunfire at the fights and from your own gun;
+  - police rotors, sirens and outboards;
+  - surf, rain and thunder;
+  - Radio Costa 88, an 80s synth station (F7).
+
+  The UI clicks are Kenney's (CC0). Samples are in `docs/audio/`.
 - **One UI, redesigned.** A single theme across every screen; real tables with titled columns (the job
   board colours the landing roll against the strip length); key caps in every footer that you can
   also click; readouts as tiles; a HUD laid out by what you need when (status chips, wanted stars,
@@ -335,7 +345,8 @@ LGPL allows that as long as users can relink against a modified JSBSim:
 
 Godot and godot-cpp are MIT.
 
-The conversations run on Nathan Hoad's Dialogue Manager (MIT; its runtime in
+The UI sounds are Kenney's UI Audio (CC0), in `assets/audio/kenney_ui/`; every other sound is
+synthesized in `scripts/game/sound.gd`. The conversations run on Nathan Hoad's Dialogue Manager (MIT; its runtime in
 `addons/dialogue_manager/`, the scripts in `dialogue/`). The performance overlay (F6) is Hugo
 Locurcio's Debug Menu add-on, MIT, in `addons/debug_menu/`;
 [docs/LIBRARIES.md](docs/LIBRARIES.md) surveys the other open-source Godot libraries considered.

@@ -35,6 +35,7 @@ Flight   W/S or UP/DOWN pitch     A/D or LEFT/RIGHT roll     Q/E rudder / nosewh
 View     C cycle camera (chase / cockpit / tower)    M big map    P pause   F2 time of day
 Seats    F3 hand the aircraft to the AI (take another seat from a station) / take it back
 Debug    F6 performance overlay: FPS, frame times, graphs (Debug Menu add-on, MIT)
+Radio    F7 Radio Costa 88: synth music out of 1985
 On foot  TAB get out (parked) / back in    WASD walk  SHIFT run  SPACE jump  mouse look
          Guns (with a ground war): 1-4 pistol / rifle / machine gun / RPG from the armoury  H holster  R reload  LMB fire
          E use (job board, fuel, hangar, the boss's desk)   F torch
@@ -120,6 +121,8 @@ func setup(sess: Session, graphics := "high", bot_ = null, server_ = null) -> Pi
 	nerves = Nerves.new().setup()
 	nerves.layer = 0  # over the 3D view, under the HUD (layer 1) and menus
 	add_child(nerves)
+	sound = Soundscape.new().setup(self)  # engine, wind, radio, the world, the music
+	add_child(sound)
 	cam = Camera3D.new()
 	cam.near = 0.5
 	cam.far = 60000.0
@@ -355,9 +358,12 @@ func _unhandled_input(ev: InputEvent) -> void:
 			toggle_ai_pilot()
 		elif k == KEY_F6:
 			cycle_debug_menu()
+		elif k == KEY_F7 and sound != null:
+			s.say("Radio Costa 88: %s" % ("on - hits from 1985" if sound.toggle_music() else "off"))
 
 
 var debug_menu: CanvasLayer = null
+var sound: Soundscape = null
 var talk: TalkBalloon = null  ## a conversation on screen (the Family, the General's aide)
 var _offers_seen := {}
 var _was_on_island := false

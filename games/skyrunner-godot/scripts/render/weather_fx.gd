@@ -5,6 +5,7 @@ extends Node3D
 ## lean with the wind, lightning, bigger seas, fog closing in under the storm.
 ## WorldScene owns it and folds `overcast` / `moon_illum` into its lighting.
 
+signal lightning
 var scene: WorldScene
 var rain: GPUParticles3D
 var sky := "clear"
@@ -95,6 +96,7 @@ func _process(dt: float) -> void:
 	if _next_flash <= 0.0:
 		_flash = 1.0
 		_next_flash = _rng.randf_range(5.0, 18.0)
+		lightning.emit()  # thunder follows (the soundscape)
 	if _flash > 0.0:
 		_flash = maxf(0.0, _flash - dt * 6.0)
 		var f := _flash * (0.6 + 0.4 * sin(_flash * 40.0))

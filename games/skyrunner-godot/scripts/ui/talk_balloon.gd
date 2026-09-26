@@ -88,6 +88,9 @@ func _next(id: String) -> void:
 func choose(i: int) -> void:
 	if line == null or i < 0 or i >= _answers.size():
 		return
+	var snd = get_parent().get("sound") if get_parent() != null else null
+	if snd != null:
+		snd.click("choose")
 	await _next(_answers[i].next_id)
 
 
