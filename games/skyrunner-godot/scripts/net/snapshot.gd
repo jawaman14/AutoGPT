@@ -129,6 +129,7 @@ static func _runner(sess: Session, role: String) -> Dictionary:
 	out["intel"] = intel
 	out["scanner"] = sess.scanner_log.slice(-8).map(func(m): return m[1]) if sess.gear.has("scanner") else null
 	out["upgrades"] = sess.upgrades["runner"].keys()
+	out["market"] = sess.econ.board()
 	if sess.stash_net != null:
 		out["stashes"] = sess.stash_net.stashes.map(func(st): return {"id": st.id, "name": st.name, "x": st.x, "y": st.y,
 			"strip": st.strip, "heat": _r(st.heat), "burned": st.burned})
@@ -235,6 +236,7 @@ static func _law(sess: Session) -> Dictionary:
 		"stashes": [] if sess.stash_net == null else sess.stash_net.known().map(func(st): return {"id": st.id, "name": st.name,
 			"x": st.x, "y": st.y, "heat": _r(st.heat), "burned": st.burned}),
 		"law_funds": int(sess.law_funds),
+		"market": sess.econ.board(),
 		"jammed": sess.radio.jammed_zones.filter(func(z): return z.size() < 4 or z[3] > now).map(
 			func(z): return [_r(z[0]), _r(z[1]), _r(z[2])]),
 		"df": sess.radio.df_log.filter(func(d): return now - d.t < 120.0).map(func(d): return {

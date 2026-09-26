@@ -1,5 +1,5 @@
 extends SceneTree
-## Menu/station screenshot: godot --script res://tools/shots/ui_shot.gd -- <load|jobs|hangar|upgrades|boss|chief|desk|lawtree|copilot|hud|lobby> <out.png>
+## Menu/station screenshot: godot --script res://tools/shots/ui_shot.gd -- <load|jobs|market|hangar|upgrades|boss|chief|desk|lawtree|copilot|hud|lobby> <out.png>
 var n := 0
 var what := "load"
 var out := ""
@@ -10,7 +10,7 @@ func _init():
 	what = a[0]
 	out = a[1]
 	match what:
-		"load", "jobs", "hangar", "upgrades":
+		"load", "jobs", "market", "hangar", "upgrades":
 			sess = Session.new({"seed": 1, "location": "FRM", "upgrades": {"runner": ["bug_sweep", "detector", "dark_paint"]}})
 			if what == "upgrades":
 				sess.money = 9000
@@ -23,8 +23,16 @@ func _init():
 				sess.accept_job(job)
 				sess.loadout.pending.clear()
 				app._toggle_menu("l")
-			elif what == "jobs":
+			elif what in ["jobs", "market"]:
+				if what == "market":  # a busy night: a crackdown, seizures, cops in town, the Cuervos in the west
+					sess.econ.events.append({"good": "cocaine", "mult": 1.35, "until": 1e9, "text": Economy.EVENTS[0][3]})
+					sess.econ.record_seizure("marijuana", "sea")
+					sess.econ.fuel_walk = 1.18
+					var c: Array = Economy.centre("town")
+					sess.econ.update(Economy.TICK_S, 1.0, [[c[0], c[1]], [c[0] + 500, c[1]]], [], {"west": 0.8, "north": 0.2, "sea": 0.5})
 				app._toggle_menu("j")
+				if what == "market":
+					app.menus["j"].key("right")
 			else:
 				app._toggle_menu("h")
 				if what == "upgrades":

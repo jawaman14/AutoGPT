@@ -106,6 +106,8 @@ var scanner_log: Array = []
 var scanner_channels := ["police"]  ## what the runner's scanner is programmed for (RadioNet.REALISM)
 var upgrades := {"runner": {}, "law": {}}  ## bought tree nodes (Upgrades)
 var law_funds := 8000.0  ## the task force's upgrade money: a budget plus forfeiture from busts and seizures
+var econ: Economy  ## the markets: what each good is worth where (Economy)
+var _news_seen := 0
 var stash_net: StashNet = null  ## the organisation's stash houses (maps that have them)
 var _stash_ai_t := 0.0
 var ai_law_upgrades := false  ## the AI chief buys law upgrades as money comes in (live play; off in sims and tests)
@@ -170,6 +172,7 @@ func _init(opts := {}) -> void:
 	radio = RadioNet.new(_rng(seed + 7))
 	radio.world = world
 	urng = _rng(seed + 31)
+	econ = Economy.new(_rng(seed + 51))
 	if not world.map.stashes.is_empty():
 		stash_net = StashNet.new(world.map.stashes, _rng(seed + 41))
 	ai_law_upgrades = opts.get("ai_law_upgrades", false)
@@ -375,6 +378,7 @@ func set_weather(w: Dictionary) -> void:
 		"moon": float(w.get("moon", 0.5))}
 	police.visibility = HQ.SKIES[sky][2] * (0.8 + 0.4 * weather["moon"])
 	police.sensors.weather = {"sky": sky, "wind_kt": float(weather["wind_kt"])}  # sea and rain clutter
+	econ.storm = sky == "storm"
 	weather_rev += 1
 	_apply_wind()
 
@@ -400,6 +404,10 @@ func refresh_board(code: String) -> void:
 		var sj = stash_net.job_from(af, rng)
 		if sj != null:
 			boards[code].append(sj)
+	if Economy.REALISM:
+		for j in boards[code]:  # today's prices
+			j.price_mult = econ.job_mult(j)
+			j.payout = int(j.payout * j.price_mult)
 
 
 # ================================================================ commands
@@ -862,12 +870,12 @@ func place_item(item_id: int, station: int):
 func fuel_source() -> Array:
 	var af := airfield
 	if af == null:
-		return [FUEL_PRICE_PER_LB, 0.0]
+		return [FUEL_PRICE_PER_LB * econ.fuel_mult(), 0.0]
 	var cache: float = fuel_caches.get(af.code, 0.0)
 	if af.kind in ["hub", "regional"]:
-		return [FUEL_PRICE_PER_LB, 1e9]
+		return [FUEL_PRICE_PER_LB * econ.fuel_mult(), 1e9]
 	if af.kind == "bush":
-		return [FUEL_PRICE_PER_LB * 2, 1e9 if cache <= 0 else cache]  # farmer's drums, or your cache
+		return [FUEL_PRICE_PER_LB * 2 * econ.fuel_mult(), 1e9 if cache <= 0 else cache]  # farmer's drums, or your cache
 	return [0.0, cache] if cache > 0 else [0.0, 0.0]  # shady strips: only what you flew in
 
 
@@ -983,6 +991,7 @@ func apply_upgrades() -> void:
 			b.speed_mult = maritime.cutter_speed
 	maritime.seize_mult = (2.0 if r.has("armed_boat") else 1.0) / (1.3 if l.has("fast_cutter") else 1.0)
 	police.raid_escape = 0.4 if r.has("strip_guards") else 0.0
+	econ.law_kit = l.size()
 
 
 ## Law funds and the AI chief's shopping, plus the runner's lookouts.
@@ -1406,6 +1415,7 @@ func _update_world(dt: float) -> void:
 	police.law_events.clear()
 	_update_upgrades(dt)
 	_update_stashes(dt)
+	_update_economy(dt)
 
 	# maritime: cutters go where the task force suspects a drop
 	var law_goals := []
@@ -1469,6 +1479,7 @@ func _maritime_event(kind: String, data: Dictionary) -> void:
 		police.score["bales_seized"] += data["count"]
 		law_say("%s seized %s with %d bales" % [data["cutter"], data["boat"], data["count"]])
 		law_funds += 1500.0 + 100.0 * data["count"]  # asset forfeiture
+		econ.record_seizure("marijuana", "sea")
 		if upgrades["runner"].has("armed_boat"):
 			law_funds += 1500.0
 			law_say("Firearms aboard %s: a federal charge on top" % data["boat"])
@@ -1561,6 +1572,9 @@ func _bust(how: String) -> void:
 	phase = "busted"
 	var fine := 1500 + int(maxi(0, money) * 0.25)
 	law_funds += 3000.0  # the aircraft and the cash, forfeited
+	for j in active_jobs:
+		if j.hot():
+			econ.record_seizure(Economy.good_of(j), Economy.job_market(j))
 	if upgrades["runner"].has("strip_guards"):
 		fine = int(fine * 1.5)  # an armed-bust case
 		how += ", with the armed guards"
@@ -1688,12 +1702,14 @@ func _update_stashes(dt: float) -> void:
 		var st: Dictionary = stash_net.get_stash(t.stash)
 		if r[1] == "delivered":
 			money += t.pay
+			econ.record_delivery("cocaine", st.zone)
 			say("Truck in at %s: +$%s" % [st.name, Py.money(t.pay)])
 			bus.emit("job_delivered", time, "", ["runner"], {"job_id": t.job_id, "pay": t.pay, "dest": t.stash, "hot": true})
 		else:
 			say("The truck to %s was stopped (%s). The load is gone." % [st.name, r[2]])
 			law_say("Truck stopped on the road to %s: %d crates seized" % [st.name, t.items])
 			law_funds += 2000.0 + 300.0 * t.items
+			econ.record_seizure("cocaine", st.zone)
 			police.case("runner").suspicion = minf(100.0, police.case("runner").suspicion + 15.0)
 			bus.emit("truck_seized", time, "", ["runner", "law"], {"stash": t.stash})
 	# the AI task force raids a stash it knows is busy
@@ -1705,6 +1721,31 @@ func _update_stashes(dt: float) -> void:
 				break
 
 
+## The markets move: police and rival traffic near each market, the rivals'
+## turf (the HQ season's, when there is one), and the news.
+func _update_economy(dt: float) -> void:
+	var cops := []
+	var rivals := []
+	for u in police.units:
+		if u.state != "crashed":
+			(cops if u.faction() == "police" else rivals).append([u.x, u.y])
+	for c in maritime.boats:
+		if c.kind == "cutter":
+			cops.append([c.x, c.y])
+	for a in smugglers:
+		if a.active() and a.kind == "rival":
+			rivals.append([a.x, a.y])
+	var turf := {}
+	if nights != null and nights.season != null and nights.season.rival != null:
+		turf = nights.season.rival.turf
+	econ.update(dt, time, cops, rivals, turf)
+	while _news_seen < econ.news.size():
+		say("Market news: " + econ.news[_news_seen][1])
+		_news_seen += 1
+	if _news_seen > 12:
+		_news_seen = econ.news.size()
+
+
 func _raid(id: String):
 	var why := stash_net.raid(id)
 	if why != "":
@@ -1714,6 +1755,7 @@ func _raid(id: String):
 	for t in taken:
 		stash_net.trucks.erase(t)
 	law_funds += 2000.0 + 1500.0 * taken.size()
+	econ.record_seizure("cocaine", st.zone)
 	law_say("Raid on %s: burned%s" % [st.name, (", %d truck(s) taken at the door" % taken.size()) if taken else ""])
 	say("The police raided %s. It's burned%s." % [st.name, " - and the truck with it" if taken else ""])
 	bus.emit("stash_raided", time, "", ["runner", "law"], {"stash": id})
@@ -1734,6 +1776,8 @@ func _complete_delivery(job: Jobs.Job, af: Airfield) -> void:
 		say("%s lb of fuel cached at %s." % [Py.f(fuel, 0), af.name])
 	var g := _grade(job)
 	money += g[0]
+	if job.hot():
+		econ.record_delivery(Economy.good_of(job), Economy.job_market(job))
 	active_jobs.erase(job)
 	loadout.remove_job(job.id)
 	say(("Delivered '%s': +$%s %s" % [job.title, Py.money(g[0]), g[1]]).strip_edges(false, true))
@@ -1766,6 +1810,12 @@ func _unload_tick(dt: float) -> void:
 func _grade(job: Jobs.Job) -> Array:
 	var pay := float(job.payout)
 	var notes := []
+	if Economy.REALISM and job.hot():
+		# contraband sells at the street price on the day it arrives
+		var move := econ.job_mult(job) / maxf(0.05, job.price_mult)
+		pay *= move
+		if absf(move - 1.0) >= 0.03:
+			notes.append("(street price %+d%%)" % int(round((move - 1.0) * 100.0)))
 	var lg := log
 	var left = job.time_left(time)
 	if left != null and left < 0:

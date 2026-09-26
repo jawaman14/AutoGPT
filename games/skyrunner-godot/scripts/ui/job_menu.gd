@@ -11,6 +11,8 @@ var card_title: Label
 var detail: Label
 var card_facts: Label
 var rows: Array = []  ## [kind, job] per table row, or null for a section
+var market: DataTable  ## the second page (LEFT/RIGHT): today's prices by market
+var page := 0
 
 
 func _build() -> void:
@@ -40,9 +42,53 @@ func _build() -> void:
 	detail = UIStyle.label("", 15, UIStyle.DIM)
 	detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	cv.add_child(detail)
+	market = GameMenu.make_table([
+		{"title": "Good", "expand": true, "ratio": 3, "min": 200},
+		{"title": "Town", "align": "right", "mono": true, "min": 80},
+		{"title": "West", "align": "right", "mono": true, "min": 80},
+		{"title": "North", "align": "right", "mono": true, "min": 80},
+		{"title": "Sea", "align": "right", "mono": true, "min": 80},
+	])
+	market.visible = false
+	content.add_child(market)
+
+
+## A price multiplier as "+12%", coloured: green pays more, red less.
+static func _pct(m: float) -> Array:
+	var p := int(round((m - 1.0) * 100.0))
+	return ["%+d%%" % p if p != 0 else "0", UIStyle.GREEN if p >= 4 else (UIStyle.RED if p <= -4 else UIStyle.DIM)]
+
+
+func _market() -> void:
+	title.text = "MARKET"
+	var b := s.econ.board()
+	subtitle.text = "prices against the usual  -  avgas $%.2f/lb (%s)" % [Session.FUEL_PRICE_PER_LB * b.fuel, _pct(b.fuel)[0]]
+	market.clear_rows()
+	for hot in [true, false]:
+		market.section("CONTRABAND - paid at the street price when you deliver" if hot else "LEGAL WORK - paid as agreed")
+		for r in b.goods.filter(func(g): return g.hot == hot):
+			var cells := [r.name]
+			var cc := {}
+			for i in Economy.MARKETS.size():
+				var pc := _pct(r.prices[Economy.MARKETS[i]])
+				cells.append(pc[0])
+				cc[i + 1] = pc[1]
+			market.add_row(cells, {"cell_colors": cc})
+	var heat := []
+	for m in Economy.MARKETS:
+		heat.append("%s: police %s, rivals %d%%" % [m, ("quiet" if b.heat[m] < 0.1 else ("around" if b.heat[m] < 0.4 else ("thick" if b.heat[m] < 0.9 else "everywhere"))),
+			int(b.rival[m] * 100)])
+	footer.text = "   ".join(heat) + ("\nNews: " + " / ".join(b.events) if not b.events.is_empty() else "")
+	hints.set_hints([["LEFT/RIGHT", "job board", "left"], ["ESC", "close", "esc"]])
 
 
 func refresh() -> void:
+	list.visible = page == 0
+	card.visible = page == 0
+	market.visible = page == 1
+	if page == 1:
+		_market()
+		return
 	var af := World.airfield(s.location)
 	title.text = "JOB BOARD"
 	subtitle.text = "%s  -  %.0f m %s" % [af.name, af.length, af.surface]
@@ -64,7 +110,8 @@ func refresh() -> void:
 	list.select_near(keep if keep >= 0 else 0)
 	_show_detail()
 	footer.text = ""
-	hints.set_hints([["UP/DOWN", "select", "down"], ["ENTER", "accept / drop", "enter"], ["L", "load & fuel", ""], ["ESC", "close", "esc"]])
+	hints.set_hints([["UP/DOWN", "select", "down"], ["ENTER", "accept / drop", "enter"], ["LEFT/RIGHT", "market", "right"],
+		["L", "load & fuel", ""], ["ESC", "close", "esc"]])
 
 
 func _sep(text: String) -> void:
@@ -108,11 +155,20 @@ func _show_detail() -> void:
 		facts.append("%d min deadline" % int(j.deadline_s / 60))
 	if not j.is_airdrop():
 		facts.append("to " + World.airfield(j.dest).name)
+	if j.hot() and Economy.REALISM:
+		var now := int(round(j.payout * s.econ.job_mult(j) / maxf(0.05, j.price_mult)))
+		facts.append("street now $%s" % Py.money(now))
 	card_facts.text = "   ".join(facts)
 	detail.text = j.notes if j.notes else ("Paid per bale landed at the cove." if j.is_airdrop() else "")
 
 
 func key(k: String) -> void:
+	if k in ["left", "right"]:
+		page = 1 - page
+		refresh()
+		return
+	if page == 1:
+		return
 	match k:
 		"up":
 			list.move(-1)

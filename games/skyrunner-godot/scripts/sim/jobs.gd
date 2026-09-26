@@ -46,6 +46,7 @@ class Job:
 	var bales_total := 0
 	var bales_delivered := 0
 	var resolved := false
+	var price_mult := 1.0  ## the market multiplier baked into `payout` when the board was drawn (Economy)
 	var stash := ""  ## stash jobs (StashNet): land at `dest`, then the crew trucks it to this stash
 
 	func _init(id_: int, title_: String, kind_: String, origin_: String, dest_: String, items_: Array, payout_: int, opts := {}) -> void:

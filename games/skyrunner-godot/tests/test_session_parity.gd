@@ -12,10 +12,12 @@ func before_each() -> void:
 	if ref.is_empty():
 		ref = JSON.parse_string(FileAccess.get_file_as_string("res://tests/fixtures/session_ref.json"))
 	SensorNet.REALISM = false  # replaying Python's radar (the Godot one: tests/test_radar.gd)
+	Economy.REALISM = false  # Python has fixed prices (the markets: tests/test_economy.gd)
 
 
 func after_each() -> void:
 	SensorNet.REALISM = true
+	Economy.REALISM = true
 
 
 func _same(got, want, what: String) -> void:

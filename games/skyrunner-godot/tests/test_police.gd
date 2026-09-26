@@ -175,7 +175,9 @@ func test_intersect_parallel_is_none() -> void:
 ## of, or replays against, the Python game. The Godot radar is tests/test_radar.gd.
 func before_each() -> void:
 	SensorNet.REALISM = false
+	Economy.REALISM = false  # Python has fixed prices (the markets: tests/test_economy.gd)
 
 
 func after_each() -> void:
 	SensorNet.REALISM = true
+	Economy.REALISM = true

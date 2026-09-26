@@ -82,6 +82,27 @@ New in the Godot build:
   armed). With no human at the desk the AI chief buys the cheapest thing it can afford as the money
   comes in. Weaponry is abstract: it changes chases, boardings and raids, never shows a wound, and it
   raises the stakes.
+- **Costa Brava, the city coast (the default map).** The port city of San Telmo (a street grid of
+  ~6,900 buildings with windows lit at night, the docks with cranes and a harbour basin), the
+  international airport on the coastal plain, a meandering river to a mangrove estuary, a farm plain
+  of patchwork fields, a jungle range with a mesa strip, scrub hills and the old quarry, the cove and
+  the cays. Land use drives the terrain shader, the vegetation (mangroves, jungle, thorn scrub) and
+  the physics: buildings are obstacles, kept out of every glide path. The HQs are Club Tropicana
+  downtown (the boss's office upstairs), the customs house on the docks with a radar tower, and Los
+  Cuervos' hacienda in the foothills. `--map city`, `--map 0` (classic), `--map N` (generated), or
+  the lobby's map picker; old saves keep their island.
+- **Stash houses.** Eight of them (a farm barn, a mangrove shack, Warehouse 7 on the docks, a lock-up
+  in Barrio Chino, a jungle camp, a quarry shed, a boathouse on the cays, a hillside villa). A stash
+  run lands at a nearby strip; the crew trucks the load in while you fly on. Police overhead or a
+  roadblock can stop the truck (likelier as the stash heats up with use, at a police strip, or when
+  you're tipped). The task force can raid a stash it knows about (X at the desk; the AI raids busy
+  ones), burning it for good.
+- **Markets.** Every good has a price in each market (the town and the three zones) that moves with
+  rival turf and rival flights (they undercut you on drugs and buy guns), police presence (a risk
+  premium where they're thick), seizures (scarcity island-wide), your own deliveries (a glut where you
+  sell), fuel (a price of its own that passes through to fares, freight and fuel drums), storms and
+  the news. Contraband is paid at the street price on delivery; legal work as agreed. J, then
+  LEFT/RIGHT, shows the market.
 - **One UI, redesigned.** A single theme across every screen; real tables with titled columns (the job
   board colours the landing roll against the strip length); key caps in every footer that you can
   also click; readouts as tiles; a HUD laid out by what you need when (status chips, wanted stars,
@@ -115,8 +136,10 @@ New in the Godot build:
 | ![storm](docs/img/storm.png) | ![moon](docs/img/full-moon.png) | ![map7](docs/img/map-seed7.png) |
 | **The HUD, crewed airdrop** | **Co-pilot's desk** | **Lobby** |
 | ![hud](docs/img/ui-hud.png) | ![copilot](docs/img/ui-copilot.png) | ![lobby](docs/img/ui-lobby.png) |
-| **Runner upgrades (hangar)** | **Task-force upgrades (desk, U)** | |
-| ![upgrades](docs/img/ui-upgrades.png) | ![lawtree](docs/img/ui-lawtree.png) | |
+| **Runner upgrades (hangar)** | **Task-force upgrades (desk, U)** | **The market** |
+| ![upgrades](docs/img/ui-upgrades.png) | ![lawtree](docs/img/ui-lawtree.png) | ![market](docs/img/ui-market.png) |
+| **San Telmo, downtown** | **The port at night** | **Costa Brava, the map** |
+| ![downtown](docs/img/city-downtown.png) | ![night](docs/img/city-night.png) | ![map](docs/img/map-city.png) |
 
 *(Rendered on a GPU-less box: Mesa llvmpipe with Godot's compatibility renderer under Xvfb. SSAO and
 volumetric fog need Forward+ on a real GPU.)*
