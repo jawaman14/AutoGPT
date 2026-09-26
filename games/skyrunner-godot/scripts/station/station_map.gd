@@ -11,6 +11,7 @@ signal clicked(button: int, world_xy: Vector2)
 var snap = null
 var role := ""
 var sel_unit = null
+var sel_squad = null  ## the ground-war squad the commander has selected
 var tex: ImageTexture
 var font: Font
 var world: World
@@ -119,6 +120,7 @@ func _draw() -> void:
 		_draw_law()
 	else:
 		_draw_runner()
+	_draw_ground()
 
 
 func _draw_runner() -> void:
@@ -136,9 +138,54 @@ func _draw_runner() -> void:
 	for sp in snap.get("spotters", []):
 		var af := World.airfield(sp.code)
 		_circle(af.x, af.y, 5000, Color(1, 1, 0.4, 0.5))
+	for sh in snap.get("stashes", []):
+		var sc: Color = Color(0.5, 0.5, 0.5) if sh.burned else Color(0.95, 0.4, 0.75)
+		draw_rect(Rect2(w2m(sh.x, sh.y) - Vector2(5, 5), Vector2(10, 10)), sc, false, 2.0)
+		_text(sh.x, sh.y, sh.name, sc)
+	for t in snap.get("trucks", []):
+		draw_circle(w2m(t.x, t.y), 4.0, Color(1, 0.85, 0.3))
 	var ac = snap.get("aircraft")
 	if ac is Dictionary:
 		_arrow(ac.x, ac.y, ac.heading, Color(1, 1, 0), 16)
+
+
+const SQUAD_COL := {"org": Color(1.0, 0.45, 0.8), "rival": Color(1.0, 0.6, 0.15), "police": Color(0.35, 0.65, 1.0)}
+
+
+## The ground war: squads as chevrons (a bar per man), our own with their
+## routes and orders, firefights as starbursts.
+func _draw_ground() -> void:
+	var g = snap.get("ground")
+	if not (g is Dictionary) or g.is_empty():
+		return
+	var own := "police" if snap.get("side") == "law" else "org"
+	for d in g.get("squads", []):
+		var col: Color = SQUAD_COL.get(d.faction, Color.WHITE)
+		if d.get("hidden", false):
+			col.a = 0.55
+		var c := w2m(d.x, d.y)
+		if d.faction == own and d.route.size() >= 2:
+			var pts := PackedVector2Array()
+			for p in d.route:
+				pts.append(w2m(p[0], p[1]))
+			draw_polyline(pts, Color(col.r, col.g, col.b, 0.35), 1.0)
+		var r := 7.0 if d.kind == "foot" else 9.0
+		if d.kind == "foot":
+			draw_polyline(PackedVector2Array([c + Vector2(-r, 3), c + Vector2(0, -r + 2), c + Vector2(r, 3)]), col, 2.5)
+		else:
+			draw_rect(Rect2(c - Vector2(r, r * 0.6), Vector2(2 * r, 1.2 * r)), col, false, 2.0)
+		for k in int(d.men):
+			draw_line(c + Vector2(-r + k * 2.2, r), c + Vector2(-r + k * 2.2, r + 4), col, 1.5)
+		if d.id == sel_squad:
+			draw_arc(c, r + 6, 0, TAU, 20, Color.WHITE, 2.0)
+		if d.faction == own:
+			var what: String = d.tactic if d.tactic != "" else d.order
+			_text(d.x, d.y, "%s %s%s" % [d.id, what, " (routed)" if d.state == "routed" else ""], col)
+	for f in g.get("fights", []):
+		var c := w2m(f.x, f.y)
+		for k in 8:
+			var a := TAU * k / 8.0 + float(Time.get_ticks_msec() % 1000) / 1000.0
+			draw_line(c + Vector2(cos(a), sin(a)) * 4, c + Vector2(cos(a), sin(a)) * 11, Color(1, 0.9, 0.3), 2.0)
 
 
 ## Coverage overlay: cells no active radar sees at `coverage_agl` m above the

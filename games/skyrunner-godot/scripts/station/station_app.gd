@@ -45,6 +45,8 @@ var confirm: ConfirmBox
 var orders: HQOrders
 var order_rows: Array = []
 var sel_unit = null
+var squad_mode := false  ## Q: the map commands our ground squads (the default desk for lieutenant and patrol)
+var sel_squad = null
 var status := ""
 var _pending: Array = []
 var _list_kind := ""
@@ -219,6 +221,14 @@ func _hints() -> Array:
 				out = [["U", "back to the desk", "u"], ["UP/DOWN", "select", "down"], ["ENTER", "buy", "enter"]]
 		Roles.BOSS, Roles.CHIEF:
 			out = [["UP/DOWN", "order", "down"], ["LEFT/RIGHT", "change it", "right"], ["ENTER", "issue", "enter"]]
+	var snap = link.snapshot() if link != null else null
+	if snap is Dictionary and commands_squads(snap):
+		if squad_mode:
+			out = [["Q", "back to the desk", "q"], ["CLICK", "squad", ""], ["RIGHT-CLICK", "send it", ""], ["TAB", "next squad", "tab"],
+				["A", "checkpoint here" if _own() == "police" else "ambush here", "a"], ["M", "melt away", "m"], ["H", "hold", "h"], ["D", "disband", "d"],
+				["F/V/K", "raise foot / car / truck", "f"]]
+		else:
+			out.append(["Q", "squads", "q"])
 	return out + [["ESC", "leave seat", "esc"]]
 
 
@@ -306,6 +316,12 @@ func _key(k: String) -> void:
 		return
 	if role == Roles.COPILOT and k in ["1", "2", "3"]:
 		tabs.current_tab = int(k) - 1
+		return
+	if k == "q" and commands_squads(snap):
+		squad_mode = not squad_mode
+		status = "Squads: click one, right-click to send it" if squad_mode else ""
+		return
+	if squad_mode and _squad_key(k, snap):
 		return
 	match role:
 		Roles.BOSS, Roles.CHIEF:
@@ -478,6 +494,9 @@ func _on_map_click(button: int, p: Vector2) -> void:
 	var snap = link.snapshot()
 	if not (snap is Dictionary):
 		return
+	if squad_mode:
+		_squad_click(button, p, snap)
+		return
 	if role == Roles.BOAT and button == MOUSE_BUTTON_RIGHT:
 		_cmd("boat_goto", {"x": p.x, "y": p.y})
 		return
@@ -505,6 +524,80 @@ func _on_map_click(button: int, p: Vector2) -> void:
 		_cmd("dispatch", {"unit": sel_unit, "x": p.x, "y": p.y})
 
 
+# ------------------------------------------------------------------ ground squads
+## Seats that can order the ground war's squads (with one running).
+func commands_squads(snap: Dictionary) -> bool:
+	var g = snap.get("ground")
+	return g is Dictionary and not g.is_empty() and role in [Roles.BOSS, Roles.CHIEF, Roles.CONTROLLER]
+
+
+func _own() -> String:
+	return "police" if Roles.side(role) == "law" else "org"
+
+
+func _my_squads(snap: Dictionary) -> Array:
+	return snap.get("ground", {}).get("squads", []).filter(func(d): return d.faction == _own())
+
+
+func _squad_key(k: String, snap: Dictionary) -> bool:
+	var mine := _my_squads(snap)
+	var raise := {"f": "foot", "v": "car", "k": "truck"}
+	if raise.has(k):
+		_cmd("recruit_squad", {"kind": raise[k]})
+		return true
+	if k == "tab":
+		if mine.is_empty():
+			return true
+		var ids: Array = mine.map(func(d): return d.id)
+		var i := ids.find(sel_squad)
+		sel_squad = ids[(i + 1) % ids.size()]
+		return true
+	if sel_squad == null:
+		return false
+	var at = map.mouse_world()
+	match k:
+		"a":
+			if at != null:
+				_cmd("squad_order", {"id": sel_squad, "order": {"type": "checkpoint" if _own() == "police" else "ambush", "x": at.x, "y": at.y}})
+		"m":
+			_cmd("squad_order", {"id": sel_squad, "order": {"type": "melt"}})
+		"h":
+			_cmd("squad_order", {"id": sel_squad, "order": {"type": "hold"}})
+		"d":
+			_cmd("disband_squad", {"id": sel_squad})
+			sel_squad = null
+		_:
+			return false
+	return true
+
+
+## Click: pick one of ours. Right-click: the order that fits the spot - a
+## stash (guard it; for the police: stake it out, or raid it when it's known),
+## an enemy squad (go after it), or anywhere else (patrol / hold the street).
+func _squad_click(button: int, p: Vector2, snap: Dictionary) -> void:
+	var near := func(items: Array):
+		return Py.min_by(items, func(o): return PyMath.hypot(o.x - p.x, o.y - p.y))
+	if button == MOUSE_BUTTON_LEFT:
+		var d = near.call(_my_squads(snap))
+		sel_squad = d.id if d != null and PyMath.hypot(d.x - p.x, d.y - p.y) < 1200 else null
+		return
+	if button != MOUSE_BUTTON_RIGHT or sel_squad == null:
+		return
+	var enemy = near.call(snap.get("ground", {}).get("squads", []).filter(func(d): return d.faction != _own()))
+	var stash = near.call(snap.get("stashes", []))
+	var o := {}
+	if enemy != null and PyMath.hypot(enemy.x - p.x, enemy.y - p.y) < 500:
+		o = {"type": "attack", "squad": enemy.id}
+	elif stash != null and PyMath.hypot(stash.x - p.x, stash.y - p.y) < 700:
+		if _own() == "police":
+			o = {"type": "raid", "stash": stash.id}  # the desk only sees the houses it knows about
+		else:
+			o = {"type": "guard", "stash": stash.id}
+	else:
+		o = {"type": "patrol_zone", "x": p.x, "y": p.y, "market": GroundWar.market_at(p.x, p.y)}
+	_cmd("squad_order", {"id": sel_squad, "order": o})
+
+
 ## The strip under a map click (within 1.5 km), or null.
 func strip_at(p: Vector2):
 	var af = Py.min_by(world.airfields, func(a): return PyMath.hypot(a.x - p.x, a.y - p.y))
@@ -518,6 +611,7 @@ func _process(delta: float) -> void:
 	var snap = link.snapshot()
 	map.snap = snap
 	map.sel_unit = sel_unit
+	map.sel_squad = sel_squad
 	if not (snap is Dictionary):
 		title.text = "Connecting..." if link.error == null else "Disconnected: %s" % link.error
 		return

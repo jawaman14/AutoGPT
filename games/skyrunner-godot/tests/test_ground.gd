@@ -375,3 +375,63 @@ func test_off_means_no_war() -> void:
 	check(s.ground == null, "no ground war")
 	s.dispose()
 	GroundWar.ENABLED = true
+
+
+# ------------------------------------------------------------------ what you see
+func test_squads_are_drawn_men_vehicles_flashes_and_the_fallen() -> void:
+	var s := _war()
+	var g := s.ground
+	var a := _squad(g, "org", Vector2(-1640, -10690), {"rifle": 4}, "car")
+	var b := _squad(g, "police", Vector2(-1590, -10660), {"rifle": 4})
+	var r := SquadRender.new()
+	r.setup(s.world, "medium")
+	Engine.get_main_loop().root.add_child(r)
+	var cam := Vector3(-1660, 20, 10720)
+	var fights := func(): return g.fights.map(func(f): return {"x": f.x, "y": f.y, "a": f.a.id, "b": f.b.id})
+	r.sync(g.squads.map(func(q): return q.dict()), [], cam, s.time, 0.1)
+	check_eq(r.drawn(), 8, "eight men standing")
+	check(r.vehicles.has(a.id) and not r.vehicles.has(b.id), "the car crew's car, nobody else's")
+	g._open(a, b)
+	var flashed := false
+	for i in 60:
+		if a.fight == null:
+			break
+		g._rounds(GroundWar.ROUND_S)
+		r.sync(g.squads.map(func(q): return q.dict()), fights.call(), cam, s.time, 0.1)
+		flashed = flashed or r.flashes.multimesh.instance_count > 0
+	check(flashed, "muzzle flashes in the fight")
+	check(r.fallen.size() > 0, "the fallen lie where they fell (%d)" % r.fallen.size())
+	r.sync(g.squads.map(func(q): return q.dict()), [], Vector3(9000, 20, 9000), s.time, 0.1)
+	check_eq(r.drawn(), 0, "out of range: not drawn")
+	r.free()
+	s.dispose()
+
+
+func test_the_desk_commands_squads() -> void:
+	var s := _war()
+	s.money = 20000
+	var st := StationApp.new()
+	Engine.get_main_loop().root.add_child(st)
+	st.setup(LocalLink.new(s, Roles.BOSS), Roles.BOSS, s.world)
+	st._process(1.0 / 30)
+	check(st.commands_squads(st.link.snapshot()), "the boss can command squads")
+	st._key("q")
+	check(st.squad_mode, "Q: squad mode")
+	st._key("v")
+	st._process(1.0 / 30)
+	var q: GroundWar.Squad = s.ground.of("org").back()
+	check(q != null and q.kind == "car", "V raised a car crew")
+	st._on_map_click(MOUSE_BUTTON_LEFT, q.pos() + Vector2(100, 0))
+	check_eq(st.sel_squad, q.id, "clicked: selected")
+	var barn: Dictionary = s.stash_net.get_stash("barn")
+	st._on_map_click(MOUSE_BUTTON_RIGHT, Vector2(barn.x + 100, barn.y))
+	st._process(1.0 / 30)
+	check_eq(q.order.get("type"), "guard", "right-click on a stash: guard it")
+	check(q.human, "a human's order")
+	st._key("m")
+	st._process(1.0 / 30)
+	check_eq(q.tactic, "melt", "M: melt away")
+	st._key("q")
+	check(not st.squad_mode, "Q again: back to the desk")
+	st.free()
+	s.dispose()

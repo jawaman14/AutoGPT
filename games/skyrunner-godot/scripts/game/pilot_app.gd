@@ -75,6 +75,7 @@ var paused := false
 var _pressed := {}
 var _cam_pos = null
 var pursuer_nodes := {}  ## Pursuer (instance id) -> [node, spinners, lights]
+var squads: SquadRender = null  ## the ground war's men and vehicles (sessions with one)
 var boat_nodes := {}
 var bale_nodes := {}
 var beacons: Array = []  ## [key, [nodes]]
@@ -94,6 +95,10 @@ func setup(sess: Session, graphics := "high", bot_ = null, server_ = null) -> Pi
 	name = "PilotApp"
 	scene = WorldScene.new().setup(sess.world, quality)
 	add_child(scene)
+	if sess.ground != null:
+		squads = SquadRender.new()
+		squads.setup(sess.world, graphics)
+		add_child(squads)
 	nerves = Nerves.new().setup()
 	nerves.layer = 0  # over the 3D view, under the HUD (layer 1) and menus
 	add_child(nerves)
@@ -539,6 +544,7 @@ func _sync_scene(dt: float) -> void:
 	dust.emitting = st.on_ground and st.gs_kts > 15 and (af == null or af.surface != "asphalt")
 	_sync_beacons()
 	_sync_pursuers(dt)
+	_sync_squads(dt)
 	_sync_maritime()
 	var aer = s.police.sensors.site("AER")
 	scene.show_aerostat(aer != null and aer.active)
@@ -642,6 +648,14 @@ func _sync_pursuers(dt: float) -> void:
 		var search = node.get_node_or_null("searchlight")
 		if search != null:
 			search.visible = scene.night > 0.3 and u.target_id != null
+
+
+func _sync_squads(dt: float) -> void:
+	if squads == null:
+		return
+	var g := s.ground
+	squads.sync(g.squads.map(func(q): return q.dict()),
+		g.fights.map(func(f): return {"x": f.x, "y": f.y, "a": f.a.id, "b": f.b.id}), cam.global_position, s.time, dt)
 
 
 func _update_camera(st: FlightModel.FlightState, dt: float) -> void:
