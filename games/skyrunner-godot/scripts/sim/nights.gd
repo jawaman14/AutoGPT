@@ -242,6 +242,14 @@ func _finish() -> void:
 			a.state = "escaped"
 	_pull()
 	var rep := ss.finish_night(runs, true)
+	# ground_turf (live play only; the season sims never have a ground war): who
+	# held the streets tonight nudges the rivals' turf, at most 0.06 a zone
+	if sess.ground != null and ss.rival != null:
+		for z in HQ.ZONES:
+			var d: float = sess.ground.turf_delta(z)
+			if absf(d) >= 0.005:
+				ss.rival.turf[z] = clampf(ss.rival.turf[z] + d, 0.05, 0.9)
+				sess.say("NEWS: %s %s ground in the %s" % [ss.rival.name, "gained" if d > 0 else "lost", z])
 	_push()
 	for line in rep.lines:
 		sess.say("NEWS: " + line)

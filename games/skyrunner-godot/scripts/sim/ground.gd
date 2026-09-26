@@ -333,7 +333,7 @@ func disband(q: Squad) -> void:
 func go(q: Squad, to: Vector2) -> void:
 	q.route = graph.route(q.pos(), to)
 	q.s = 0.0
-	if q.state != "fighting":
+	if q.state not in ["fighting", "routed"]:
 		q.state = "moving"
 
 
@@ -769,7 +769,7 @@ func _arrest(q: Squad, cop: Squad, n: int) -> void:
 			var live: Array = sess.stash_net.live()
 			if not live.is_empty() and frng.random() < 0.25 * n:
 				var st: Dictionary = live[frng.randint(0, live.size() - 1)]
-				st.heat += 20.0
+				st.intel += 20.0
 				_say("law", "A prisoner talked: %s" % st.name)
 	if q.men <= 0:
 		_gone(q)
@@ -814,7 +814,7 @@ func _breach(q: Squad) -> void:
 	for g in squads:
 		if g.faction == "org" and g.state != "gone" and g.pos().distance_to(Vector2(st.x, st.y)) < CONTACT_M:
 			return  # the guards first; the fight decides
-	st.heat = maxf(st.heat, StashNet.KNOWN_HEAT)
+	st.intel = maxf(st.intel, StashNet.KNOWN_HEAT)
 	sess._raid(id)
 	q.order = {"type": "hold"}
 	q.tactic = ""
@@ -862,7 +862,7 @@ func truck_contacts() -> Array:
 				elif _should_tail(q, t):
 					q.tactic = "tail"
 					q.order = {"type": "tail", "job_id": t.job_id}
-					tails[t.job_id] = q.id
+					tails[t.job_id] = [q.id, t.stash]
 					_say("law", "%s is tailing a truck instead of stopping it" % q.id)
 				else:
 					out.append([t, "seized", "a %s checkpoint" % q.id])
@@ -881,7 +881,7 @@ func truck_contacts() -> Array:
 ## Tail a truck when we don't know where it's going: the stash is worth more.
 func _should_tail(q: Squad, t) -> bool:
 	var st = sess.stash_net.get_stash(t.stash)
-	return st != null and st.heat < StashNet.KNOWN_HEAT and sess.police.controller != "human" and rng.random() < 0.6
+	return st != null and StashNet.suspicion(st) < StashNet.KNOWN_HEAT and sess.police.controller != "human" and rng.random() < 0.6
 
 
 func _trucks(dt: float) -> void:
@@ -903,26 +903,33 @@ func _trucks(dt: float) -> void:
 			if q.faction == "police" and q.order.get("type", "") == "raid" and q.fight == null and q.route.size() < 2:
 				_breach(q)
 	for jid in tails.keys():
-		var q = get_squad(tails[jid])
+		var q = get_squad(tails[jid][0])
+		var st = sess.stash_net.get_stash(tails[jid][1])
 		var t = Py.first(sess.stash_net.trucks, func(tt): return tt.job_id == jid)
-		if q == null:
+		if q == null or st == null:
 			tails.erase(jid)
 			continue
-		if t == null:
-			# the truck got in: now we know the house
+		var arrived: bool = t == null or t.frac(sess.time) >= 0.97
+		if arrived:
 			tails.erase(jid)
 			q.tactic = ""
 			q.order = {"type": "hold"}
+			# close enough behind it to see the door: now we know the house
+			if q.pos().distance_to(Vector2(st.x, st.y)) < 1500.0:
+				st.intel = maxf(st.intel, StashNet.KNOWN_HEAT + 15.0)
+				_say("law", "%s followed a truck to %s" % [q.id, st.name])
 			continue
-		var p: Array = t.pos(sess.time)
-		if q.pos().distance_to(Vector2(p[0], p[1])) > 700.0 and q.route.size() < 2:
-			go(q, Vector2(p[0], p[1]))
-		var st = sess.stash_net.get_stash(t.stash)
-		if st != null and t.frac(sess.time) >= 0.97:
-			st.heat = maxf(st.heat, StashNet.KNOWN_HEAT + 5.0)
-			_say("law", "%s followed a truck to %s" % [q.id, st.name])
-			tails.erase(jid)
-			q.tactic = ""
+		# shadow it along its own road, a few hundred metres back
+		var d: float = clampf((sess.time - t.t0 - StashNet.TRUCK_LOAD_S) / maxf(1.0, t.dur - StashNet.TRUCK_LOAD_S), 0.0, 1.0)
+		var lag: PackedVector2Array = t.route if t.route.size() >= 2 else PackedVector2Array([Vector2(t.x0, t.y0), Vector2(t.x1, t.y1)])
+		var spot := RoadGraph.along(lag, maxf(0.0, d * RoadGraph.length(lag) - 350.0))
+		if q.pos().distance_to(spot) < 900.0:
+			q.x = spot.x
+			q.y = spot.y
+			q.route = PackedVector2Array()
+			q.state = "moving"
+		elif q.route.size() < 2:
+			go(q, spot)
 	# stakeouts watch: a watched stash warms up
 	for id in stakeouts.keys():
 		var q = get_squad(stakeouts[id])
@@ -931,7 +938,7 @@ func _trucks(dt: float) -> void:
 			stakeouts.erase(id)
 			continue
 		if q.pos().distance_to(Vector2(st.x, st.y)) < 600.0:
-			st.heat += 1.2 * dt / 60.0 + (0.3 if sess.stash_net.trucks_to(id).size() > 0 else 0.0)
+			st.intel += 1.5 * dt / 60.0 + (0.3 if sess.stash_net.trucks_to(id).size() > 0 else 0.0)
 
 
 ## Informants: now and then a controlled buy gives away a stash.
@@ -947,7 +954,7 @@ func _informants(dt: float) -> void:
 		var live: Array = sess.stash_net.live()
 		if not live.is_empty():
 			var st: Dictionary = live[rng.randint(0, live.size() - 1)]
-			st.heat += 18.0
+			st.intel += 18.0
 			_say("law", "Controlled buy by an informant: product from %s" % st.name)
 
 
@@ -1131,7 +1138,7 @@ func _think_police() -> void:
 	if sess.stash_net != null:
 		var live: Array = sess.stash_net.live()
 		# raid: a cordon, then the entry team
-		var ripe = _pick(live.filter(func(s): return s.heat >= 55.0), func(s): return s.heat)
+		var ripe = _pick(live.filter(func(s): return StashNet.suspicion(s) >= 55.0), func(s): return StashNet.suspicion(s))
 		if ripe != null and mine.size() >= 2 and not squads.any(func(q): return q.order.get("type", "") == "raid"):
 			var guards := of("org").filter(func(q): return q.pos().distance_to(Vector2(ripe.x, ripe.y)) < 800.0)
 			var team = _pick(mine, func(q): return strength(q))
@@ -1145,7 +1152,7 @@ func _think_police() -> void:
 				mine.erase(team)
 				_log("police", "Raid on %s: %s%s" % [ripe.name, team.id, (", cordon " + cordon.id) if cordon else ""])
 		# stake out the suspected ones
-		for st in live.filter(func(s): return s.heat >= 12.0 and s.heat < StashNet.KNOWN_HEAT):
+		for st in live.filter(func(s): return StashNet.suspicion(s) >= 10.0 and StashNet.suspicion(s) < 55.0):
 			if mine.is_empty():
 				break
 			if stakeouts.has(st.id):
@@ -1156,7 +1163,7 @@ func _think_police() -> void:
 				stakeouts[st.id] = q.id
 				mine.erase(q)
 		# a buy-bust at a known house
-		var known := live.filter(func(s): return s.heat >= StashNet.KNOWN_HEAT)
+		var known := live.filter(func(s): return StashNet.suspicion(s) >= StashNet.KNOWN_HEAT)
 		if not known.is_empty() and not mine.is_empty() and rng.random() < 0.2:
 			var st: Dictionary = known[rng.randint(0, known.size() - 1)]
 			var q = mine.back()
@@ -1195,6 +1202,22 @@ func _recruit_ai(f: String, rich: bool, kind := "") -> void:
 	if not rich or of(f).size() >= CAP[f]:
 		return
 	var k := kind if kind != "" else ("car" if rng.random() < 0.5 else "foot")
+	var ars = arsenal(f)
+	if ars != null and ars.count() * 2 < MEN[k]:
+		# nobody sends men out unarmed: buy guns first (the dealer, or police procurement)
+		var price: int = 4 * int(Arsenal.TIERS.rifle.price * (1.0 if f == "police" else 1.4))
+		if f == "org" and sess.money > price + 15000:
+			sess.money -= price
+		elif f == "police" and sess.law_funds > price + 5000.0:
+			sess.law_funds -= price
+		elif f == "rival" and commanders.rival.cash > price + 5000.0:
+			commanders.rival.cash -= price
+		else:
+			return
+		ars.add("rifle", 4)
+		_log(f, "Bought four rifles")
+		if ars.count() * 2 < MEN[k]:
+			return
 	var q = recruit(f, k)
 	if q is Squad:
 		_log(f, "Raised %s (%s, %s)" % [q.id, k, Arsenal.describe(q.loadout)])

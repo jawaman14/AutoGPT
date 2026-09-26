@@ -21,6 +21,7 @@ const HEAT_DELIVERY := 15.0
 const HEAT_SEIZED := 25.0
 const HEAT_DECAY_MIN := 1.5  ## per minute
 const KNOWN_HEAT := 30.0  ## the task force knows where it is
+const INTEL_DECAY_MIN := 0.15  ## police intel (stakeouts, tails, informants, prisoners) fades slowly
 
 class Truck:
 	var job_id: int
@@ -61,6 +62,7 @@ func _init(map_stashes: Array, rng_: PyRandom) -> void:
 	for s in map_stashes:
 		var d: Dictionary = s.duplicate()
 		d["heat"] = 0.0
+		d["intel"] = 0.0  ## what the task force has learned about it (GroundWar), on top of the traffic's heat
 		d["burned"] = false
 		stashes.append(d)
 
@@ -76,8 +78,13 @@ func live() -> Array:
 	return stashes.filter(func(s): return not s.burned)
 
 
+## How much the task force suspects a stash: the traffic's heat plus its intel.
+static func suspicion(st: Dictionary) -> float:
+	return float(st.heat) + float(st.get("intel", 0.0))
+
+
 func known() -> Array:
-	return stashes.filter(func(s): return s.heat >= KNOWN_HEAT or s.burned)
+	return stashes.filter(func(s): return suspicion(s) >= KNOWN_HEAT or s.burned)
 
 
 ## A stash job from `origin`: contraband for one of the live stashes (not the
@@ -133,6 +140,7 @@ func dispatch(job: Jobs.Job, af: Airfield, now: float, pay: int, risk := 0.0) ->
 func update(dt: float, now: float, police_units: Array) -> Array:
 	for s in stashes:
 		s.heat = maxf(0.0, s.heat - dt * HEAT_DECAY_MIN / 60.0)
+		s.intel = maxf(0.0, s.intel - dt * INTEL_DECAY_MIN / 60.0)
 	var done := []
 	for t in trucks.duplicate():
 		var p: Array = t.pos(now)
@@ -161,7 +169,7 @@ func raid(id: String) -> String:
 		return "No such stash."
 	if st.burned:
 		return "Already burned."
-	if st.heat < KNOWN_HEAT:
+	if suspicion(st) < KNOWN_HEAT:
 		return "No intelligence on %s yet." % st.name
 	st.burned = true
 	return ""
