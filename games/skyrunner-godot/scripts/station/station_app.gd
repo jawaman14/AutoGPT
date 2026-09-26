@@ -221,7 +221,7 @@ func _hints() -> Array:
 			out = [["RIGHT-CLICK", "send the go-fast there", ""]]
 		Roles.CONTROLLER:
 			out = [["CLICK", "unit, then track", ""], ["H", "heli", "h"], ["I", "interceptor", "i"], ["C", "cutter", "c"],
-				["R", "recall", "r"], ["E", "encryption", "e"], ["B", "aerostat", "b"], ["G", "coverage", "g"], ["T", "tac channel", "t"], ["J", "jam here", "j"], ["X", "raid stash", "x"], ["U", "upgrades", "u"], ["TAB", "next unit", "tab"]]
+				["R", "recall", "r"], ["E", "encryption", "e"], ["B", "aerostat", "b"], ["G", "coverage", "g"], ["T", "tac channel", "t"], ["J", "jam here", "j"], ["X", "raid stash", "x"], ["V", "investigate the Agency", "v"], ["U", "upgrades", "u"], ["TAB", "next unit", "tab"]]
 			if upgrades != null and upgrades.visible:
 				out = [["U", "back to the desk", "u"], ["UP/DOWN", "select", "down"], ["ENTER", "buy", "enter"]]
 		Roles.BOSS, Roles.CHIEF:
@@ -444,6 +444,9 @@ func _hq_key(k: String, snap: Dictionary) -> void:
 
 func _law_key(k: String, snap: Dictionary) -> void:
 	var pos = map.mouse_world()
+	if k == "v" and not snap.get("agency", {}).is_empty():
+		_cmd("investigate_agency")
+		return
 	if k == "u":
 		upgrades.visible = not upgrades.visible
 		_upg_sig = ""
@@ -863,6 +866,15 @@ func _draw_squads(snap: Dictionary) -> void:
 	detail.text = "Selected: %s" % (sel_squad if sel_squad != null else "- (click a squad, or UP/DOWN)")
 
 
+static func _agency_line(ag: Dictionary) -> String:
+	if ag.is_empty():
+		return ""
+	if ag.get("burned", false):
+		return "THE AGENCY: exposed - the hearings are on\n"
+	return "THE AGENCY: %d cases quashed from Washington   exposure %d%%  (V: investigate, $%d)\n" % [int(ag.get("quashed", 0)),
+		int(ag.get("exposure", 0)), Agency.INVESTIGATE_COST]
+
+
 func _draw_law(snap: Dictionary) -> void:
 	title.text = "TASK FORCE DESK"
 	subtitle.text = snap.mode
@@ -875,7 +887,8 @@ func _draw_law(snap: Dictionary) -> void:
 			"TACTICAL" if snap.get("radio_channel") == "police_tac" else "dispatch", snap.aerostat],
 		"Busts %d   boats %d   bales seized %d      Runners: bales in %d, escaped %d" % [int(sc.busts), int(sc.boats_seized), int(sc.bales_seized),
 			int(rs.bales_delivered), int(rs.escapes)],
-		"Selected unit: %s" % (sel_unit if sel_unit != null else "-  (click one on the map or pick it below)"), "", "CASES",
+		"Selected unit: %s" % (sel_unit if sel_unit != null else "-  (click one on the map or pick it below)"),
+		_agency_line(snap.get("agency", {})), "CASES",
 	]
 	for c in cases.slice(0, 6):
 		lines.append("  %-10s suspicion %3.0f%%   %s%s" % [c.id, c.suspicion, "\u2605".repeat(int(c.wanted)) if c.wanted else "", "   TIPPED" if c.tipped else ""])

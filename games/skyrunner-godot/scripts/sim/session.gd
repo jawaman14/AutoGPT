@@ -113,6 +113,7 @@ var _stash_ai_t := 0.0
 var arsenals := {}  ## "org" | "law" | "rival" -> Arsenal (Arsenal.REALISM)
 var seats: Seats  ## who holds each role: the AI, or a human (Seats)
 var _ai_defaults := {}  ## what each seat's AI was set to before a human took it
+var agency: Agency = null  ## the Company: arms flights south, protection, exposure (live play asks for it)
 var foot: FootCombat = null  ## the pilot on foot with a gun (sessions with a ground war)
 var chronicle: Chronicle = null  ## the news and the breaks between runs (Chronicle; live play asks for it)
 var ground: GroundWar = null  ## squads, firefights and turf on the roads (GroundWar; live play asks for it)
@@ -195,6 +196,8 @@ func _init(opts := {}) -> void:
 		ground = GroundWar.new(self, _rng(seed + 61), _rng(seed + 67))
 	if ground != null:
 		foot = FootCombat.new(self, _rng(seed + 73))
+	if Agency.ENABLED and opts.get("agency", false):
+		agency = Agency.new(self, _rng(seed + 89))
 	if Chronicle.ENABLED and opts.get("chronicle", false):
 		chronicle = Chronicle.new(self, _rng(seed + 83))
 	for side in ["runner", "law"]:
@@ -249,6 +252,7 @@ func _init(opts := {}) -> void:
 ## Break the reference cycles (night director, campaign, bus subscribers) so a
 ## finished Session is freed; batch simulators build thousands of them.
 func dispose() -> void:
+	agency = null
 	foot = null
 	chronicle = null
 	ground = null
@@ -432,6 +436,10 @@ func refresh_board(code: String) -> void:
 		var sj = stash_net.job_from(af, rng)
 		if sj != null:
 			boards[code].append(sj)
+	if agency != null and agency.active() and features.has("contraband") and af.kind in ["shady", "bush"] and agency.rng.random() < agency.offer_chance:
+		var aj = agency.job_from(af, world.airfields)
+		if aj != null:
+			boards[code].append(aj)
 	if Arsenal.REALISM and stash_net != null and features.has("contraband") and af.kind in ["shady", "bush"] and arng.random() < 0.5:
 		var gj = Arsenal.gun_run(af, world.airfields, stash_net, arng)
 		if gj != null:
@@ -1510,6 +1518,8 @@ func _update_world(dt: float) -> void:
 	_update_economy(dt)
 	if chronicle != null:
 		chronicle.update(dt)
+	if agency != null:
+		agency.update(dt)
 
 	# maritime: cutters go where the task force suspects a drop
 	var law_goals := []
@@ -1665,6 +1675,8 @@ func _crash(reason: String) -> void:
 
 
 func _bust(how: String) -> void:
+	if agency != null and agency.quash(how):
+		return  # friends in Washington
 	phase = "busted"
 	var fine := 1500 + int(maxi(0, money) * 0.25)
 	law_funds += 3000.0  # the aircraft and the cash, forfeited
@@ -1754,7 +1766,9 @@ func _arrive(af: Airfield, s: FlightModel.FlightState) -> void:
 	location = af.code
 	if police.landing_check(s, af, carrying_hot()):
 		_bust("arrested on landing at %s" % af.name)
-		return
+		if phase == "busted":
+			return
+		phase = "parked"
 	var delivered := active_jobs.filter(func(j): return j.dest == af.code)
 	for job in delivered.filter(func(j): return j.stash != "" and stash_net != null):
 		_truck_out(job, af)
@@ -2035,6 +2049,13 @@ func _cmd_disband_squad(role: String, a: Dictionary):
 	return null
 
 
+func _cmd_investigate_agency(role: String, a: Dictionary):
+	if agency == null:
+		return "No Agency in this game."
+	var err := agency.investigate()
+	return err if err != "" else null
+
+
 func _cmd_raid_stash(role: String, a: Dictionary):
 	if stash_net == null:
 		return "No stash houses on this map."
@@ -2047,7 +2068,9 @@ func _complete_delivery(job: Jobs.Job, af: Airfield) -> void:
 		var fuel := Py.sum_by(drums, func(i): return i.weight_lb) * 0.9
 		fuel_caches[af.code] = fuel_caches.get(af.code, 0.0) + fuel
 		say("%s lb of fuel cached at %s." % [Py.f(fuel, 0), af.name])
-	if Arsenal.REALISM and not job.weapons.is_empty() and job.gun_mode == "stock":
+	if job.agency and agency != null:
+		agency.flight_done(job)
+	if Arsenal.REALISM and not job.weapons.is_empty() and job.gun_mode == "stock" and not job.agency:
 		_stock_weapons(job.weapons, "")
 		active_jobs.erase(job)
 		loadout.remove_job(job.id)
@@ -2072,8 +2095,11 @@ func _unload_tick(dt: float) -> void:
 	for u in police.units:
 		if (u.faction() == "police" and u.state != "crashed"
 				and PyMath.hypot(u.x - s.x, u.y - s.y) < RAID_RANGE_M and u.z - s.alt < 600):
+			var held := unloading
 			unloading = []
 			_bust("raided on the ground at %s" % (airfield.name if airfield else "the strip"))
+			if phase != "busted":
+				unloading = held  # quashed: the count goes on
 			return
 	unload_t -= dt
 	if unload_t <= 0:

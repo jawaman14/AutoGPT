@@ -254,3 +254,37 @@ Every role in every mode exists from the start and is run by the AI. Humans join
 claim any free seat from the role picker; leaving (or dropping for more than 30 s) hands it back to
 the AI. The host's `Seats` table is the single place this happens. See [MULTIPLAYER.md](MULTIPLAYER.md)
 for the protocol, the roster and chat.
+
+## 13. The Agency, and the history the season runs through
+
+**The Company** (`scripts/sim/agency.gd`) is a covert intelligence agency running guns south to
+the Contras through the island's strips: a fourth player in the drug war, and the task force's most
+awkward opponent. It offers "southern front" arms flights on the shady strips' boards. Carrying its
+cargo, or for half an hour after a run, you're protected: a bust is quashed by a call from
+Washington ("national security"), and police checkpoints are told to wave your trucks through. A
+trusted organisation gets favours (crates of rifles, an informant "reassigned"). Every quash and
+flight leaves a trail; the task force can dig (V at the desk: subpoenas and bank records, cheaper
+the more cases were quashed) and at 100% exposure the hearings end it: no more protection, the
+task force gets the budget, and the organisation's pilots are named in the testimony.
+
+It is fiction inspired by the documented record, not a claim about real people:
+
+- the **Boland Amendments** (1982, and Boland II in 1984) barred U.S. funding for the Contras, and
+  the supply effort went private and covert
+  ([Boland Amendment](https://en.wikipedia.org/wiki/Boland_Amendment));
+- in October 1986 a Contra supply plane was shot down over Nicaragua and its surviving crewman
+  talked; the **Iran-Contra affair** broke that November
+  ([Iran-Contra affair](https://en.wikipedia.org/wiki/Iran%E2%80%93Contra_affair));
+- the Senate subcommittee chaired by John Kerry (the **Kerry Committee**, report 1989) found that
+  people involved in Contra supply networks were also involved in drug trafficking, and that U.S.
+  agencies were at times aware of it
+  ([Kerry Committee report](https://en.wikipedia.org/wiki/Kerry_Committee_report)).
+  Stronger claims made later (for example in the "Dark Alliance" series) remain disputed, and the
+  game doesn't rely on them.
+
+The **Chronicle** also runs a timeline of real headlines, one per stretch of play, in order: the
+1979 Dadeland mall shootout, the 1980 Mariel boatlift, Operation Greenback, the 1982 South Florida
+Task Force, the Boland Amendments, Customs' air-interdiction jets and Blackhawks, crack reaching
+the streets, the 1986 shoot-down, Iran-Contra, the 1986 Anti-Drug Abuse Act and the Kerry
+inquiry. Each moves something in the game: the task force's funds and arsenal, Los Cuervos'
+recruits, the markets, and the Agency's exposure.

@@ -864,6 +864,10 @@ func truck_contacts() -> Array:
 					q.order = {"type": "tail", "job_id": t.job_id}
 					tails[t.job_id] = [q.id, t.stash]
 					_say("law", "%s is tailing a truck instead of stopping it" % q.id)
+				elif t.waved or (sess.agency != null and sess.agency.waves_through(frng)):
+					if not t.waved:
+						_say("law", "%s was told to let a truck through: orders from Washington" % q.id)
+					t.waved = true
 				else:
 					out.append([t, "seized", "a %s checkpoint" % q.id])
 				break

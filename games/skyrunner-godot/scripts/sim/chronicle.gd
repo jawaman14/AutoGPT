@@ -75,7 +75,28 @@ const MILESTONES := {
 	"cuervos_own": ["rival", "Los Cuervos own the {zone}: nobody else's product moves there"],
 }
 
+## The history the season runs through, one headline every HISTORY_EVERY_S in
+## order, each moving something (the Agency's exposure when there is one).
+## [id, year, text]. Real events, reported as the papers did.
+const HISTORY_EVERY_S := 1500.0
+const HISTORY := [
+	["mall_shootout", 1979, "A daylight shootout at a Miami shopping mall: the cocaine wars are front-page news"],
+	["mariel", 1980, "The Mariel boatlift: 125,000 people arrive from Cuba in six months"],
+	["greenback", 1980, "Operation Greenback: federal agents start following the cash through the banks"],
+	["sfl_task_force", 1982, "The Vice President's South Florida Task Force: the Army and Navy join the drug war"],
+	["boland", 1982, "Congress passes the Boland Amendment: no U.S. money for the Contras"],
+	["interdiction", 1983, "Customs gets radar jets and Blackhawk helicopters for air interdiction"],
+	["boland_2", 1984, "Boland II: the ban tightens; the Contra supply effort goes private and covert"],
+	["crack", 1985, "Crack reaches the streets: cheap, and the demand is enormous"],
+	["shootdown", 1986, "A Contra supply plane is shot down over Nicaragua; the surviving crewman is captured and talks"],
+	["iran_contra", 1986, "The Iran-Contra affair breaks: arms sold to Iran, the profits diverted to the Contras"],
+	["drug_abuse_act", 1986, "The Anti-Drug Abuse Act: mandatory minimum sentences for trafficking"],
+	["kerry", 1986, "A Senate subcommittee starts asking about drug pilots in the Contra supply lines"],
+]
+
 var sess  ## Session
+var history_i := 0
+var _hist_t := 0.0
 var rng: PyRandom
 var fired := {}  ## milestone id -> time
 var entries: Array = []  ## [t, side, good, public, text]
@@ -102,6 +123,11 @@ func update(dt: float) -> void:
 	var step := _t
 	_t = 0.0
 	_milestones()
+	_hist_t += step
+	if _hist_t >= HISTORY_EVERY_S and history_i < HISTORY.size():
+		_hist_t = 0.0
+		history(history_i)
+		history_i += 1
 	_next -= step
 	if _next <= 0.0:
 		_next = _interval()
@@ -278,6 +304,48 @@ func _news(side: String, good: bool, public: bool, text: String) -> void:
 		sess.law_say(("NEWS - " if public else "") + line)
 	sess.bus.emit("news", sess.time, line, (["runner", "law"] if public else (["runner"] if side != "law" else ["law"])),
 		{"side": side, "good": good})
+
+
+# ------------------------------------------------------------------ history
+func history(i: int) -> String:
+	var h: Array = HISTORY[i]
+	var ag = sess.agency
+	var c = sess.police.case("runner")
+	match h[0]:
+		"mall_shootout":
+			sess.law_funds += 2000.0
+			c.suspicion = minf(100.0, c.suspicion + 5.0)
+		"mariel":
+			if sess.ground != null:
+				sess.ground.commanders.rival.cash += 6000.0
+				sess.ground.recruit("rival", "foot", null, false)
+		"greenback":
+			sess.law_funds += 3000.0
+			sess.money -= mini(maxi(0, sess.money), 1000)  # the bankers want more to look away
+		"sfl_task_force":
+			sess.law_funds += 8000.0
+			if sess.arsenals.has("law"):
+				sess.arsenals.law.add("rifle", 6)
+		"boland":
+			if ag != null:
+				ag.pay_mult = 1.3  # the money goes private: it pays better
+		"interdiction":
+			sess.law_funds += 5000.0
+		"boland_2":
+			if ag != null:
+				ag.offer_chance = 0.6
+		"crack":
+			sess.econ.events.append({"good": "cocaine", "mult": 1.3, "until": sess.time + 5400.0, "text": h[2]})
+		"shootdown", "iran_contra", "kerry":
+			if ag != null and ag.active():
+				ag.exposure = minf(100.0, ag.exposure + {"shootdown": 25.0, "iran_contra": 35.0, "kerry": 20.0}[h[0]])
+				ag._check_exposed()
+		"drug_abuse_act":
+			sess.law_funds += 3000.0
+			c.suspicion = minf(100.0, c.suspicion + 10.0)
+	var text := "%d - %s" % [h[1], h[2]]
+	_news("law", true, true, text)
+	return text
 
 
 # ------------------------------------------------------------------ milestones

@@ -45,7 +45,7 @@ const GOODS := {
 }
 ## item label -> good (anything else: general freight; passengers by kind)
 const LABELS := {"Sealed case": "cocaine", "Kilo brick crate": "cocaine", "'Coffee' sacks": "marijuana", "Bale": "marijuana",
-	"Unmarked crate": "guns", "Weapons crate": "guns", "Nervous man": "fugitive", "Duffel bag": "fugitive", "Food supplies": "perishable",
+	"Unmarked crate": "guns", "Weapons crate": "guns", "Crate marked 'humanitarian aid'": "guns", "Nervous man": "fugitive", "Duffel bag": "fugitive", "Food supplies": "perishable",
 	"Glass panels": "fragile", "Lab samples": "fragile", "Fuel drum": "fuel_drums", "Medical kit": "medical"}
 ## [good, multiplier, minutes, headline]
 const EVENTS := [

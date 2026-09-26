@@ -36,10 +36,10 @@ static var PERMISSIONS := {
 	SPOTTER: ["spotter_move", "chat"],
 	BOAT: ["boat_goto", "chat"],
 	BOSS: ["hq", "chat", "gun_mode", "sell_weapons", "buy_weapons", "set_cache", "squad_order", "recruit_squad", "disband_squad"],
-	CONTROLLER: ["launch", "dispatch", "recall", "encrypt", "radio_channel", "jam", "upgrade", "raid_stash", "aerostat", "chat", "hq", "squad_order"],
+	CONTROLLER: ["launch", "dispatch", "recall", "encrypt", "radio_channel", "jam", "upgrade", "raid_stash", "aerostat", "chat", "hq", "squad_order", "investigate_agency"],
 	INTERCEPTOR: ["claim_unit", "release_unit", "chat"],
 	CUTTER: ["cutter_goto", "chat"],
-	CHIEF: ["hq", "chat", "squad_order", "recruit_squad", "disband_squad"],
+	CHIEF: ["hq", "chat", "squad_order", "recruit_squad", "disband_squad", "investigate_agency"],
 	LIEUTENANT: _SQUADS + ["chat", "gun_mode", "sell_weapons", "buy_weapons", "set_cache"],
 	PATROL: _SQUADS + ["raid_stash", "chat"],
 }
