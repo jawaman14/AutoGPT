@@ -127,8 +127,13 @@ Python station clients connect to it too, because it speaks the same protocol.
 Controls: F1 in game. They are the Python game's keys, plus F2 for time of day, gamepad or joystick
 support, and on foot: TAB get out / climb in, WASD walk (Shift runs, Space jumps), mouse look, E use, F torch.
 
-Demo videos: [docs/video/](docs/video/) (`tools/tour.gd` records the on-foot and HQ tour;
-`tools/record_demo.sh` records a bot flight against the task force, optionally in weather).
+Demo videos: [docs/video/](docs/video/):
+- [`demo-ui.mp4`](docs/video/demo-ui.mp4): the redesigned UI in use - lobby, job board, load planner,
+  hangar, the HUD on a crewed airdrop, the co-pilot's desk, both HQ boards, the task-force desk
+  (`tools/ui_tour.gd`)
+- [`demo-tour.mp4`](docs/video/demo-tour.mp4): on foot, the boss's desk, the three HQs (`tools/tour.gd`)
+- [`demo-bust.mp4`](docs/video/demo-bust.mp4): a bot flight against the task force, split screen
+  (`tools/record_demo.sh`, optionally in weather)
 
 ## Balance tooling
 
