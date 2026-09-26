@@ -63,6 +63,11 @@ const EVENTS := {
 	"casino_skim": ["family", false, true, "A casino count room skimmed: the Morettis are squeezed, and greedier"],
 	"wiretap": ["family", false, true, "The FBI wiretaps a social club in Ybor City: the case against the Morettis grows"],
 	"trunk": ["family", false, true, "A Moretti capo found in a car trunk at the airport: the Family is at war with itself"],
+	"drum_found": ["family", true, true, "A witness against the Family found in an oil drum in the bay: nobody else will talk"],
+	# the money
+	"shrimp_front": ["org", true, false, "A seafood company in Puntarenas takes our cash as 'aid contracts': clean money"],
+	"bank_collapse": ["org", false, true, "An offshore bank collapses under a fraud probe: our deposits with it (-${cash})"],
+	"pilot_flips": ["law", true, false, "A smuggling pilot flips: he'll fly with a hidden camera for us"],
 	# the Company's double game
 	"company_tip": ["org", true, false, "A man from 'the Company' warns us: the task force is watching {stash}"],
 	"company_leak": ["law", true, false, "An anonymous caller with a government accent names {stash}"],
@@ -97,17 +102,24 @@ const HISTORY := [
 	["mall_shootout", 1979, "A daylight shootout at a Miami shopping mall: the cocaine wars are front-page news"],
 	["mariel", 1980, "The Mariel boatlift: 125,000 people arrive from Cuba in six months"],
 	["greenback", 1980, "Operation Greenback: federal agents start following the cash through the banks"],
+	["opa_locka", 1980, "Agents at an Opa-locka airfield seize $1.6 million in cash and two aircraft"],
 	["sfl_task_force", 1982, "The Vice President's South Florida Task Force: the Army and Navy join the drug war"],
+	["mia_hangar", 1982, "Nearly two tons of cocaine found in a Miami airport hangar: the biggest seizure yet"],
 	["boland", 1982, "Congress passes the Boland Amendment: no U.S. money for the Contras"],
 	["interdiction", 1983, "Customs gets radar jets and Blackhawk helicopters for air interdiction"],
 	["boland_2", 1984, "Boland II: the ban tightens; the Contra supply effort goes private and covert"],
 	["crack", 1985, "Crack reaches the streets: cheap, and the demand is enormous"],
 	["pizza", 1985, "The Pizza Connection trial opens in New York: Sicilian heroin sold through pizzerias"],
+	["baggage_ring", 1986, "DEA probe: baggage handlers at Miami's airport moved cocaine past customs for years"],
+	["informant_shot", 1986, "A smuggler pilot turned government informant is shot dead outside a halfway house"],
 	["shootdown", 1986, "A Contra supply plane is shot down over Nicaragua; the surviving crewman is captured and talks"],
-	["iran_contra", 1986, "The Iran-Contra affair breaks: arms sold to Iran, the profits diverted to the Contras"],
 	["drug_abuse_act", 1986, "The Anti-Drug Abuse Act: mandatory minimum sentences for trafficking"],
-	["kerry", 1986, "A Senate subcommittee starts asking about drug pilots in the Contra supply lines"],
+	["iran_contra", 1986, "The Iran-Contra affair breaks: arms sold to Iran, the profits diverted to the Contras"],
 	["commission", 1986, "The Commission trial: the heads of New York's crime families convicted under RICO"],
+	["kerry", 1986, "A Senate subcommittee starts asking about drug pilots in the Contra supply lines"],
+	["noriega", 1988, "A Miami grand jury indicts Panama's dictator: he sold cocaine flights safe passage"],
+	["kerry_report", 1989, "The Kerry report: some Contra suppliers paid with aid money were drug traffickers"],
+	["ochoa", 1989, "Havana executes a general and a colonel for moving cocaine through Cuban waters"],
 ]
 
 var sess  ## Session
@@ -199,7 +211,7 @@ func _can(id: String) -> bool:
 			return sess.ground != null
 		"rival_arms", "guard_rifles", "evidence_theft":
 			return sess.arsenals.has("law")
-		"bookmaker", "sitdown", "casino_skim", "wiretap", "trunk":
+		"bookmaker", "sitdown", "casino_skim", "wiretap", "trunk", "drum_found":
 			return sess.family != null and sess.family.active()
 		"company_tip":
 			return sess.agency != null and sess.agency.active() and sess.agency.trust >= 30.0 and sess.stash_net != null and not sess.stash_net.live().is_empty()
@@ -316,6 +328,16 @@ func fire(id: String) -> String:
 		"trunk":
 			sess.family.greed = minf(1.0, sess.family.greed + 0.1)
 			sess.family.rico = minf(100.0, sess.family.rico + 5.0)
+		"drum_found":
+			sess.family.rico = maxf(0.0, sess.family.rico - 10.0)
+		"shrimp_front":
+			c.suspicion = maxf(0.0, c.suspicion - 10.0)
+		"bank_collapse":
+			var k := mini(maxi(0, sess.money), rng.randint(20, 60) * 100)
+			sess.money -= k
+			vars.cash = Py.money(k)
+		"pilot_flips":
+			c.suspicion = minf(100.0, c.suspicion + 15.0)
 		"company_tip":
 			var st = _hottest_stash()
 			st.intel = maxf(0.0, st.intel - 20.0)
@@ -377,6 +399,27 @@ func history(i: int) -> String:
 				ag.pay_mult = 1.3  # the money goes private: it pays better
 		"interdiction":
 			sess.law_funds += 5000.0
+		"opa_locka":
+			sess.law_funds += 2000.0
+		"mia_hangar":
+			sess.econ.scarcity["cocaine"] = minf(0.6, sess.econ.scarcity["cocaine"] + 0.1)
+		"baggage_ring":
+			sess.bus.emit("airport_crackdown", sess.time, "", ["runner", "law"], {})  # the airports tighten up
+			sess.law_funds += 2000.0
+		"informant_shot":
+			c.suspicion = maxf(0.0, c.suspicion - 5.0)  # informants go quiet
+			if sess.stash_net != null:
+				for st in sess.stash_net.live():
+					st.intel = maxf(0.0, st.intel - 5.0)
+		"noriega":
+			sess.money -= mini(maxi(0, sess.money), 2000)  # the bankers want more to look away
+			sess.law_funds += 4000.0
+		"kerry_report":
+			if ag != null and ag.active():
+				ag.exposure = minf(100.0, ag.exposure + 25.0)
+				ag._check_exposed()
+		"ochoa":
+			sess.bus.emit("island_purge", sess.time, "", ["runner", "law"], {})  # the island's protection is gone for a while
 		"boland_2":
 			if ag != null:
 				ag.offer_chance = 0.6

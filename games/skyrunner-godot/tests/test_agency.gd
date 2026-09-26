@@ -124,10 +124,14 @@ func test_the_history_runs_in_order_and_hits_the_agency() -> void:
 	var texts := []
 	for i in Chronicle.HISTORY.size():
 		texts.append(s.chronicle.history(i))
-	check(texts[0].begins_with("1979") and texts.back().begins_with("1986"), "1979 to 1986")
+	check(texts[0].begins_with("1979") and texts.back().begins_with("1989"), "1979 to 1989")
+	var years := Chronicle.HISTORY.map(func(h): return h[1])
+	var sorted_years := years.duplicate()
+	sorted_years.sort()
+	check_eq(years, sorted_years, "in date order")
 	check(s.agency.exposure > e0 or s.agency.burned, "the shoot-down, the affair and the Senate move the exposure")
 	check(s.agency.pay_mult > 1.0, "Boland: the money went private")
-	check(s.messages.any(func(m): return "Boland" in m[1]), "in the papers")
+	check(s.chronicle.entries.any(func(e): return "Boland" in e[4]), "in the papers")
 	# and the clock fires them one at a time
 	var t := _sess({"chronicle": true})
 	for i in int(Chronicle.HISTORY_EVERY_S) + 5:

@@ -288,3 +288,59 @@ Task Force, the Boland Amendments, Customs' air-interdiction jets and Blackhawks
 the streets, the 1986 shoot-down, Iran-Contra, the 1986 Anti-Drug Abuse Act and the Kerry
 inquiry. Each moves something in the game: the task force's funds and arsenal, Los Cuervos'
 recruits, the markets, and the Agency's exposure.
+
+## 14. The Family, the Company's double game, and the research behind them
+
+**The Family** (`scripts/sim/family.gd`) is a fictional Cosa Nostra crime family, the Morettis,
+out of Tampa by way of New York. It runs the docks' union, casino count rooms, bookmakers and a
+loan-sharking book. The design rule is that **every helping hand might be a trap**:
+
+- Each offer carries a hidden `honest` flag and a *read* (what our people notice, e.g. "the
+  steward was seen at the federal building"). The read is right about four times in five, so
+  accepting is a judgement call.
+- The offers are: a loan (the con: the vig "changes" and the enforcers come), laundering through a
+  count room (the con: a skim and a wiretap), the union at the docks (the con: the Coast Guard gets
+  the schedule), a gun fence (the con: a buy-bust), a crew of the Family's soldiers (the con: a
+  stash sold to Los Cuervos) and a lawyer (the con: he reports to the prosecutor).
+- Honesty falls with greed, low respect and pressure. The task force's RICO case grows; past 60% a
+  made man may flip, and a family with a rat in it sells everyone out. At 100% the Commission
+  trial ends the Family, and what it knew about our stash houses goes into evidence.
+- Unasked, the Family also: levies a street tax on a rich organisation, sells rifles to Los
+  Cuervos too, puts a sergeant on the payroll who leaks raids, and moves in on a weak organisation's
+  stash.
+
+**The Company's double game** (in `agency.gd`, on its own RNG stream):
+
+- The limited hangout: at high exposure it may give our names to the task force itself.
+- A stung flight: it hands a flight to the DEA. The notes may say "the contact changed at the last
+  minute", a hint that is right about three times in four.
+- "The check's in the mail": part of the pay is withheld.
+- Both sides: Los Cuervos' planes get waved through too.
+- Disinformation, both ways.
+- Brokering its cash through the Family's casinos.
+
+### What the research found, and where it went
+
+Fiction built on documented history. No real person appears in the game; events are reported as
+the papers did.
+
+| History | In the game |
+|---|---|
+| The CIA recruited mobsters (Giancana, Roselli, Trafficante) to kill Castro in 1960-63; it came out in the Church Committee hearings (1975); Roselli was later found in an oil drum in Biscayne Bay ([CIA plots on Castro](https://en.wikipedia.org/wiki/CIA_assassination_attempts_on_Fidel_Castro), [Mob Museum](https://themobmuseum.org/blog/mob-attempts-assassinate-castro/)) | The Company and the Family know each other: the Company's cash goes through the Family's casinos with us as go-between; the "drum_found" event (a witness silenced, the RICO case sets back) |
+| The Kerry report (1989): the State Department paid Contra "humanitarian" contracts to companies run by traffickers, including SETCO Air and a Costa Rican seafood firm, Frigorificos de Puntarenas, set up to launder drug money ([Kerry Committee](https://en.wikipedia.org/wiki/Kerry_Committee_report), [report text](https://archive.org/stream/KerryCommitteeReport/Kerry%20Committee%20Report_djvu.txt)) | Crates marked "humanitarian aid"; the "shrimp_front" laundering event; the 1989 headline raises the Agency's exposure |
+| A cocaine pilot flew out of Mena, Arkansas, flipped to become a DEA informant in 1983, flew a camera-rigged C-123 on a CIA-linked mission, and was shot dead in 1986 ([Barry Seal](https://en.wikipedia.org/wiki/Barry_Seal)) | The "pilot_flips" event; the 1986 headline (informants go quiet); the stung flight |
+| Norman's Cay, Bahamas: a private island with a 1,000 m strip, armed guards, dogs and radar, used as a transshipment base (1978-82) ([Norman's Cay](https://en.wikipedia.org/wiki/Norman%27s_Cay), [Carlos Lehder](https://en.wikipedia.org/wiki/Carlos_Lehder)) | The offshore pickup island (next phase) |
+| Operation Greenback (1980) followed the cash through the banks; the Opa-locka seizure; Great American Bank fell in 1982 ([Operation Greenback](https://en.wikipedia.org/wiki/Operation_Greenback)) | Headlines; laundering costs; the "bank_collapse" event |
+| 1986: a DEA probe of Eastern Airlines baggage handlers at Miami International, who moved cocaine past customs and dogs for years ([CS Monitor, 1986](https://www.csmonitor.com/1986/0214/aline.html)) | The 1986 headline tightens the airports; airport smuggling with bought handlers (next phase) |
+| The Pizza Connection trial (1985-87) and the Commission trial (1985-86, bosses convicted under RICO) ([Pizza Connection](https://en.wikipedia.org/wiki/Pizza_Connection_Trial), [Commission trial](https://en.wikipedia.org/wiki/Mafia_Commission_Trial)) | Both headlines raise the RICO case |
+| 1988: Noriega indicted in Miami for selling traffickers safe passage; his money sat in BCCI ([Manuel Noriega](https://en.wikipedia.org/wiki/Manuel_Noriega)) | The 1988 headline: laundering costs more |
+| Cuba, 1989: General Ochoa and Colonel de la Guardia were executed after a trial for arranging cocaine drops in Cuban waters, handed to speedboats for Florida ([Arnaldo Ochoa](https://en.wikipedia.org/wiki/Arnaldo_Ochoa)) | The island's corrupt officers and their purge (next phase) |
+
+Storylines and jobs these suggest, some of them built next:
+
+- **The island**: a Cuba-like offshore state with cheaper product, corrupt officers selling safe
+  passage in its waters, and its own politics. A purge can close the route overnight.
+- **Airport runs**: mules and bought baggage handlers at the international airport, against
+  customs, dogs and a crackdown after a scandal.
+- **Informant flights**: the DEA flips your pilot and wants photographs of the next pickup.
+- **The seafood front**: aid contracts that launder money until an inquiry reads the books.
