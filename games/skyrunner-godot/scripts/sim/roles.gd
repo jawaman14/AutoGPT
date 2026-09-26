@@ -32,11 +32,11 @@ static var PERMISSIONS := {
 	COPILOT: _GROUND_OPS + _CREW_AIR + ["hire_spotter", "chat", "gun_mode"],
 	SPOTTER: ["spotter_move", "chat"],
 	BOAT: ["boat_goto", "chat"],
-	BOSS: ["hq", "chat", "gun_mode", "sell_weapons", "buy_weapons", "set_cache"],
-	CONTROLLER: ["launch", "dispatch", "recall", "encrypt", "radio_channel", "jam", "upgrade", "raid_stash", "aerostat", "chat", "hq"],
+	BOSS: ["hq", "chat", "gun_mode", "sell_weapons", "buy_weapons", "set_cache", "squad_order", "recruit_squad", "disband_squad"],
+	CONTROLLER: ["launch", "dispatch", "recall", "encrypt", "radio_channel", "jam", "upgrade", "raid_stash", "aerostat", "chat", "hq", "squad_order"],
 	INTERCEPTOR: ["claim_unit", "release_unit", "chat"],
 	CUTTER: ["cutter_goto", "chat"],
-	CHIEF: ["hq", "chat"],
+	CHIEF: ["hq", "chat", "squad_order", "recruit_squad", "disband_squad"],
 }
 
 ## Roles a human can take in each mode. Everything else is AI or absent.

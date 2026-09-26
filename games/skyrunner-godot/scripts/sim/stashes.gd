@@ -37,12 +37,16 @@ class Truck:
 	var stop_at := -1.0  ## fraction of the route where a roadblock waits, -1 none
 	var weapons := {}  ## a gun run's weapons (Arsenal)
 	var gun_mode := "sell"
+	var route := PackedVector2Array()  ## by road (GroundWar), else the straight line
 
 	func frac(now: float) -> float:
 		return clampf((now - t0) / dur, 0.0, 1.0)
 
 	func pos(now: float) -> Array:
 		var f := clampf((now - t0 - StashNet.TRUCK_LOAD_S) / maxf(1.0, dur - StashNet.TRUCK_LOAD_S), 0.0, 1.0)
+		if route.size() >= 2:
+			var p := RoadGraph.along(route, f * RoadGraph.length(route))
+			return [p.x, p.y]
 		return [lerpf(x0, x1, f), lerpf(y0, y1, f)]
 
 

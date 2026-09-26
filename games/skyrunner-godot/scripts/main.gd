@@ -75,7 +75,7 @@ func start() -> void:
 	var save := SAVE_DIR + ("campaign.json" if mode == Roles.CAMPAIGN else "save.json")
 	if args["new"] and FileAccess.file_exists(save):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(save))
-	var opts := {"seed": args["seed"], "mode": mode, "ai_law_upgrades": true}  # the AI chief shops as forfeiture comes in
+	var opts := {"seed": args["seed"], "mode": mode, "ai_law_upgrades": true, "ground_war": true}  # the AI chief shops as forfeiture comes in
 	if args["map"] >= 0:  # --map 0 = classic island, --map N = generated island N
 		opts["map_seed"] = args["map"]
 	elif not FileAccess.file_exists(save):

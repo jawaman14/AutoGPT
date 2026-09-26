@@ -111,6 +111,7 @@ var _news_seen := 0
 var stash_net: StashNet = null  ## the organisation's stash houses (maps that have them)
 var _stash_ai_t := 0.0
 var arsenals := {}  ## "org" | "law" | "rival" -> Arsenal (Arsenal.REALISM)
+var ground: GroundWar = null  ## squads, firefights and turf on the roads (GroundWar; live play asks for it)
 var arng: PyRandom  ## gun runs and arsenal draws, off the board and parity streams
 var ai_law_upgrades := false  ## the AI chief buys law upgrades as money comes in (live play; off in sims and tests)
 var urng: PyRandom  ## upgrade draws (spoiled tips, leaks), off the parity streams
@@ -186,6 +187,8 @@ func _init(opts := {}) -> void:
 	if not world.map.stashes.is_empty():
 		stash_net = StashNet.new(world.map.stashes, _rng(seed + 41))
 	ai_law_upgrades = opts.get("ai_law_upgrades", false)
+	if GroundWar.ENABLED and opts.get("ground_war", false):
+		ground = GroundWar.new(self, _rng(seed + 61), _rng(seed + 67))
 	for side in ["runner", "law"]:
 		for id in opts.get("upgrades", {}).get(side, []):
 			upgrades[side][id] = true
@@ -1704,6 +1707,12 @@ func _truck_out(job: Jobs.Job, af: Airfield) -> void:
 	var c := police.case("runner")
 	var risk := (0.15 if af.police else 0.0) + (0.1 if (c.tipped or c.wanted) else 0.0)
 	var t := stash_net.dispatch(job, af, time, g[0], risk)
+	if ground != null:
+		# by road; the roadblock roll gives way to the checkpoints on the ground
+		var st: Dictionary = stash_net.get_stash(job.stash)
+		t.route = ground.graph.route(Vector2(af.x, af.y), Vector2(st.x, st.y))
+		t.dur = StashNet.TRUCK_LOAD_S + RoadGraph.length(t.route) / StashNet.TRUCK_MS
+		t.stop_at = -1.0
 	active_jobs.erase(job)
 	loadout.remove_job(job.id)
 	say("Load's on the truck to %s: about %d min by road." % [stash_net.get_stash(job.stash).name, int(ceil(t.dur / 60.0))])
@@ -1713,9 +1722,26 @@ func _truck_out(job: Jobs.Job, af: Airfield) -> void:
 func _update_stashes(dt: float) -> void:
 	if stash_net == null:
 		return
-	for r in stash_net.update(dt, time, police.units.filter(func(u): return u.faction() == "police")):
+	var results := stash_net.update(dt, time, police.units.filter(func(u): return u.faction() == "police"))
+	if ground != null:
+		ground.update(dt)
+		for r in ground.truck_contacts():
+			stash_net.trucks.erase(r[0])
+			results.append(r)
+		for e in ground.events:
+			if e[0] in ["runner", "both"]:
+				say(e[1])
+			if e[0] in ["law", "both"]:
+				law_say(e[1])
+		ground.events.clear()
+	for r in results:
 		var t: StashNet.Truck = r[0]
 		var st: Dictionary = stash_net.get_stash(t.stash)
+		if r[1] == "hijacked":
+			say("Los Cuervos hit the truck to %s. The load is theirs." % st.name)
+			law_say("Word on the street: Los Cuervos hijacked a truck near %s" % st.name)
+			bus.emit("truck_hijacked", time, "", ["runner"], {"stash": t.stash})
+			continue
 		if r[1] == "delivered" and not t.weapons.is_empty() and t.gun_mode == "stock" and Arsenal.REALISM:
 			_stock_weapons(t.weapons, st.id)
 			say("Truck in at %s: %s into the armoury here" % [st.name, Arsenal.describe(t.weapons)])
@@ -1734,7 +1760,7 @@ func _update_stashes(dt: float) -> void:
 			police.case("runner").suspicion = minf(100.0, police.case("runner").suspicion + 15.0)
 			bus.emit("truck_seized", time, "", ["runner", "law"], {"stash": t.stash})
 	# the AI task force raids a stash it knows is busy
-	if police.controller == "ai" and time >= _stash_ai_t:
+	if police.controller == "ai" and time >= _stash_ai_t and ground == null:
 		_stash_ai_t = time + 60.0
 		for st in stash_net.known():
 			if not st.burned and st.heat >= 55.0 and urng.random() < 0.3:
@@ -1759,6 +1785,10 @@ func _update_economy(dt: float) -> void:
 	var turf := {}
 	if nights != null and nights.season != null and nights.season.rival != null:
 		turf = nights.season.rival.turf
+	if ground != null:
+		cops += ground.positions("police")
+		rivals += ground.positions("rival")
+		turf = ground.turf(turf)
 	econ.update(dt, time, cops, rivals, turf)
 	while _news_seen < econ.news.size():
 		say("Market news: " + econ.news[_news_seen][1])
@@ -1874,6 +1904,56 @@ func _cmd_set_cache(role: String, a: Dictionary):
 		return "No such stash."
 	arsenals["org"].cache = id
 	say("The guns are kept at %s now." % ("the club" if id == "" else stash_net.get_stash(id).name))
+	return null
+
+
+# ================================================================ the ground war
+func _faction_of(role: String) -> String:
+	return "police" if Roles.side(role) == "law" else "org"
+
+
+func _cmd_squad_order(role: String, a: Dictionary):
+	if ground == null:
+		return "No ground war here."
+	var q = ground.get_squad(str(a.get("id", "")))
+	if q == null or q.faction != _faction_of(role):
+		return "Not one of ours."
+	var o: Dictionary = a.get("order", {}) if a.get("order") is Dictionary else {"type": str(a.get("order", ""))}
+	for k in ["x", "y", "stash", "market", "squad", "job_id"]:
+		if a.has(k) and not o.has(k):
+			o[k] = a[k]
+	var err: String = ground.order(q, o)
+	if err != "":
+		return err
+	q.human = true
+	if o.get("type", "") == "stakeout" and o.has("stash"):
+		ground.stakeouts[str(o.stash)] = q.id
+	return null
+
+
+func _cmd_recruit_squad(role: String, a: Dictionary):
+	if ground == null:
+		return "No ground war here."
+	var r = ground.recruit(_faction_of(role), str(a.get("kind", "foot")))
+	if r is String:
+		return r
+	var text := "Raised %s: %s" % [r.id, Arsenal.describe(r.loadout)]
+	if r.faction == "org":
+		say(text)
+	else:
+		law_say(text)
+	return null
+
+
+func _cmd_disband_squad(role: String, a: Dictionary):
+	if ground == null:
+		return "No ground war here."
+	var q = ground.get_squad(str(a.get("id", "")))
+	if q == null or q.faction != _faction_of(role):
+		return "Not one of ours."
+	if q.fight != null:
+		return "They're in a firefight."
+	ground.disband(q)
 	return null
 
 

@@ -21,7 +21,7 @@ func _init() -> void:
 			"--port": port = int(a[i + 1])
 			"--seed": seed = int(a[i + 1])
 			"--seconds": seconds = float(a[i + 1])
-	sess = Session.new({"mode": Roles.POLICE, "seed": seed, "map_seed": MapCity.SEED})  # AI runs the desk until a controller joins
+	sess = Session.new({"mode": Roles.POLICE, "seed": seed, "map_seed": MapCity.SEED, "ground_war": true})  # AI runs the desk until a controller joins
 	srv = HostServer.new()
 	root.add_child.call_deferred(srv)
 	var err = srv.start(port, Roles.POLICE)
