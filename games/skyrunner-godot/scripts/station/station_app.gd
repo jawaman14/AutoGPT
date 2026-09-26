@@ -204,7 +204,7 @@ func _hints() -> Array:
 			out = [["RIGHT-CLICK", "send the go-fast there", ""]]
 		Roles.CONTROLLER:
 			out = [["CLICK", "unit, then track", ""], ["H", "heli", "h"], ["I", "interceptor", "i"], ["C", "cutter", "c"],
-				["R", "recall", "r"], ["E", "encryption", "e"], ["B", "aerostat", "b"], ["TAB", "next unit", "tab"]]
+				["R", "recall", "r"], ["E", "encryption", "e"], ["B", "aerostat", "b"], ["G", "coverage", "g"], ["TAB", "next unit", "tab"]]
 		Roles.BOSS, Roles.CHIEF:
 			out = [["UP/DOWN", "order", "down"], ["LEFT/RIGHT", "change it", "right"], ["ENTER", "issue", "enter"]]
 	return out + [["ESC", "leave seat", "esc"]]
@@ -415,6 +415,10 @@ func _law_key(k: String, snap: Dictionary) -> void:
 			_cmd("encrypt", {"on": not snap.get("encrypted", false)})
 		"b":
 			_cmd("aerostat", {"on": snap.get("aerostat") == "down"})
+		"g":
+			# coverage overlay: off -> blind below 150 / 500 / 1500 m AGL
+			var steps := [0.0, 150.0, 500.0, 1500.0]
+			map.coverage_agl = steps[(steps.find(map.coverage_agl) + 1) % steps.size()]
 		"up", "down":
 			GameMenu.list_move(list, 1 if k == "down" else -1)
 			var i := GameMenu.selected(list)
@@ -532,11 +536,14 @@ func _runner_tiles(ac, snap: Dictionary) -> void:
 		var b: Dictionary = boats[0]
 		var d := PyMath.hypot(float(b.x) - float(ac.x), float(b.y) - float(ac.y)) / 1000
 		tiles["boat"].set_value(str(b.state).replace("_", " "), UIStyle.CYAN, -1.0, "%.1f km, %d aboard" % [d, int(b.cargo)])
-	chips["xpdr"].set_state(("XPDR " + str(ac.squawk)) if ac.transponder else "XPDR OFF", UIStyle.GREEN if ac.transponder else UIStyle.AMBER, true)
+	chips["xpdr"].set_state(("XPDR %s %s" % [ac.squawk, ac.get("code", "")]) if ac.transponder else "XPDR OFF",
+		UIStyle.GREEN if ac.transponder else UIStyle.AMBER, true)
 	chips["ap"].set_state("AP", UIStyle.CYAN, ac.autopilot)
 	var det = ac.get("detector")
 	chips["radar"].visible = det != null
-	chips["radar"].set_state("RADAR %s" % str(det), UIStyle.RED if det == "LOCK" else UIStyle.AMBER, det in ["LOCK", "PAINT"])
+	var who: Array = ac.get("painters", []).map(func(p): return "%s %03d" % [p.code, int(p.bearing)])
+	chips["radar"].set_state("RADAR %s%s" % [str(det), ("  " + ", ".join(who)) if not who.is_empty() else ""],
+		UIStyle.RED if det == "LOCK" else UIStyle.AMBER, det in ["LOCK", "PAINT"])
 	var w := int(ac.wanted)
 	chips["wanted"].set_state(("WANTED " + "\u2605".repeat(w)) if w else "NOT WANTED", UIStyle.RED if w else UIStyle.GREEN, w > 0)
 	chips["crew"].set_state("CO-PILOT ABOARD" if ac.get("copilot") else "SOLO", UIStyle.CYAN, Py.truthy(ac.get("copilot")))

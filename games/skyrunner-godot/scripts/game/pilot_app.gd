@@ -36,8 +36,11 @@ View     C cycle camera (chase / cockpit / tower)    M big map    P pause   F2 t
 On foot  TAB get out (parked) / back in    WASD walk  SHIFT run  SPACE jump  mouse look
          E use (job board, fuel, hangar, the boss's desk)   F torch
 Ground   J job board   L load planner & fuel   H hangar, gear, spotters, crew
-Crew     N transponder on/off   U autopilot (hold alt/hdg)   K kick a bale   O call the boat
+Crew     N transponder on/off   7 squawk code (1200 VFR / 7700 / 7600 / 7500)   U autopilot
+         K kick a bale   O call the boat
          V ferry fuel pump   I push aircraft round (stopped)   ENTER continue   ESC close menu / quit
+Radar    fly across a radar's beam or slow and the MTI loses you; low over rough sea or in rain the
+         clutter hides you; the detector shows who's painting you and from where
 
 Goal: haul passengers & cargo between strips for money. Balance the load:
 too heavy = long roll & weak climb, CG too far aft = pitch-up / stall,
@@ -261,6 +264,12 @@ func _unhandled_input(ev: InputEvent) -> void:
 			_pressed[PRESS_KEYS[k]] = true
 		elif CREW_KEYS.has(k):
 			var r: Array = s.command(Roles.PILOT, CREW_KEYS[k], {})
+			if not r[0]:
+				s.say(r[1])
+		elif k == KEY_7:
+			# cycle the Mode A code: VFR, then the three emergency codes
+			var codes := ["1200", "7700", "7600", "7500"]
+			var r: Array = s.command(Roles.PILOT, "squawk", {"code": codes[(codes.find(s.squawk_code) + 1) % codes.size()]})
 			if not r[0]:
 				s.say(r[1])
 		elif k in [KEY_J, KEY_L, KEY_H]:

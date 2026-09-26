@@ -40,7 +40,8 @@ const LAW_FEATURES := ["interceptors", "aerostat", "cutters", "encryption", "df"
 
 
 static func _z(obj) -> float:
-	return obj.alt if "alt" in obj else obj.z
+	var a = obj.get("alt") if "alt" in obj else null  # a radar track's Mode C is null without a transponder
+	return a if a != null else obj.z
 
 
 class Pursuer:
@@ -227,6 +228,7 @@ class Case:
 	var drop_alerted := false
 	var odd_destination := {}  ## strips a squawking "legit" flight let down into
 	var first_known = null  ## [x, y] at first radar contact: the course made good starts here
+	var code := ""  ## last Mode A code Center saw (SensorNet.REALISM)
 	var last_contact = null  ## [x, y, agl, vx, vy, squawking] at the last radar contact
 
 	func _init(tid: String, opts := {}) -> void:
@@ -348,6 +350,12 @@ var rival_meter: float:
 var detected_by:
 	get:
 		return case().detected_by
+
+
+## Who's painting the runner: [{code, kind, bearing, locked}] (SensorNet.REALISM).
+func painters(tid := "runner") -> Array:
+	var d: SensorNet.Detection = detections.get(tid)
+	return d.painters if d != null else []
 
 
 func detector(tid := "runner") -> String:
@@ -789,6 +797,8 @@ func _classify(t: Target, dt: float) -> void:
 		if sig.transponder:
 			c.identified_t = now
 			c.squawk = sig.squawk
+			if SensorNet.REALISM:
+				_squawk_code(c, sig)
 	# squawk lost while being tracked: the classic tell
 	if site_code and not sig.transponder and 0 < now - c.identified_t and now - c.identified_t < 20 and c.squawk:
 		c.suspicion = minf(100.0, c.suspicion + 50)
@@ -854,6 +864,33 @@ func _classify(t: Target, dt: float) -> void:
 				c.wanted = 1
 	else:
 		c.suspicion = maxf(0.0, c.suspicion - SUSPICION_DECAY * dt)
+
+
+## Center watches the Mode A code. The emergency codes get a response - 7700
+## sends a helicopter to help (and to look), 7500 is a hijack the task force
+## takes very seriously - and a code change mid-flight is itself worth a note.
+func _squawk_code(c: Case, sig: SensorNet.Signature) -> void:
+	var code := sig.code
+	if code == c.code:
+		return
+	var was := c.code
+	c.code = code
+	if was == "":
+		return  # first contact
+	match code:
+		"7700":
+			_say("Center", "%s squawking 7700, emergency - rescue helicopter on the way" % sig.squawk, null)
+			if controller == "ai" and stock.get("heli", 0) > 0:
+				launch("heli", null, null, [sig.x, sig.y])
+		"7500":
+			c.suspicion = minf(100.0, c.suspicion + 40)
+			_say("Center", "%s squawking 7500 - hijack. All units, heads up" % sig.squawk, null)
+			law_events.append("HIJACK code from %s" % alias(sig.id))
+		"7600":
+			_say("Center", "%s squawking 7600, lost comms - light signals from the tower" % sig.squawk, null)
+		_:
+			c.suspicion = minf(100.0, c.suspicion + 15)
+			_say("Center", "%s changed code %s to %s" % [sig.squawk, was, code], null)
 
 
 ## Is the track heading inland from open water behind it?

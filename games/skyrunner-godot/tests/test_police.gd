@@ -169,3 +169,13 @@ func test_direction_finding_fix() -> void:
 
 func test_intersect_parallel_is_none() -> void:
 	check(RadioNet.intersect(RadioNet.Bearing.new("a", 0, 0, 90), RadioNet.Bearing.new("b", 0, 100, 90)) == null)
+
+
+## Python's radar (one look a second, a binary clutter floor): these are ports
+## of, or replays against, the Python game. The Godot radar is tests/test_radar.gd.
+func before_each() -> void:
+	SensorNet.REALISM = false
+
+
+func after_each() -> void:
+	SensorNet.REALISM = true

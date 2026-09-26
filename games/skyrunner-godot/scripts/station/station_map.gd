@@ -13,9 +13,11 @@ var role := ""
 var sel_unit = null
 var tex: ImageTexture
 var font: Font
+var world: World
 
 
-func setup(world: World) -> StationMap:
+func setup(world_: World) -> StationMap:
+	world = world_
 	tex = ImageTexture.create_from_image(Models.minimap_image(world, 512))
 	font = UIStyle.mono()
 	clip_contents = true
@@ -139,19 +141,73 @@ func _draw_runner() -> void:
 		_arrow(ac.x, ac.y, ac.heading, Color(1, 1, 0), 16)
 
 
+## Coverage overlay: cells no active radar sees at `coverage_agl` m above the
+## ground are shaded - the valleys a smuggler flies. Computed locally from the
+## same terrain (it never crosses the network).
+var coverage_agl := 0.0
+var _cov_net: SensorNet
+var _cov_img: ImageTexture
+var _cov_key := ""
+
+
+func _draw_coverage() -> void:
+	var active: Array = snap.get("radars", []).filter(func(r): return r.active).map(func(r): return r.code)
+	var key := "%d/%s" % [int(coverage_agl), ",".join(active)]
+	if key != _cov_key:
+		_cov_key = key
+		if _cov_net == null:
+			_cov_net = SensorNet.new(world)
+		var n := 48
+		var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+		for j in n:
+			for i in n:
+				var seen := false
+				for code in active:
+					if _cov_net.coverage(code, coverage_agl, n)[j * n + i]:
+						seen = true
+						break
+				img.set_pixel(i, j, Color(0, 0, 0, 0) if seen else Color(0.05, 0.05, 0.1, 0.55))
+		_cov_img = ImageTexture.create_from_image(img)
+	var sd := side()
+	draw_texture_rect(_cov_img, Rect2(origin(), Vector2(sd, sd)), false)
+	draw_string(font, origin() + Vector2(8, sd - 10), "blind below %d m AGL shaded" % int(coverage_agl),
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.8, 0.9, 1))
+
+
 func _draw_law() -> void:
+	if coverage_agl > 0:
+		_draw_coverage()
 	for r in snap.get("radars", []):
 		_circle(r.x, r.y, r.range, Color(1, 0.25, 0.25, 0.6) if r.active else Color(0.4, 0.2, 0.2, 0.4))
+		if r.active and r.has("beam"):
+			# the rotating beam, with a fading wake behind it like a PPI scope
+			var a := deg_to_rad(float(r.beam))
+			for k in 6:
+				var ak := a - deg_to_rad(4.0 * k)
+				draw_line(w2m(r.x, r.y), w2m(r.x + sin(ak) * r.range, r.y + cos(ak) * r.range),
+					Color(0.4, 1, 0.5, 0.5 - 0.08 * k), 2.0 if k == 0 else 1.0)
 	for tip in snap.get("tips", []):
 		_circle(tip.x, tip.y, tip.r, Color(1, 0.8, 0.2, 0.8), 2.0)
 		_text(tip.x, tip.y, str(tip.text).substr(0, 28), Color(1, 0.85, 0.3))
 	for t in snap.get("tracks", []):
 		var c := w2m(t.x, t.y)
-		var col := Color(1, 0.3, 0.3) if t.age < 3 else Color(0.6, 0.3, 0.3)
-		draw_rect(Rect2(c - Vector2(6, 6), Vector2(12, 12)), col, false, 2.0)
+		var stale: bool = t.age >= 6
+		var col := Color(1, 0.3, 0.3) if t.age < 6 else Color(0.6, 0.3, 0.3)
+		var trail: Array = t.get("trail", [])
+		for k in trail.size():
+			draw_circle(w2m(trail[k][0], trail[k][1]), 2.0, Color(col.r, col.g, col.b, 0.15 + 0.5 * k / maxf(1.0, trail.size())))
+		if stale:  # coasting: dead-reckoned, drawn open
+			draw_arc(c, 7, 0, TAU, 12, col, 1.5)
+		else:
+			draw_rect(Rect2(c - Vector2(6, 6), Vector2(12, 12)), col, false, 2.0)
 		draw_line(c, w2m(t.x + t.vx * 60, t.y + t.vy * 60), col, 1.5)
 		var nm: String = t.squawk if t.squawk else "TRK %s" % t.id
-		_text(t.x, t.y, "%s %s %.0fs" % [nm, t.source, t.age], Color(1, 0.5, 0.5))
+		var mode := ""
+		if t.has("code"):
+			# Mode A code and Mode C altitude in hundreds of feet, as a real data block shows them
+			mode = (" %s A%03d" % [t.code, int(float(t.alt) / 0.3048 / 100)]) if t.get("alt") != null else " no alt"
+		var emergency: bool = t.get("code") in ["7500", "7600", "7700"]
+		_text(t.x, t.y, "%s%s %s %.0fs" % [nm, mode, t.source, t.age], Color(1, 0.2, 0.9) if emergency else Color(1, 0.5, 0.5))
 	for b in snap.get("boats", []):
 		_arrow(b.x, b.y, b.heading, Color(1, 0.6, 0.2), 9)
 		_text(b.x, b.y, "go-fast %s" % b.state, Color(1, 0.7, 0.3))

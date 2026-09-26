@@ -271,7 +271,9 @@ func _flight(st: FlightModel.FlightState, c: FlightModel.Controls, lo: Loadout) 
 
 
 func _chip_row(st: FlightModel.FlightState, c: FlightModel.Controls) -> void:
-	chips["xpdr"].set_state(("XPDR " + s.squawk) if s.transponder else "XPDR OFF", UIStyle.GREEN if s.transponder else UIStyle.AMBER, true)
+	var emerg: bool = s.squawk_code in ["7500", "7600", "7700"]
+	chips["xpdr"].set_state(("XPDR %s %s" % [s.squawk, s.squawk_code]) if s.transponder else "XPDR OFF",
+		UIStyle.RED if emerg and s.transponder else (UIStyle.GREEN if s.transponder else UIStyle.AMBER), true)
 	chips["ap"].set_state("AP", UIStyle.CYAN, s.autopilot.engaged)
 	var who: String = {"human": "CREW: CO-PILOT", "ai": "CREW: ROSA"}.get(s.copilot, "SOLO")
 	chips["crew"].set_state(who, UIStyle.CYAN, Py.truthy(s.copilot))
@@ -281,7 +283,7 @@ func _chip_row(st: FlightModel.FlightState, c: FlightModel.Controls) -> void:
 	chips["pump"].set_state("PUMP", UIStyle.CYAN, true)
 	chips["radar"].visible = s.gear.has("detector")
 	var det: String = s.police.detector() if s.gear.has("detector") else ""
-	chips["radar"].set_state({"LOCK": "RADAR LOCK", "PAINT": "RADAR PAINT"}.get(det, "RADAR CLEAR"),
+	chips["radar"].set_state({"LOCK": "RADAR LOCK", "PAINT": "RADAR PAINT"}.get(det, "RADAR CLEAR") + _painter_text(st),
 		UIStyle.RED if det == "LOCK" else (UIStyle.AMBER if det == "PAINT" else UIStyle.GREEN), det != "")
 	chips["wx"].visible = not s.weather.is_empty()
 	if not s.weather.is_empty():
@@ -291,6 +293,20 @@ func _chip_row(st: FlightModel.FlightState, c: FlightModel.Controls) -> void:
 	chips["pulse"].visible = pulse > 0.0
 	chips["pulse"].set_state("PULSE %.0f%s" % [pulse, " SHAKING" if pulse > 131 else ""], UIStyle.RED, true)
 	chips["cam"].set_state("%s%s" % ["YOKE:MOUSE  " if mouse_yoke else "", cam_mode.to_upper()], UIStyle.CAPTION, false)
+
+
+## The strongest painter as "HAR ↗": which site, and which way it is from the nose.
+func _painter_text(st: FlightModel.FlightState) -> String:
+	var ps: Array = s.police.painters() if s.gear.has("detector") else []
+	if ps.is_empty():
+		return ""
+	var p: Dictionary = ps[0]
+	for q in ps:
+		if q.locked and not p.locked:
+			p = q
+	var arrows := ["\u2191", "\u2197", "\u2192", "\u2198", "\u2193", "\u2199", "\u2190", "\u2196"]
+	var rel := fposmod(float(p.bearing) - st.heading + 22.5, 360.0)
+	return "  %s %s%s" % [p.code, arrows[int(rel / 45.0) % 8], " +%d" % (ps.size() - 1) if ps.size() > 1 else ""]
 
 
 func _wanted() -> void:

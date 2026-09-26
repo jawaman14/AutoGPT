@@ -87,8 +87,9 @@ static func _runner(sess: Session, role: String) -> Dictionary:
 			"flaps": _r(sess.fm.controls.flaps, 2),
 			"ferry_fuel": _r(sess.loadout.ferry_fuel_lb()), "endurance_h": _r(he[0], 2), "range_km": _r(he[1]),
 			"phase": sess.phase, "location": sess.location, "parked": sess.parked, "on_ground": s.on_ground,
-			"transponder": sess.transponder, "squawk": sess.squawk, "autopilot": sess.autopilot.engaged,
+			"transponder": sess.transponder, "squawk": sess.squawk, "code": sess.squawk_code, "autopilot": sess.autopilot.engaged,
 			"detector": sess.police.detector() if sess.gear.has("detector") else null,
+			"painters": sess.police.painters() if sess.gear.has("detector") else [],
 			"pumping": sess.pumping, "kick_queue": sess.kick_queue, "auto_kick": sess.auto_kick,
 			"copilot": sess.copilot, "wanted": sess.police.wanted, "suspicion": _r(sess.police.suspicion),
 			"outcome": sess.last_outcome if sess.phase in ["crashed", "busted"] else "",
@@ -131,6 +132,16 @@ static func _runner(sess: Session, role: String) -> Dictionary:
 				if u.faction() == "police" and u.state != "crashed" and PyMath.hypot(u.x - af.x, u.y - af.y) < 5000:
 					intel.append({"unit": u.id, "x": _r(u.x), "y": _r(u.y), "age": 0.0, "source": "eyes@" + sp.code})
 	return out
+
+
+static func _track(ps: PoliceSystem, t: SensorNet.Track, now: float) -> Dictionary:
+	var d := {"id": ps.alias(t.target_id), "x": _r(t.x), "y": _r(t.y), "vx": _r(t.vx), "vy": _r(t.vy),
+		"age": _r(t.age(now)), "source": t.source, "squawk": t.squawk}
+	if SensorNet.REALISM:
+		d["code"] = t.code
+		d["alt"] = _r(t.alt) if t.alt != null else null
+		d["trail"] = t.trail.map(func(p): return [_r(p[0]), _r(p[1])])
+	return d
 
 
 static func _loadout(sess: Session) -> Dictionary:
@@ -199,8 +210,7 @@ static func _law(sess: Session) -> Dictionary:
 	var feats := ps.features.keys()
 	feats.sort()
 	return {
-		"tracks": ps.sensors.tracks.values().map(func(t): return {"id": ps.alias(t.target_id), "x": _r(t.x), "y": _r(t.y),
-			"vx": _r(t.vx), "vy": _r(t.vy), "age": _r(t.age(now)), "source": t.source, "squawk": t.squawk}),
+		"tracks": ps.sensors.tracks.values().map(func(t): return _track(ps, t, now)),
 		"cases": ps.cases.values().filter(func(c): return c.suspicion > 0 or c.wanted or c.tipped).map(
 			func(c): return {"id": ps.alias(c.target_id), "suspicion": _r(c.suspicion), "wanted": c.wanted, "tipped": c.tipped}),
 		"units": law_units,
@@ -212,7 +222,7 @@ static func _law(sess: Session) -> Dictionary:
 		"encrypted": sess.radio.encrypted,
 		"aerostat": aerostat,
 		"radars": ps.sensors.sites.map(func(s): return {"code": s.code, "x": _r(s.x), "y": _r(s.y), "range": _r(s.range_m),
-			"active": s.active}),
+			"active": s.active, "kind": s.kind, "beam": _r(s.beam(now), 1), "period": s.period_s}),
 		"score": ps.score.duplicate(),
 		"runner_score": sess.runner_score.duplicate(),
 		"messages": sess.law_log.slice(-12).map(func(m): return m[1]),

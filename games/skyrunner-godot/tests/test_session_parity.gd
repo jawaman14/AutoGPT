@@ -11,6 +11,11 @@ const TOL := 1e-9
 func before_each() -> void:
 	if ref.is_empty():
 		ref = JSON.parse_string(FileAccess.get_file_as_string("res://tests/fixtures/session_ref.json"))
+	SensorNet.REALISM = false  # replaying Python's radar (the Godot one: tests/test_radar.gd)
+
+
+func after_each() -> void:
+	SensorNet.REALISM = true
 
 
 func _same(got, want, what: String) -> void:

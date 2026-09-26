@@ -107,6 +107,7 @@ var intel := {}  ## unit -> [t, x, y, source]
 var spotters: Array = []
 var transponder := true
 var squawk := ""
+var squawk_code := "1200"  ## Mode A: 1200 VFR; 7500 hijack, 7600 radio failure, 7700 emergency
 var kick_queue := 0
 var kick_t := 0.0
 var kicker = null
@@ -349,6 +350,7 @@ func set_weather(w: Dictionary) -> void:
 	weather = {"sky": sky, "wind_kt": int(w.get("wind_kt", (wr[0] + wr[1]) / 2)), "wind_dir": int(w.get("wind_dir", 250)),
 		"moon": float(w.get("moon", 0.5))}
 	police.visibility = HQ.SKIES[sky][2] * (0.8 + 0.4 * weather["moon"])
+	police.sensors.weather = {"sky": sky, "wind_kt": float(weather["wind_kt"])}  # sea and rain clutter
 	weather_rev += 1
 	_apply_wind()
 
@@ -474,10 +476,22 @@ func _cmd_spotter_move(role: String, a: Dictionary):
 	return null
 
 
+## Dial a Mode A code: four octal digits. 1200 is plain VFR; 7500/7600/7700 are
+## the emergency codes, and Center reacts to them (police.gd _classify).
+func _cmd_squawk(role: String, a: Dictionary):
+	var code := str(a.get("code", "")).strip_edges()
+	if code.length() != 4 or not code.is_valid_int() or code.contains("8") or code.contains("9"):
+		return "Bad arguments for squawk: four octal digits, 0000-7777"
+	squawk_code = code
+	say("Squawking %s%s" % [code, {"7500": " (hijack)", "7600": " (radio failure)", "7700": " (emergency)"}.get(code, "")])
+	return null
+
+
 func _cmd_transponder(role: String, a: Dictionary):
 	var on = a.get("on")
 	transponder = (not transponder) if on == null else Py.truthy(on)
-	say("Transponder %s" % [("ON, squawking " + squawk) if transponder else "OFF"])
+	var on_text := ("ON, %s squawking %s" % [squawk, squawk_code]) if SensorNet.REALISM else "ON, squawking " + squawk
+	say("Transponder %s" % [on_text if transponder else "OFF"])
 	return null
 
 
@@ -1120,7 +1134,10 @@ func runner_signature() -> SensorNet.Signature:
 	if s == null or not runner_active() or phase != "flying":
 		return null
 	var agl := s.alt - world.ground(s.x, s.y) - fm.mass.gear_height_ft * FT
-	return SensorNet.Signature.new("runner", s.x, s.y, s.alt, agl, s.vx, s.vy, "air", transponder, squawk)
+	var sig := SensorNet.Signature.new("runner", s.x, s.y, s.alt, agl, s.vx, s.vy, "air", transponder, squawk)
+	sig.code = squawk_code
+	sig.rcs = float(SensorNet.RCS.get(spec.key, 1.0))
+	return sig
 
 
 func _update_world(dt: float) -> void:
