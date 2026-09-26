@@ -1,22 +1,61 @@
 class_name UIStyle
 extends RefCounted
 ## Shared colours, fonts and widget helpers for the HUD, menus and stations.
+##
+## The look is the 1980s coast after dark: hot pink and electric cyan on deep
+## violet, headlines in a brush script with a neon glow (Kaushan Script and
+## Monoton, both SIL Open Font Licence, in assets/fonts).
 
 const WHITE := Color(1, 1, 1)
+const PINK := Color(1.0, 0.3, 0.68)
+const NEON_CYAN := Color(0.3, 0.95, 1.0)
+const SUNSET := Color(1.0, 0.55, 0.25)
 const AMBER := Color(1, 0.75, 0.2)
 const RED := Color(1, 0.25, 0.2)
 const GREEN := Color(0.4, 1, 0.45)
 const CYAN := Color(0.5, 0.9, 1)
 const DIM := Color(0.8, 0.8, 0.8)
-const PANEL := Color(0.02, 0.03, 0.05, 0.88)
-const SURFACE := Color(0.09, 0.10, 0.13)  ## raised surfaces: buttons, table headers
-const SURFACE_HI := Color(0.15, 0.17, 0.22)
-const LINE := Color(1, 1, 1, 0.09)
-const ACCENT := AMBER
+const PANEL := Color(0.06, 0.025, 0.09, 0.9)  ## deep violet
+const SURFACE := Color(0.13, 0.07, 0.17)  ## raised surfaces: buttons, table headers
+const SURFACE_HI := Color(0.22, 0.11, 0.28)
+const LINE := Color(1.0, 0.45, 0.8, 0.14)
+const ACCENT := PINK
 const CAPTION := Color(0.62, 0.66, 0.72)
 
 static var _mono: SystemFont
+static var _script: Font
+static var _neon: Font
 static var _theme: Theme
+
+
+## The headline face: a brush script (Kaushan Script, OFL).
+static func script() -> Font:
+	if _script == null:
+		_script = load("res://assets/fonts/KaushanScript.woff2") if ResourceLoader.exists("res://assets/fonts/KaushanScript.woff2") else ThemeDB.fallback_font
+	return _script
+
+
+## The neon-tube display face (Monoton, OFL), for the big banners.
+static func neon() -> Font:
+	if _neon == null:
+		_neon = load("res://assets/fonts/Monoton.woff2") if ResourceLoader.exists("res://assets/fonts/Monoton.woff2") else ThemeDB.fallback_font
+	return _neon
+
+
+## A screen title: brush script in hot pink with a neon glow.
+static func title(text := "", size := 30, color := PINK) -> Label:
+	var l := label(text, size, color, script())
+	glow(l, color)
+	return l
+
+
+## Make a label glow like a neon sign (a soft coloured outline and shadow).
+static func glow(l: Label, color: Color) -> void:
+	l.add_theme_constant_override("outline_size", maxi(4, int(l.get_theme_font_size("font_size") / 6)))
+	l.add_theme_color_override("font_outline_color", Color(color.r, color.g, color.b, 0.35))
+	l.add_theme_color_override("font_shadow_color", Color(color.r * 0.6, color.g * 0.2, color.b * 0.7, 0.9))
+	l.add_theme_constant_override("shadow_offset_x", 0)
+	l.add_theme_constant_override("shadow_offset_y", 2)
 
 
 static func mono() -> Font:

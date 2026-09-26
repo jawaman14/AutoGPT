@@ -39,6 +39,11 @@ var papi_dots: Array = []
 var minimap: Minimap
 
 
+var banner: Label
+var banner_sub: Label
+var _banner_until := 0.0
+
+
 func setup(sess: Session) -> Hud:
 	s = sess
 	name = "Hud"
@@ -59,6 +64,15 @@ func setup(sess: Session) -> Hud:
 	add_child(intel)
 	warn = _centered(UIStyle.label("", 30, UIStyle.RED), 0.22)
 	center = _centered(UIStyle.label("", 24, UIStyle.AMBER), 0.42)
+	banner = _centered(UIStyle.title("", 72), 0.3)
+	banner_sub = _centered(UIStyle.label("", 30, UIStyle.WHITE, UIStyle.script()), 0.41)
+	UIStyle.glow(banner_sub, UIStyle.NEON_CYAN)
+	s.bus.subscribe("job_delivered", func(ev):
+		if ev.data.get("hot", false) or int(ev.data.get("pay", 0)) > 0:
+			show_banner("Run complete", "+$%s" % Py.money(int(ev.data.get("pay", 0))) if int(ev.data.get("pay", 0)) > 0 else "into the armoury", UIStyle.PINK))
+	s.bus.subscribe("busted", func(_ev): show_banner("Busted", "", UIStyle.RED))
+	s.bus.subscribe("bales_delivered", func(ev): show_banner("Run complete", "%d bales made the cove" % int(ev.data.get("count", 0)), UIStyle.PINK))
+	s.bus.subscribe("stash_raided", func(_ev): show_banner("Stash burned", "", UIStyle.SUNSET))
 	papi_label = _centered(UIStyle.label("", 14), 0.84)
 	var papi_row := HBoxContainer.new()
 	papi_row.add_theme_constant_override("separation", 8)
@@ -210,7 +224,21 @@ func _build_flight() -> void:
 	add_child(v)
 
 
+## A big neon banner across the screen for a few seconds ("Run complete", "Busted").
+func show_banner(text: String, sub := "", color := UIStyle.PINK) -> void:
+	banner.text = text
+	banner.add_theme_color_override("font_color", color)
+	UIStyle.glow(banner, color)
+	banner_sub.text = sub
+	_banner_until = Time.get_ticks_msec() / 1000.0 + 3.5
+
+
 func refresh() -> void:
+	var left := _banner_until - Time.get_ticks_msec() / 1000.0
+	banner.visible = left > 0.0
+	banner_sub.visible = left > 0.0
+	banner.modulate.a = clampf(left, 0.0, 1.0)
+	banner_sub.modulate.a = clampf(left, 0.0, 1.0)
 	var st: FlightModel.FlightState = s.state
 	if st == null:
 		return

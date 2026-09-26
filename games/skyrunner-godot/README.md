@@ -124,6 +124,18 @@ Beyond the prototype:
   - MultiMesh forests, directional shadows, glow, and SSAO and volumetric fog on Forward+
   - dust on unpaved take-off rolls, boat wakes and prop discs
 
+- **The 1980s-coast look.** Pastel art-deco blocks (flamingo, mint, lilac, peach) with white,
+  turquoise or pink trim along the roofline, "speed line" bands, and neon strips that glow pink and
+  cyan after dark; palm-lined boulevards; a sky that goes orange, magenta and violet at sunset and
+  violet at night, with the city's glow on the haze; a saturated colour grade. The UI is hot pink
+  and electric cyan on deep violet with brush-script neon headlines (Kaushan Script and Monoton,
+  both under the SIL Open Font Licence, in `assets/fonts/`), and a big banner when a run pays off
+  or you're busted. Original art throughout: the genre's look, nobody's assets.
+
+| **Dusk on the boulevard** | **Sunset over San Telmo** | **The city at night** |
+|---|---|---|
+| ![street](docs/img/vice-street.png) | ![dusk](docs/img/vice-dusk.png) | ![night](docs/img/vice-night.png) |
+
 | Mid-afternoon on the runway (medium) | Dusk, climbing out near Eagle's Nest (high) | Night: edge lights on |
 |---|---|---|
 | ![runway](docs/img/runway-medium.png) | ![dusk](docs/img/dusk-high.png) | ![night](docs/img/night-runway.png) |

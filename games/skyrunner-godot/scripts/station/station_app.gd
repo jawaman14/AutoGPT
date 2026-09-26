@@ -92,7 +92,7 @@ func setup(link_, role_: String, world_: World = null, vertical := false) -> Sta
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 12)
 	body.add_child(head)
-	title = UIStyle.label("", 22, UIStyle.AMBER)
+	title = UIStyle.title("", 28)
 	head.add_child(title)
 	subtitle = UIStyle.label("", 14, UIStyle.CAPTION)
 	subtitle.size_flags_horizontal = Control.SIZE_EXPAND_FILL

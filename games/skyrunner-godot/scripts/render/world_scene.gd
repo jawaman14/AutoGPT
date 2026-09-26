@@ -8,8 +8,8 @@ extends Node3D
 
 const BOUNCE := Color(0.56, 0.52, 0.45)  ## sunlit ground's bounce light
 const DAY_SKY := Color(0.55, 0.72, 0.9)
-const NIGHT_SKY := Color(0.02, 0.03, 0.07)
-const DUSK_SKY := Color(0.85, 0.5, 0.35)
+const NIGHT_SKY := Color(0.04, 0.02, 0.08)  ## violet: the fog and the low preset's sky at night
+const DUSK_SKY := Color(0.95, 0.45, 0.5)  ## the pink of a coastal sunset
 
 var quality: Quality
 var world: World
@@ -94,9 +94,13 @@ func _build_environment() -> void:
 	env.fog_aerial_perspective = 0.5 if quality.sky else 0.0
 	if quality.glow:
 		env.glow_enabled = true
-		env.glow_intensity = 0.6
-		env.glow_bloom = 0.05
-		env.glow_hdr_threshold = 1.2
+		env.glow_intensity = 0.75  # neon wants to bleed a little
+		env.glow_bloom = 0.08
+		env.glow_hdr_threshold = 1.1
+	# the grade: a touch more colour and punch (the 1980s-coast look)
+	env.adjustment_enabled = true
+	env.adjustment_saturation = 1.15
+	env.adjustment_contrast = 1.05
 	if quality.ssao:  # Forward+ only; ignored by the compatibility renderer
 		env.ssao_enabled = true
 		env.ssao_radius = 2.0

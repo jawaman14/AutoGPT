@@ -45,7 +45,7 @@ func _ready() -> void:
 	v.custom_minimum_size = Vector2(660, 0)
 	v.add_theme_constant_override("separation", 10)
 	panel.add_child(v)
-	v.add_child(UIStyle.label("SKYRUNNER", 44, UIStyle.AMBER))
+	v.add_child(UIStyle.title("Skyrunner", 64))
 	v.add_child(UIStyle.label("Bush flying, weight & balance, and the long arm of the law.", 16, UIStyle.DIM))
 	v.add_child(UIStyle.caption("Host a game"))
 	var g := GridContainer.new()

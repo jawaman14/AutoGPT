@@ -41,7 +41,7 @@ func setup(link_: NetClient) -> SeatPicker:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 10)
 	m.add_child(v)
-	v.add_child(UIStyle.label("TAKE A SEAT", 26, UIStyle.AMBER))
+	v.add_child(UIStyle.title("Take a seat", 36))
 	v.add_child(UIStyle.label("Every role is played by the AI until someone takes it. Leave, and the AI takes it back.", 15, UIStyle.CAPTION))
 	table = DataTable.new().setup([{"title": "Role", "min": 110}, {"title": "Side", "min": 80}, {"title": "Seat", "min": 160},
 		{"title": "What you do", "expand": true, "ratio": 3}])

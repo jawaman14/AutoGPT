@@ -35,7 +35,7 @@ func setup(sess: Session) -> GameMenu:
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 14)
 	v.add_child(head)
-	title = UIStyle.label("", 24, UIStyle.AMBER)
+	title = UIStyle.title("", 30)
 	head.add_child(title)
 	subtitle = UIStyle.label("", 15, UIStyle.CAPTION)
 	subtitle.size_flags_horizontal = Control.SIZE_EXPAND_FILL

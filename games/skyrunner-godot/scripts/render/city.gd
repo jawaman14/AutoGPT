@@ -6,8 +6,9 @@ extends RefCounted
 ## stash houses. The buildings drawn here are the obstacles in the physics
 ## tree list (MapCity.post), so what you see is what you hit.
 
-const PALETTE := [Color(0.86, 0.79, 0.63), Color(0.80, 0.60, 0.52), Color(0.63, 0.73, 0.76), Color(0.87, 0.84, 0.77),
-	Color(0.77, 0.69, 0.50), Color(0.70, 0.78, 0.62), Color(0.90, 0.72, 0.55)]
+## Pastel deco: flamingo, mint, lilac, peach, cream, sea-foam, lemon (the shader adds trim and neon).
+const PALETTE := [Color(0.96, 0.7, 0.76), Color(0.68, 0.9, 0.8), Color(0.8, 0.72, 0.93), Color(0.99, 0.8, 0.64),
+	Color(0.97, 0.94, 0.88), Color(0.6, 0.86, 0.88), Color(0.97, 0.91, 0.66), Color(0.93, 0.87, 0.8)]
 
 static var _mat: ShaderMaterial
 static var _lamp_mat: StandardMaterial3D
@@ -40,6 +41,7 @@ static func build(world: World, q: Quality) -> Node3D:
 			root.add_child(_crane(b))
 	root.add_child(_roads(world, l.roads))
 	root.add_child(_lamps(world, l.roads))
+	root.add_child(_palms(world, l.roads, q))
 	for st in l.stashes:
 		root.add_child(stash_house(world, st))
 	return root
@@ -180,6 +182,52 @@ static func _lamps(world: World, roads: Array) -> MultiMeshInstance3D:
 	mmi.material_override = _lamp_mat
 	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mmi.visibility_range_end = 6000.0
+	return mmi
+
+
+## Palms down both sides of the town's streets and along the waterfront, every 28 m.
+static func _palms(world: World, roads: Array, q: Quality) -> MultiMeshInstance3D:
+	var spots := []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 31
+	for r in roads:
+		for k in r.size() - 1:
+			var a := Vector2(r[k][0], r[k][1])
+			var b := Vector2(r[k + 1][0], r[k + 1][1])
+			var dir := (b - a).normalized()
+			var side := Vector2(-dir.y, dir.x)
+			var d := 14.0
+			while d < a.distance_to(b):
+				for sgn in [-1.0, 1.0]:
+					var p: Vector2 = a + dir * d + side * sgn * 6.2  # on the kerb (the buildings keep 7 m off the centreline)
+					# the cells beside the carriageway are ROAD: judge the neighbourhood a little further out
+					var nb: Vector2 = p + side * sgn * 18.0
+					var cls := MapCity.at(world.map.land_use, nb.x, nb.y)
+					if cls in [MapCity.URBAN, MapCity.PORT, MapCity.BEACH] and world.ground(p.x, p.y) > 0.5:
+						spots.append(Vector3(p.x, world.ground(p.x, p.y), -p.y))
+				d += 28.0
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = Vegetation._palm(5 if q.name == "low" else 6)
+	mm.instance_count = spots.size()
+	for i in spots.size():
+		var s := rng.randf_range(9.0, 13.0)
+		var bs := Basis.from_euler(Vector3(rng.randf_range(-0.05, 0.05), rng.randf() * TAU, rng.randf_range(-0.05, 0.05))).scaled(Vector3(s, s, s))
+		mm.set_instance_transform(i, Transform3D(bs, spots[i]))
+		mm.set_instance_color(i, Color(1, 1, 1))
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = "street-palms"
+	mmi.multimesh = mm
+	# the palm mesh is built for the (double-sided) foliage shader: draw both faces
+	var pm := StandardMaterial3D.new()
+	pm.vertex_color_use_as_albedo = true
+	pm.roughness = 0.85
+	pm.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mmi.material_override = pm
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if q.shadows else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# no visibility range: it's measured to the batch's AABB centre, and the
+	# palms line roads across the whole island (it culled every one of them)
 	return mmi
 
 
