@@ -140,12 +140,16 @@ Beyond the prototype:
 - **The Family.** A (fictional) Cosa Nostra family whose help might be a trap. Every offer (a loan,
   laundering, the docks' union, a gun fence, a crew of soldiers, a lawyer) comes with our people's
   read on it, right about four times in five. It levies a street tax when you're rich, sells to
-  Los Cuervos too, and a RICO case with a rat in it turns it against you (section 14).
+  Los Cuervos too, and a RICO case with a rat in it turns it against you (section 14). Sit down
+  with Sal Moretti (Shift+F in the cockpit, C at the desks): hear the offer, your man's read on it,
+  press him for a second read, take it or leave it; pay or stall the tribute.
 - **Isla Soberana.** An island republic over the southern horizon (SOB). Product is cheap there;
   get it home by air, as mules on the airliner, or in a container on the freighter. Customs' odds
   depend on both sides' perks: bought baggage handlers, forged papers and false bottoms against
   dogs, profiling, X-ray and crackdowns. The task force can't follow past the line; the General
-  sells passage past his MiGs until a purge closes the island (section 15).
+  sells passage past his MiGs until a purge closes the island (section 15). His aide, Captain
+  Ibarra, meets you on the ramp when you land, or on the radio (Shift+G / G): passage, the
+  island's news, mules and containers with customs' odds in the answers.
 - **One UI, redesigned.** A single theme across every screen; real tables with titled columns (the job
   board colours the landing roll against the strip length); key caps in every footer that you can
   also click; readouts as tiles; a HUD laid out by what you need when (status chips, wanted stars,
@@ -192,6 +196,8 @@ Beyond the prototype:
 | ![lieutenant](docs/img/ui-lieutenant.png) | ![seats](docs/img/ui-seats.png) | ![docks](docs/img/ground-docks.png) |
 | **The cast and the cars (Kenney CC0)** | **On foot with a rifle** | **Isla Soberana, over the horizon** |
 | ![cast](docs/img/models-cast.png) | ![rifle](docs/img/foot-rifle.png) | ![island](docs/img/island-approach.png) |
+| **A sit-down with the Family** | **The General's aide on the ramp** | |
+| ![talk](docs/img/talk.png) | ![aide](docs/img/talk_island.png) | |
 
 | Mid-afternoon on the runway (medium) | Dusk, climbing out near Eagle's Nest (high) | Night: edge lights on |
 |---|---|---|
@@ -299,7 +305,9 @@ LGPL allows that as long as users can relink against a modified JSBSim:
 
 Godot and godot-cpp are MIT.
 
-The performance overlay (F6) is Hugo Locurcio's Debug Menu add-on, MIT, in `addons/debug_menu/`;
+The conversations run on Nathan Hoad's Dialogue Manager (MIT; its runtime in
+`addons/dialogue_manager/`, the scripts in `dialogue/`). The performance overlay (F6) is Hugo
+Locurcio's Debug Menu add-on, MIT, in `addons/debug_menu/`;
 [docs/LIBRARIES.md](docs/LIBRARIES.md) surveys the other open-source Godot libraries considered.
 
 The 3D models in `assets/models/kenney/` are Kenney's (www.kenney.nl), CC0 1.0 (public domain);

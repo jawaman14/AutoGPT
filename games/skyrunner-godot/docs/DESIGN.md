@@ -309,6 +309,13 @@ loan-sharking book. The design rule is that **every helping hand might be a trap
   Cuervos too, puts a sergeant on the payroll who leaks raids, and moves in on a weak organisation's
   stash.
 
+**Talking to them.** The offers can be taken with a key, or at a sit-down with Sal Moretti
+(`dialogue/family.dialogue`, run by Dialogue Manager): he pitches the offer in his own words, your man
+gives his read, and you can take it, turn it down, or **press him** - a second read, an independent
+roll just as likely right, for two points of respect. Two agreeing reads are right about 94% of the
+time; two that disagree are a coin toss. That makes asking a real decision. The tribute can be paid,
+refused or **stalled** (five more minutes, once, for five points of respect).
+
 **The Company's double game** (in `agency.gd`, on its own RNG stream):
 
 - The limited hangout: at high exposure it may give our names to the task force itself.
@@ -385,3 +392,8 @@ their own government tried them.
   raise prices; a glut drops them; a boatlift swamps the Coast Guard; the General's birthday. A
   purge (random when relations are low, or the 1989 headline) closes the island: no loads, no
   passage, and soldiers on the ramp for whoever lands.
+- **The General's aide.** Captain Ibarra (`dialogue/general.dialogue`) meets you on the ramp when
+  you land and answers the island frequency (Shift+G, G at the lieutenant's desk). He sells passage,
+  gives the island's news (and a warning when the General's friends are in danger - relations
+  under 40 are where purges happen), and takes orders for mules and containers, with customs' current
+  odds in the answer text. During a purge a stranger answers.

@@ -1,0 +1,79 @@
+# Isla Soberana: the General's aide, Captain Ibarra, on the ramp at SOB or on
+# a scratchy HF radio. (Fiction, inspired by the Ochoa affair; no real person.)
+#
+# Reads and acts through Talk.State: {{relations}}, {{status}}, {{passage_cost}},
+# {{mule_pct}} / {{ship_pct}} (customs' odds right now), buy_passage(), mules(),
+# container().
+
+~ start
+if not island
+	Radio: Nothing but static on the island frequency.
+	=> END
+if status == "purge"
+	=> purge
+=> greet
+
+~ landing
+if status == "purge"
+	=> purge
+{{aide}}: [[Welcome to the Republic.|Bienvenido. Your papers are in order - they are always in order, for friends.|You're late. The General doesn't like late.]]
+=> talk
+
+~ greet
+if relations >= 70
+	{{aide}}: [[My friend! The General asks after you.|Ah, the General's favourite pilot.]]
+elif relations < 35
+	{{aide}}: (cold) The General remembers the defectors. What do you want?
+else
+	{{aide}}: [[Ibarra here. Speak.|Go ahead. This line is... mostly secure.]]
+=> talk
+
+~ talk
+- Buy safe passage. ({{money_s(passage_cost)}}) [if passage_min == 0]
+	do buy_passage()
+	if result != ""
+		{{aide}}: {{result}}
+	else
+		{{aide}}: The MiGs will be busy elsewhere. For a while.
+	=> talk
+- "What's the word on the island?"
+	=> word
+- Send four mules on the airliner. (each {{mule_pct}}% likely caught)
+	do mules()
+	if result != ""
+		{{aide}}: {{result}}
+	else
+		{{aide}}: Four good girls, very calm. They leave on the evening flight.
+	=> talk
+- Put a container on the freighter. ({{ship_pct}}% likely found)
+	do container()
+	if result != ""
+		{{aide}}: {{result}}
+	else
+		{{aide}}: Frozen shrimp. Very cold, very boring. Nobody likes to open it.
+	=> talk
+- That's all.
+	{{aide}}: [[Viva la Revolucion.|Go carefully. The Americans are everywhere.|Until next time.]]
+	=> END
+
+~ word
+if status == "hurricane"
+	{{aide}}: A hurricane. The freighters stay in port and nothing is for sale until it passes.
+elif status == "shortage"
+	{{aide}}: Shortages. Fuel, rice, everything. Prices are up; the soldiers are hungry.
+elif status == "glut"
+	{{aide}}: The Colombians came in heavy. Prices are down - buy now.
+elif status == "boatlift"
+	{{aide}}: The General is letting people leave. Boats everywhere. Your Coast Guard doesn't know where to look.
+else
+	{{aide}}: Quiet. The price is {{money_s(int(price))}} a pound.
+if relations < 40
+	{{aide}}: (lower) And a word of advice. There are people in Havana - in the capital - who think some of us have too many friends. Be careful whose friend you are.
+elif passage_min > 0
+	{{aide}}: Your passage is good for {{passage_min}} more minutes.
+=> talk
+
+~ purge
+{{aide}}: [[(a different voice) Captain Ibarra is no longer with the ministry.|(static, then a stranger) Ibarra has been arrested. So have his friends.]]
+Radio: [[The island is closed. Anyone who lands will be treated as part of the plot.|Stay away from Soberana until this blows over.]]
+=> END

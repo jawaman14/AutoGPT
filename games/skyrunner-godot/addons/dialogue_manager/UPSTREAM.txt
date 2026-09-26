@@ -1,0 +1,8 @@
+https://github.com/nathanhoad/godot_dialogue_manager (MIT, Nathan Hoad), v3.10.5 from the v3.x branch (the Godot 4.4 line), commit:
+96b32d46de29bc778f01d356052549d2a373e803
+Only the runtime is vendored (the manager, its processor, resources, compiler, utilities and
+translations); the editor plugin, its views, the example balloon and the C# bridge are left out.
+The game never enables the plugin: scripts/game/talk.gd instances the manager itself (it registers
+the "DialogueManager" engine singleton on its own) and compiles dialogue/*.dialogue with DMCompiler,
+so there is no autoload and no import step.
+Local patch: settings.gd names the editor's test scene by path instead of preloading it (not vendored).

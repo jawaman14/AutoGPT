@@ -42,11 +42,13 @@ Ground   J job board   L load planner & fuel   H hangar, gear, crew (LEFT/RIGHT:
 Crew     N transponder on/off   7 squawk code (1200 VFR / 7700 / 7600 / 7500)   U autopilot
          K kick a bale   O call the boat (SHIFT+O: the 1 s codeword - harder to DF)
          V ferry fuel pump   I push aircraft round (stopped)   ENTER continue   ESC close menu / quit
-Family   SHIFT+Y take the Morettis' newest offer   SHIFT+N turn it down   SHIFT+P pay their tribute
-         (read the hint that comes with an offer: it's right most of the time, not always)
+Family   SHIFT+F sit down with Sal Moretti: hear the offer, your man's read on it, press him for
+         another, take it or leave it; pay or stall the tribute (1-4 answer, ENTER go on, ESC leave)
+         SHIFT+Y / SHIFT+N take or turn down the newest offer without the talk, SHIFT+P pay the tribute
 Island   Isla Soberana is over the southern horizon (SOB): cheap loads, the General's MiGs, and the
-         task force can't follow you past the line. SHIFT+G buy passage   SHIFT+U four mules on
-         the airliner   SHIFT+I a container on the freighter (the desks show the odds)
+         task force can't follow you past the line. SHIFT+G the General's aide on the radio:
+         passage, the island's news, mules and containers with customs' odds. SHIFT+U four mules
+         SHIFT+I a container (quick orders). Land there and the aide meets you on the ramp.
 Radar    fly across a radar's beam or slow and the MTI loses you; low over rough sea or in rain the
          clutter hides you; the detector shows who's painting you and from where
 
@@ -282,10 +284,13 @@ func _unhandled_input(ev: InputEvent) -> void:
 					scene.set_hour(scene.hour + 3.0)
 			get_viewport().set_input_as_handled()
 			return
-		if ev.shift_pressed and k in [KEY_G, KEY_U, KEY_I] and s.island != null:
-			# Isla Soberana: Shift+G the General's passage, Shift+U four mules, Shift+I a container
-			var r: Array = s.command(Roles.PILOT, "buy_passage", {}) if k == KEY_G else s.command(Roles.PILOT, "island_ship",
-				{"method": "mules" if k == KEY_U else "ship", "amount": 4 if k == KEY_U else 500})
+		if ev.shift_pressed and k == KEY_F and s.family != null:
+			open_talk("family")  # a sit-down with the Family
+		elif ev.shift_pressed and k == KEY_G and s.island != null:
+			open_talk("general")  # the General's aide on the island frequency
+		elif ev.shift_pressed and k in [KEY_U, KEY_I] and s.island != null:
+			# Isla Soberana quick orders: Shift+U four mules, Shift+I a container
+			var r: Array = s.command(Roles.PILOT, "island_ship", {"method": "mules" if k == KEY_U else "ship", "amount": 4 if k == KEY_U else 500})
 			if not r[0]:
 				s.say(r[1])
 		elif ev.shift_pressed and k in [KEY_Y, KEY_N, KEY_P] and s.family != null:
@@ -345,6 +350,32 @@ func _unhandled_input(ev: InputEvent) -> void:
 
 
 var debug_menu: CanvasLayer = null
+var talk: TalkBalloon = null  ## a conversation on screen (the Family, the General's aide)
+var _offers_seen := {}
+var _was_on_island := false
+
+
+## Open a conversation (dialogue/<name>.dialogue) from the pilot's seat.
+func open_talk(name: String, title := "start") -> TalkBalloon:
+	if talk != null and is_instance_valid(talk):
+		return talk
+	talk = Talk.open(self, name, title, LocalLink.new(s, Roles.PILOT, false))
+	if talk != null:
+		talk.finished.connect(func(): talk = null)
+	return talk
+
+
+## Word that someone wants to talk, and the aide on the ramp when you land on the island.
+func _talk_cues() -> void:
+	if s.family != null:
+		for o in s.family.offers:
+			if not _offers_seen.has(o.id):
+				_offers_seen[o.id] = true
+				s.say("%s wants a word. SHIFT+F to sit down with him." % Talk.CAPO)
+	var on_island: bool = s.island != null and s.parked and s.location == Island.CODE
+	if on_island and not _was_on_island:
+		open_talk("general", "landing")
+	_was_on_island = on_island
 
 
 ## F6: the performance overlay (Calinou's Debug Menu, MIT, addons/debug_menu):
@@ -540,6 +571,8 @@ func _process(delta: float) -> void:
 		var bc = bot.step(dt) if bot != null and not on_foot else (s.remote_controls() if remote else null)
 		s.update(dt, inp, bc)
 		nerves.update(s, dt)
+		if _frame % 15 == 0:
+			_talk_cues()
 		if server != null:
 			server.publish(s)
 	if _weather_rev != s.weather_rev:

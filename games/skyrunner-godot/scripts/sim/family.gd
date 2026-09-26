@@ -91,6 +91,7 @@ var tribute_by := -1.0
 var taxed := false  ## the street tax has been asked for at least once
 var tribute_total := 0  ## all the tribute paid
 var _tax_next := 0.0
+var _stalled := false  ## the current tribute has had its extra five minutes
 var payroll_until := -1.0
 var knows := {}  ## stash id -> true: what the Family has learned about us
 var loans_taken := 0
@@ -265,6 +266,37 @@ func accept(id: String) -> String:
 	return ""
 
 
+## Press the capo on offer `id`: a second read (an independent roll, just as
+## likely right), at the cost of some respect. Once per offer. Returns "" or why not.
+func probe(id: String) -> String:
+	var o = get_offer(id)
+	if o == null:
+		return "No such offer."
+	if o.get("probe", "") != "":
+		return "You already pressed him on it."
+	var right := rng.random() < READ_ACCURACY
+	var reads: Array = (GOOD_READS if o.honest == right else BAD_READS)[o.kind]
+	var pick: String = reads[rng.randint(0, reads.size() - 1)]
+	if pick == o.read and reads.size() > 1:
+		pick = reads[(reads.find(pick) + 1) % reads.size()]
+	o["probe"] = pick
+	respect = maxf(0.0, respect - 2.0)
+	return ""
+
+
+## Ask for more time on the tribute: five more minutes, once, and they remember it.
+func stall() -> String:
+	if tribute_due <= 0:
+		return "Nobody's asking."
+	if _stalled:
+		return "They won't wait twice."
+	_stalled = true
+	tribute_by += 300.0
+	respect = maxf(0.0, respect - 5.0)
+	last = "Asked the Family for more time on the tribute"
+	return ""
+
+
 func decline(id: String) -> String:
 	var o = get_offer(id)
 	if o == null:
@@ -426,6 +458,7 @@ func update(dt: float) -> void:
 	# the street tax
 	if tribute_due <= 0 and sess.money >= TAX_AT and now >= _tax_next and (not taxed or rng.random() < 0.02 * step / 10.0):
 		taxed = true
+		_stalled = false
 		_tax_next = now + 2700.0  # at most every 45 min
 		tribute_due = int(sess.money * TAX_RATE / 1000) * 1000
 		tribute_by = now + TAX_DUE_S
@@ -571,5 +604,6 @@ func view(side: String) -> Dictionary:
 		"tribute_s": maxi(0, int(tribute_by - sess.time)) if tribute_due > 0 else 0,
 		"loan": {} if loan.is_empty() else {"owed": int(loan.owed) if loan.honest else int(loan.amount * 1.2), "due_s": maxi(0, int(float(loan.due) - sess.time))},
 		"docks_s": maxi(0, int(docks_until - sess.time)), "lawyer": lawyer != "",
+		"stalled": _stalled,
 		"offers": offers.map(func(o): return {"id": o.id, "kind": o.kind, "text": o.text, "read": o.read, "cost": o.cost,
-			"expires_s": int(o.expires - sess.time)})}
+			"amount": o.amount, "probe": o.get("probe", ""), "expires_s": int(o.expires - sess.time)})}

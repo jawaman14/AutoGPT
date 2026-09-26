@@ -2149,6 +2149,20 @@ func _cmd_family_decline(role: String, a: Dictionary):
 	return err if err != "" else null
 
 
+func _cmd_family_probe(role: String, a: Dictionary):
+	if family == null or family.gone:
+		return "No Family in this game."
+	var err := family.probe(str(a.get("id", "")))
+	return err if err != "" else null
+
+
+func _cmd_family_stall(role: String, a: Dictionary):
+	if family == null or family.gone:
+		return "No Family in this game."
+	var err := family.stall()
+	return err if err != "" else null
+
+
 func _cmd_pay_tribute(role: String, a: Dictionary):
 	if family == null or family.gone:
 		return "No Family in this game."

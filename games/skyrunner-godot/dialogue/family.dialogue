@@ -1,0 +1,84 @@
+# The Family: a sit-down with Sal Moretti, the Morettis' man on the coast.
+# (Fiction. Nobody here is a real person.)
+#
+# Reads and acts through Talk.State: {{offer_text}}, {{offer_read}} (what our
+# man noticed - right about four times in five), take(), refuse(), press()
+# (a second read, for a little respect), pay(), stall().
+
+~ start
+if not family or family_gone
+	=> gone
+if tribute > 0
+	=> tribute
+if has_offer
+	=> offer
+=> social
+
+~ gone
+Radio: [[The social club on Ybor Street is dark. The Morettis' bosses are in federal prison.|Nobody answers at the Morettis' club. The Commission trial took them all.]]
+=> END
+
+~ social
+{{capo}}: [[Sit, sit. Have an espresso.|My friend. You look tired. You're working too hard.|Come in. Close the door.]]
+if loan_owed > 0
+	{{capo}}: And don't forget, the shylock expects {{money_s(loan_owed)}}. On time. Always on time.
+if respect >= 70
+	{{capo}}: The old man speaks well of you. That's worth more than money.
+elif respect < 30
+	{{capo}}: People say you don't return calls. People say a lot of things.
+{{capo}}: Nothing on the table today. When there is, you'll hear.
+=> END
+
+~ offer
+{{capo}}: [[I have something for you.|Here's the thing.|A friend of ours has a proposition.]]
+if offer_kind == "loan"
+	{{capo}}: You're short. Everybody's short sometimes. Our man can help. {{offer_text}}.
+elif offer_kind == "laundry"
+	{{capo}}: All that cash under the mattress. It makes noise. The casino can make it quiet. {{offer_text}}.
+elif offer_kind == "docks"
+	{{capo}}: The union runs the port, and the union is ours. {{offer_text}}.
+elif offer_kind == "guns"
+	{{capo}}: A fellow came into some hardware. Army surplus, very clean. {{offer_text}}.
+elif offer_kind == "muscle"
+	{{capo}}: Los Cuervos are getting ideas. Some of our boys could stand around your place for a while. {{offer_text}}.
+elif offer_kind == "lawyer"
+	{{capo}}: Every businessman needs a good lawyer. Ours got an underboss off in '81. {{offer_text}}.
+=> choose
+
+~ choose
+Your man: (quietly) {{offer_read}}.
+if offer_probe != ""
+	Your man: And when you pushed him: {{offer_probe}}.
+- Take it. [if money >= offer_cost]
+	do take()
+	if result != ""
+		{{capo}}: {{result}}
+	else
+		{{capo}}: [[Good. We understand each other.|Salud. This is how friends do business.]]
+	=> END
+- "I can't cover it." [if money < offer_cost]
+	{{capo}}: Then come back when you can. The offer doesn't wait long.
+	=> END
+- Press him on it. [if offer_probe == ""]
+	do press()
+	{{capo}}: (a long look) [[You don't trust me?|Questions. Always questions with you people.|Fine. Ask.]]
+	=> choose
+- Not today, Sal.
+	do refuse()
+	{{capo}}: [[Suit yourself.|Your loss, my friend.|Some other time, then.]]
+	=> END
+
+~ tribute
+{{capo}}: You've done well. Everybody can see how well. The Family would like its piece: {{money_s(tribute)}}.
+{{capo}}: You have {{tribute_min}} minutes. It's a courtesy, the minutes.
+- Pay him. [if money >= tribute]
+	do pay()
+	{{capo}}: [[Good. Now we're friends again.|Salud. See how easy?]]
+	=> END
+- Ask for more time. [if not stalled]
+	do stall()
+	{{capo}}: Five minutes. Because I like you. Don't ask twice.
+	=> END
+- Tell him no.
+	{{capo}}: (he stands, buttons his jacket) That's a shame. Such a nice business you have. Such nice trucks.
+	=> END

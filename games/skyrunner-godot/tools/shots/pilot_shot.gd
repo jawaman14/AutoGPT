@@ -8,7 +8,8 @@ extends SceneTree
 ##       villa (on foot inside the org's villa, at the boss's desk) |
 ##       gun (on foot by the hangars with a rifle from the armoury) |
 ##       island (Isla Soberana from its approach, over the horizon) | island_strip (its runway) |
-##       debug (the F6 performance overlay, detailed)
+##       debug (the F6 performance overlay, detailed) | talk (a sit-down with the Family) |
+##       talk_island (the General's aide on the radio)
 var app: PilotApp
 var n := 0
 var q := "medium"
@@ -29,6 +30,8 @@ func _init():
 	var opts := {"seed": 1, "location": "HAR"}
 	if view == "gun":
 		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "ground_war": true})
+	elif view in ["talk", "talk_island"]:
+		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "family": true, "island": true})
 	if a.size() > 5: opts["map_seed"] = int(a[5])
 	if a.size() > 6:
 		opts["weather"] = {"sky": a[6], "moon": float(a[7]) if a.size() > 7 else 0.5}
@@ -86,6 +89,18 @@ func _process(_d):
 		app.cam.look_at(fixed_cam[1], Vector3.UP)
 		app.cam.fov = 60
 		app.hud.visible = false
+	if n == 3 and view in ["talk", "talk_island"]:
+		app.s.family.ai = false
+		app.s.money = 24000
+		if view == "talk":
+			app.s.family.offer("docks")
+			app.open_talk("family")
+		else:
+			app.open_talk("general", "landing")
+	if n in [6, 7, 8] and view == "talk" and app.talk != null:
+		app.talk.advance()  # on to the read and the answers
+	if n == 6 and view == "talk_island" and app.talk != null:
+		app.talk.advance()
 	if n == 3 and view == "debug":
 		app.cycle_debug_menu()
 		app.cycle_debug_menu()  # the detailed overlay

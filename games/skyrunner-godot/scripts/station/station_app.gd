@@ -228,7 +228,7 @@ func _hints() -> Array:
 			out = [["UP/DOWN", "order", "down"], ["LEFT/RIGHT", "change it", "right"], ["ENTER", "issue", "enter"]]
 		Roles.LIEUTENANT, Roles.PATROL:
 			out = [["UP/DOWN", "squad", "down"]]
-			out += [["Y/N", "the Family's offer", "y"], ["P", "pay tribute", "p"], ["U/I", "mules / a container", "u"], ["G", "passage", "g"]] if role == Roles.LIEUTENANT else [["O", "RICO case", "o"]]
+			out += [["C", "talk to the Family", "c"], ["G", "the General's aide", "g"], ["U/I", "mules / a container", "u"]] if role == Roles.LIEUTENANT else [["O", "RICO case", "o"]]
 	var snap = link.snapshot() if link != null else null
 	if snap is Dictionary and commands_squads(snap):
 		if squad_mode:
@@ -361,6 +361,9 @@ func _family_key(k: String, snap: Dictionary) -> bool:
 	var fam: Dictionary = snap.get("family", {})
 	if fam.is_empty() or fam.get("gone", false):
 		return false
+	if role in [Roles.LIEUTENANT, Roles.COPILOT] and k == "c":
+		open_talk("family")  # a sit-down with Sal Moretti
+		return true
 	if role in [Roles.LIEUTENANT, Roles.COPILOT] and k in ["y", "n", "p"]:
 		var offers: Array = fam.get("offers", [])
 		if k == "p":
@@ -376,6 +379,19 @@ func _family_key(k: String, snap: Dictionary) -> bool:
 	return false
 
 
+var talk: TalkBalloon = null
+
+
+## A conversation (dialogue/<name>.dialogue) over this desk's link.
+func open_talk(name: String, title := "start") -> TalkBalloon:
+	if talk != null and is_instance_valid(talk):
+		return talk
+	talk = Talk.open(self, name, title, link)
+	if talk != null:
+		talk.finished.connect(func(): talk = null)
+	return talk
+
+
 ## Isla Soberana (the lieutenant's desk): U four mules on the airliner, I a
 ## container on the freighter, G buy the General's passage. The controller's:
 ## L a crackdown at the airport, P container inspections at the port.
@@ -384,7 +400,7 @@ func _island_key(k: String, snap: Dictionary) -> bool:
 		return false
 	if role == Roles.LIEUTENANT and k in ["u", "i", "g"]:
 		if k == "g":
-			_cmd("buy_passage")
+			open_talk("general")  # the General's aide on the island frequency
 		else:
 			_cmd("island_ship", {"method": "mules" if k == "u" else "ship", "amount": 4 if k == "u" else 500})
 		return true
@@ -400,7 +416,7 @@ static func island_lines(isl: Dictionary) -> Array:
 	var out := ["ISLA SOBERANA (%s, the General's regard %d)   product $%.0f/lb" % [isl.status, int(isl.relations), float(isl.price)]]
 	out.append("  U mules on the airliner: %d%% each caught (%s)" % [int(100 * float(isl.mule_p)), ", ".join(isl.mule_why)])
 	out.append("  I a container on the freighter: %d%% found (%s)" % [int(100 * float(isl.ship_p)), ", ".join(isl.ship_why)])
-	out.append("  G safe passage: %s" % ("%d s left" % int(isl.passage_s) if int(isl.passage_s) > 0 else "$%s" % Py.money(int(isl.passage_cost))))
+	out.append("  G talk to the General's aide - safe passage: %s" % ("%d s left" % int(isl.passage_s) if int(isl.passage_s) > 0 else "$%s" % Py.money(int(isl.passage_cost))))
 	for sh in isl.get("shipments", []):
 		out.append("  %s %s, %d lb, %d s out" % [sh.id, sh.method, int(sh.lb), int(sh.eta_s)])
 	if str(isl.get("last", "")) != "":
@@ -424,7 +440,7 @@ static func family_lines(fam: Dictionary, ag: Dictionary) -> Array:
 		if fam.get("gone", false):
 			out.append("THE FAMILY: the Moretti bosses are in prison")
 		else:
-			out.append("THE FAMILY (respect %d)   Y take the newest offer   N turn it down" % int(fam.get("respect", 0)))
+			out.append("THE FAMILY (respect %d)   C sit down with Sal   Y take the newest offer   N turn it down" % int(fam.get("respect", 0)))
 			for o in fam.get("offers", []):
 				out.append("  %s  [%d s]" % [o.text, int(o.expires_s)])
 				out.append("      our read: %s" % o.read)
