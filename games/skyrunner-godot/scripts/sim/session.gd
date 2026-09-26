@@ -111,6 +111,7 @@ var _news_seen := 0
 var stash_net: StashNet = null  ## the organisation's stash houses (maps that have them)
 var _stash_ai_t := 0.0
 var arsenals := {}  ## "org" | "law" | "rival" -> Arsenal (Arsenal.REALISM)
+var chronicle: Chronicle = null  ## the news and the breaks between runs (Chronicle; live play asks for it)
 var ground: GroundWar = null  ## squads, firefights and turf on the roads (GroundWar; live play asks for it)
 var arng: PyRandom  ## gun runs and arsenal draws, off the board and parity streams
 var ai_law_upgrades := false  ## the AI chief buys law upgrades as money comes in (live play; off in sims and tests)
@@ -189,6 +190,8 @@ func _init(opts := {}) -> void:
 	ai_law_upgrades = opts.get("ai_law_upgrades", false)
 	if GroundWar.ENABLED and opts.get("ground_war", false):
 		ground = GroundWar.new(self, _rng(seed + 61), _rng(seed + 67))
+	if Chronicle.ENABLED and opts.get("chronicle", false):
+		chronicle = Chronicle.new(self, _rng(seed + 83))
 	for side in ["runner", "law"]:
 		for id in opts.get("upgrades", {}).get(side, []):
 			upgrades[side][id] = true
@@ -237,6 +240,8 @@ func _init(opts := {}) -> void:
 ## Break the reference cycles (night director, campaign, bus subscribers) so a
 ## finished Session is freed; batch simulators build thousands of them.
 func dispose() -> void:
+	chronicle = null
+	ground = null
 	if nights != null:
 		nights.sess = null
 	nights = null
@@ -1433,6 +1438,8 @@ func _update_world(dt: float) -> void:
 	_update_upgrades(dt)
 	_update_stashes(dt)
 	_update_economy(dt)
+	if chronicle != null:
+		chronicle.update(dt)
 
 	# maritime: cutters go where the task force suspects a drop
 	var law_goals := []

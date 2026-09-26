@@ -132,6 +132,10 @@ static func _runner(sess: Session, role: String) -> Dictionary:
 	out["market"] = sess.econ.board()
 	if sess.arsenals.has("org"):
 		out["arsenal"] = sess.arsenals["org"].to_dict()
+	if sess.ground != null:
+		out["ground"] = sess.ground.snapshot("org")
+	if sess.chronicle != null:
+		out["chronicle"] = sess.chronicle.view("runner")
 	if sess.stash_net != null:
 		out["stashes"] = sess.stash_net.stashes.map(func(st): return {"id": st.id, "name": st.name, "x": st.x, "y": st.y,
 			"strip": st.strip, "heat": _r(st.heat), "burned": st.burned})
@@ -239,6 +243,8 @@ static func _law(sess: Session) -> Dictionary:
 			"x": st.x, "y": st.y, "heat": _r(st.heat), "burned": st.burned}),
 		"law_funds": int(sess.law_funds),
 		"arsenal": sess.arsenals["law"].to_dict() if sess.arsenals.has("law") else {},
+		"ground": sess.ground.snapshot("police") if sess.ground != null else {},
+		"chronicle": sess.chronicle.view("law") if sess.chronicle != null else {},
 		"market": sess.econ.board(),
 		"jammed": sess.radio.jammed_zones.filter(func(z): return z.size() < 4 or z[3] > now).map(
 			func(z): return [_r(z[0]), _r(z[1]), _r(z[2])]),

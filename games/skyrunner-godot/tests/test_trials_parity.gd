@@ -21,6 +21,7 @@ func before_each() -> void:
 	Economy.REALISM = false  # Python has fixed prices (the markets: tests/test_economy.gd)
 	Arsenal.REALISM = false  # no gun runs or arsenals in Python (tests/test_arsenal.gd)
 	GroundWar.ENABLED = false
+	Chronicle.ENABLED = false
 
 
 func after_each() -> void:
@@ -28,6 +29,7 @@ func after_each() -> void:
 	Economy.REALISM = true
 	Arsenal.REALISM = true
 	GroundWar.ENABLED = true
+	Chronicle.ENABLED = true
 
 
 func _match(got: Dictionary, want: Dictionary, what: String) -> void:
