@@ -237,6 +237,10 @@ Demo videos: [docs/video/](docs/video/):
   plain, a crewed airdrop with the radar detector, the task-force desk (radar sweeps, coverage, DF
   bearings and ellipse, the jammer), a stash run's truck, the market and the upgrade trees, the port
   at night (`tools/city_tour.gd`)
+- [`demo-ground.mp4`](docs/video/demo-ground.mp4): the ground war, the seats and the 1980s-coast look -
+  sunset over San Telmo, a firefight on a palm-lined boulevard, the lieutenant's and patrol
+  commander's desks, the seat picker, on foot with a rifle, a run paying off, the city's neon at
+  night (`tools/ground_tour.gd`)
 - [`demo-bust.mp4`](docs/video/demo-bust.mp4): a bot flight against the task force, split screen
   (`tools/record_demo.sh`, optionally in weather)
 
