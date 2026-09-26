@@ -68,6 +68,9 @@ var caught := 0
 var intercepts := 0
 var next_mules := 0.0  ## when the connection has another batch for the mules
 var next_ship := 0.0
+var rival_shipped := 0
+var rival_caught := 0
+var _rival_t := 0.0
 var last := ""
 var _serial := 0
 var _t := 0.0
@@ -185,15 +188,22 @@ func ship(method: String, amount: int) -> String:
 		if sess.time < next_mules:
 			return "The connection has nothing for the mules for %d min." % int(ceil((next_mules - sess.time) / 60.0))
 		var n := clampi(amount, 1, 8)
+		var mules := []
+		if sess.payroll != null:
+			mules = sess.payroll.mules_for("org", n, "mules-%d" % (_serial + 1))
+			if mules.is_empty():
+				return "Not enough mules on the payroll, and no money for street mules."
 		var lb := n * MULE_KG * 2.2046
 		var cost := int(n * (MULE_COST - MULE_FEE) * price_mult) + n * MULE_FEE
 		if sess.money < cost:
+			if sess.payroll != null:
+				sess.payroll.release(mules)
 			return "Need $%s." % Py.money(cost)
 		sess.money -= cost
 		next_mules = sess.time + RESTOCK_S
 		_serial += 1
 		shipments.append({"id": "M%d" % _serial, "method": "mules", "n": n, "lb": lb, "cost": cost,
-			"value": n * MULE_VALUE, "eta": sess.time + MULE_ETA_S, "p": mule_odds()[0]})
+			"value": n * MULE_VALUE, "eta": sess.time + MULE_ETA_S, "p": mule_odds()[0], "mules": mules})
 		last = "%d mules on the airliner to San Telmo Intl ($%s)" % [n, Py.money(cost)]
 		sess.say("THE ISLAND - " + last)
 		return ""
@@ -220,13 +230,21 @@ func _resolve(sh: Dictionary) -> void:
 	if sh.method == "mules":
 		# the odds when they land, not when they left (a crackdown in between counts)
 		var p: float = mule_odds()[0]
+		var ids: Array = sh.get("mules", [])
+		var pr = sess.payroll
+		if pr != null and not ids.is_empty():
+			p *= 1.2 - 0.4 * pr.mean_skill(ids)  # a calm, practised mule is a harder read
 		var got := 0
 		var lost := 0
 		for i in int(sh.n):
 			if rng.random() < p:
 				lost += 1
+				if pr != null and i < ids.size():
+					pr.lose(ids[i], "arrested")
 			else:
 				got += 1
+				if pr != null and i < ids.size():
+					pr.release([ids[i]])
 		var pay := int(sh.value * got / maxf(1.0, float(sh.n)))
 		sess.money += pay
 		if lost > 0:
@@ -394,6 +412,32 @@ func _event() -> void:
 	sess.bus.emit("island_status", sess.time, text, ["runner", "law"], {"status": status})
 
 
+## Los Cuervos buy on the island too: a container of their own every so often,
+## against the same customs (without our perks). It floods the market, or it's
+## the task force's seizure.
+func _rival_trade() -> void:
+	var g = sess.ground
+	if g == null or not open() or status == "hurricane" or g.commanders.rival.cash < 15000.0:
+		return
+	var cost := 500 * PRICE_PER_LB * price_mult + SHIP_FREIGHT
+	g.commanders.rival.cash -= cost
+	var p := 0.08 * (1.0 + port_heat / 100.0) * (2.0 if law_has("container_xray") else 1.0) * (2.0 if inspections_until > sess.time else 1.0)
+	rival_shipped += 1
+	if rng.random() < p:
+		rival_caught += 1
+		caught += 1
+		port_heat = minf(100.0, port_heat + 20.0)
+		sess.law_funds += 5000.0
+		sess.econ.record_seizure("cocaine", "sea")
+		sess.law_say("Port of San Telmo: a Los Cuervos container from Isla Soberana, 500 lb under the fish")
+		sess.say("NEWS - Customs open a container from the island: Los Cuervos lose a load.")
+	else:
+		g.commanders.rival.cash += 500 * STREET_PER_LB
+		port_heat = minf(100.0, port_heat + 5.0)
+		sess.econ.record_delivery("cocaine", "sea")
+		sess.econ.record_delivery("cocaine", "sea")  # a glut on the street: prices fall for everyone
+
+
 ## The island's MiGs, when a plane with no passage flies into its airspace.
 func _patrol(step: float) -> void:
 	if not sess.runner_active() or sess.state == null or sess.parked:
@@ -436,6 +480,10 @@ func update(dt: float) -> void:
 			sess.say("NEWS - After the purge, new men in the old jobs on Isla Soberana. They're open for business.")
 		status = "calm"
 		price_mult = 1.0
+	_rival_t += step
+	if _rival_t >= 1200.0:
+		_rival_t = 0.0
+		_rival_trade()
 	_event_t += step
 	if _event_t >= 900.0:
 		_event_t = 0.0

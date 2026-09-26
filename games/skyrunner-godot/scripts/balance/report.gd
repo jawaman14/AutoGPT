@@ -78,6 +78,9 @@ const CHANGELOG := [
 	["The live-play systems got their own simulator",
 		"Requested: a balance run after the Family, Isla Soberana and the Company's double game went in. None of them are in the season model, so tools/live_balance.gd steps them directly (80 seeds x 3 simulated hours x 5 configurations; flown runs stand in as income). First run: a mule lost money in every case (ROI -0.77 to -0.86: $364 of 'sugar' for a $1,540 cost); the Family was convicted in 100% of runs because the RICO case drifted 0.3/min on its own (+54 in 3 h); respect bled to 15-19 because every declined offer cost 3 points and nothing brought it back. After a fix, the island dominated: $133k median against $70k for the control, a shipment every 10 minutes at ROI ~1.0 and our perks cancelling the task force's kit.",
 		"A mule carries a kilo of the pure product ($1,400 cost, worth $2,600); a container pays the shipping line $6,000; X-ray and inspections double the odds instead of x1.7/x1.5; the island's connection restocks each route every 20 minutes; each load that gets through warms that route (+2 heat a mule, +8 a container). RICO filings cost $4,000 and add 5-10 (+6 with a rat); the case drifts 0.1/min; a declined offer costs 1 point of respect and respect drifts back toward 50; the street tax comes at most every 45 minutes. Now: ROI per load 0.67-0.69 cold, 0.11-0.16 against the task force's whole kit and a crackdown, 0.76-0.81 with our perks; the island config ends level with the control after paying for the perks (the payoff is in longer play); the Family costs about $15k in 3 h, mostly tribute, with a rat in 4-25% of runs and a trial in 0-6%."],
+	["Hired hands, paid or else",
+		"Requested: NPCs using the systems, and cartels that have to hire and pay their workers. Soldiers, drivers, mules, lookouts, accountants and contract pilots now come off a payroll (both outfits), paid every 10 minutes; the unpaid turn (skim, walk or call the task force), the arrested get cases and may flip. The worry was a wage bill that starves the organisation. The live simulator (a 'payroll' configuration, the AI hiring to its needs) says it roughly pays for itself: $12k of wages over 3 hours against contract pilots' runs and the accountant's cooling of the case; with every live system on, it costs about $9k net.",
+		"No retune: loyalty ends high (0.84-0.88) because the AI pays on time, which is the point - the risks bite a player who hires cheap, pays late or leaves the jailed without lawyers. Worth playtesting whether the street hires (drivers, mules) should cost more."],
 ]
 
 
@@ -309,6 +312,10 @@ static func write_report(results_dir: String, out_path: String) -> String:
 			var il: Dictionary = al["island"]
 			lines += ["", "The island: %s shipments a run (p50); %s of mules and containers caught; closed by a purge %s of the time." % [
 				Py.f(il["shipments"]["p50"], 0), _pct(il["catch_rate"]), _pct(il["closed_frac"])]]
+		if al.has("payroll"):
+			var py: Dictionary = al["payroll"]
+			lines += ["", "The payroll (the organisation's AI hiring to its needs): %s workers on it at the end, $%s in wages over the run, %s lost (arrested or dead), %s flipped by the prosecutor, loyalty %s%%, a short payday in %s of runs." % [
+				Py.f(py["crew"], 1), Py.money(int(py["paid"])), Py.f(py["lost"], 1), Py.f(py["flips"], 2), Py.f(100 * float(py["loyalty"]), 0), _pct(py["short_rate"])]]
 		if al.has("agency"):
 			var ag: Dictionary = al["agency"]
 			lines += ["", "The Company: %s flights a run; $%s 'in the mail'; hung out to dry in %s of runs; exposed in %s." % [

@@ -40,7 +40,8 @@ func _initialize() -> void:
 		"family": {"family": true},
 		"island": {"island": true},
 		"agency": {"agency": true},
-		"all": {"family": true, "island": true, "agency": true, "chronicle": true},
+		"payroll": {"payroll": true},
+		"all": {"family": true, "island": true, "agency": true, "chronicle": true, "payroll": true},
 	}
 	var out := {"seeds": seeds, "hours": hours, "stand_ins": {"run_pay": RUN_PAY, "run_every_s": RUN_EVERY_S,
 		"law_pay": LAW_PAY, "law_every_s": LAW_EVERY_S, "mule_max": MULE_MAX, "ship_max": SHIP_MAX}, "configs": {}}
@@ -96,6 +97,8 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 				_agency_flight(s)
 		if s.chronicle != null:
 			s.chronicle.update(STEP)
+		if s.payroll != null:
+			s.payroll.update(STEP)
 		if s.island != null:
 			var isl := s.island
 			isl.update(STEP)
@@ -140,6 +143,10 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 	if s.island != null:
 		r["island"] = {"caught": s.island.caught, "delivered": s.island.delivered, "intercepts": s.island.intercepts,
 			"closed_frac": closed_s / (hours * 3600.0), "relations": s.island.relations}
+	if s.payroll != null:
+		var pr := s.payroll
+		r["payroll"] = {"crew": pr.of("org").filter(func(w): return w.status in ["free", "assigned"]).size(), "paid": pr.paid_total.org,
+			"lost": pr.lost.org, "flips": pr.flips.org, "loyalty": pr.loyalty("org"), "short": pr.unpaid.org > 0}
 	if s.agency != null:
 		r["agency"] = {"flights": s.agency.flights, "hung_out": s.agency.hung_out, "burned": s.agency.burned,
 			"stings": r.get("stings", 0), "withheld": s.agency.withheld, "exposure": s.agency.exposure}
@@ -209,6 +216,9 @@ func _summary(rows: Array) -> Dictionary:
 		sm["island"] = {"shipments": _stats(rows.map(func(r): return r.shipped)), "units_sent": sent, "units_caught": caught,
 			"catch_rate": float(caught) / maxf(1.0, sent), "closed_frac": _mean(rows, "island", "closed_frac"),
 			"intercepts": _mean(rows, "island", "intercepts"), "relations": _mean(rows, "island", "relations"), "spent": spent}
+	if rows[0].has("payroll"):
+		sm["payroll"] = {"crew": _mean(rows, "payroll", "crew"), "paid": _mean(rows, "payroll", "paid"), "lost": _mean(rows, "payroll", "lost"),
+			"flips": _mean(rows, "payroll", "flips"), "loyalty": _mean(rows, "payroll", "loyalty"), "short_rate": _rate(rows, "payroll", "short")}
 	if rows[0].has("agency"):
 		sm["agency"] = {"flights": _mean(rows, "agency", "flights"), "hangout_rate": _rate(rows, "agency", "hung_out"),
 			"burned_rate": _rate(rows, "agency", "burned"), "withheld": _mean(rows, "agency", "withheld"),

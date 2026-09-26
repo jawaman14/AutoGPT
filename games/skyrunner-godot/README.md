@@ -165,6 +165,19 @@ Beyond the prototype:
 
   Skip bail to the island and you're a fugitive. The task force prosecutes from its desk (N W K
   D Y), or the AI does. Talk it through with your lawyer (Shift+L; section 16).
+- **Hired hands.** Both cartels run on a payroll:
+  - **Roles:** soldiers crew the squads (no soldiers, no squad); drivers take the trucks past
+    checkpoints; mules fly the island run; lookouts see raids coming; an accountant cleans the
+    books or skims them; contract pilots fly runs of their own.
+  - **Hiring:** hire from Manny Ortega's hall (Shift+W, W at the desks). Skill shows; loyalty only
+    as a hint.
+  - **Payday every 10 minutes:** the unpaid skim, walk off or call the task force.
+  - **The arrested** get cases of their own: a lawyer keeps them quiet, the prosecutor's deal
+    (A at the desk) makes them talk.
+  - **The AI:** Los Cuervos hire, pay, lose people and trade with the island the same way. The
+    organisation's AI runs your payroll when nobody sits the boss's or lieutenant's chair.
+
+  See [docs/DESIGN.md](docs/DESIGN.md) section 17.
 - **One UI, redesigned.** A single theme across every screen; real tables with titled columns (the job
   board colours the landing roll against the strip length); key caps in every footer that you can
   also click; readouts as tiles; a HUD laid out by what you need when (status chips, wanted stars,
@@ -213,6 +226,8 @@ Beyond the prototype:
 | ![cast](docs/img/models-cast.png) | ![rifle](docs/img/foot-rifle.png) | ![island](docs/img/island-approach.png) |
 | **A sit-down with the Family** | **The General's aide on the ramp** | **The bail hearing** |
 | ![talk](docs/img/talk.png) | ![aide](docs/img/talk_island.png) | ![court](docs/img/court.png) |
+| **Manny Ortega's hiring hall** | | |
+| ![crew](docs/img/crew.png) | | |
 
 | Mid-afternoon on the runway (medium) | Dusk, climbing out near Eagle's Nest (high) | Night: edge lights on |
 |---|---|---|

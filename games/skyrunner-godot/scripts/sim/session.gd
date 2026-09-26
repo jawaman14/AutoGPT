@@ -116,6 +116,7 @@ var _ai_defaults := {}  ## what each seat's AI was set to before a human took it
 var remote_stick := {}  ## a remote pilot's controls {roll, pitch, throttle, rudder, brake} (the pilot seat over the wire)
 var agency: Agency = null  ## the Company: arms flights south, protection, exposure (live play asks for it)
 var family: Family = null  ## the Morettis: help that might be a trap (live play asks for it)
+var payroll: Payroll = null  ## the outfits' hired workers: soldiers, drivers, mules, lookouts, accountants, pilots (live play asks for it)
 var court: Court = null  ## the pilot's case after an arrest: bail, lawyers, plea, trial, sentence (live play asks for it)
 var island: Island = null  ## Isla Soberana, over the horizon: cheap product, sovereign airspace (live play asks for it)
 var foot: FootCombat = null  ## the pilot on foot with a gun (sessions with a ground war)
@@ -204,6 +205,9 @@ func _init(opts := {}) -> void:
 		agency = Agency.new(self, _rng(seed + 89), _rng(seed + 101))
 	if Island.ENABLED and opts.get("island", false) and not world.map.foreign.is_empty():
 		island = Island.new(self, _rng(seed + 103))
+	if Payroll.ENABLED and opts.get("payroll", false):
+		payroll = Payroll.new(self, _rng(seed + 109))
+		payroll.ai["org"] = not (humans.has(Roles.BOSS) or humans.has(Roles.LIEUTENANT))
 	if Court.ENABLED and opts.get("court", false):
 		court = Court.new(self, _rng(seed + 107))
 		court.prosecutor_ai = not (humans.has(Roles.CONTROLLER) or humans.has(Roles.CHIEF))
@@ -266,6 +270,7 @@ func _init(opts := {}) -> void:
 ## Break the reference cycles (night director, campaign, bus subscribers) so a
 ## finished Session is freed; batch simulators build thousands of them.
 func dispose() -> void:
+	payroll = null
 	court = null
 	island = null
 	agency = null
@@ -669,6 +674,8 @@ func seat_driver(role: String, human: bool) -> void:
 		Roles.BOSS:
 			if family != null:
 				family.ai = not (human or humans.has(Roles.LIEUTENANT))
+			if payroll != null:
+				payroll.ai["org"] = not (human or humans.has(Roles.LIEUTENANT))
 			if nights != null:
 				if human:
 					_ai_defaults[role] = nights.runner_ai
@@ -688,6 +695,8 @@ func seat_driver(role: String, human: bool) -> void:
 				ground.commanders["org"].ai = not human
 			if family != null:
 				family.ai = not (human or humans.has(Roles.BOSS))
+			if payroll != null:
+				payroll.ai["org"] = not (human or humans.has(Roles.BOSS))
 		Roles.PATROL:
 			if ground != null:
 				ground.commanders["police"].ai = not human
@@ -1572,6 +1581,8 @@ func _update_world(dt: float) -> void:
 		island.update(dt)
 	if court != null:
 		court.update(dt)
+	if payroll != null:
+		payroll.update(dt)
 
 	# maritime: cutters go where the task force suspects a drop
 	var law_goals := []
@@ -1863,6 +1874,11 @@ func _truck_out(job: Jobs.Job, af: Airfield) -> void:
 	var c := police.case("runner")
 	var risk := (0.15 if af.police else 0.0) + (0.1 if (c.tipped or c.wanted) else 0.0)
 	var t := stash_net.dispatch(job, af, time, g[0], risk)
+	if payroll != null:
+		var d: Array = payroll.driver_for(str(job.id))
+		t.driver = d[0]
+		if d[1]:
+			t.waved = true  # he knows the checkpoint sergeant's cousin
 	if ground != null:
 		# by road; the roadblock roll gives way to the checkpoints on the ground
 		var st: Dictionary = stash_net.get_stash(job.stash)
@@ -1908,6 +1924,9 @@ func _update_stashes(dt: float) -> void:
 			say("Truck in at %s: +$%s" % [st.name, Py.money(t.pay)])
 			bus.emit("job_delivered", time, "", ["runner"], {"job_id": t.job_id, "pay": t.pay, "dest": t.stash, "hot": true})
 		else:
+			if payroll != null and t.driver != "":
+				payroll.lose(t.driver, "arrested")
+				t.driver = ""
 			say("The truck to %s was stopped (%s). The load is gone." % [st.name, r[2]])
 			law_say("Truck stopped on the road to %s: %d crates seized" % [st.name, t.items])
 			law_funds += 2000.0 + 300.0 * t.items
@@ -1954,6 +1973,16 @@ func _update_economy(dt: float) -> void:
 
 
 func _raid(id: String):
+	if payroll != null and stash_net.get_stash(id) != null and not stash_net.get_stash(id).burned and payroll.lookout_warns(id):
+		# the lookout saw them coming: the product was gone before the door came in
+		var ls: Dictionary = stash_net.get_stash(id)
+		ls.heat = 0.0
+		ls.intel *= 0.5
+		law_funds += 500.0
+		law_say("Raid on %s: empty. Somebody warned them." % ls.name)
+		say("The lookout at %s saw the raid coming: the product was moved. The house is cold for now." % ls.name)
+		bus.emit("raid_foiled", time, "", ["runner", "law"], {"stash": id})
+		return null
 	var why := stash_net.raid(id)
 	if why != "":
 		return why
@@ -2226,6 +2255,38 @@ func _cmd_court_charge(role: String, a: Dictionary):
 
 func _cmd_court_offer_plea(role: String, a: Dictionary):
 	return _court(func(): return court.offer_plea(bool(a.get("lenient", false))))
+
+
+# ------------------------------------------------------------------ the payroll
+func _pay(fn: Callable):
+	if payroll == null:
+		return "No payroll in this game."
+	var err: String = fn.call()
+	return err if err != "" else null
+
+
+func _cmd_hire_worker(role: String, a: Dictionary):
+	return _pay(func(): return payroll.hire("org", str(a.get("id", ""))))
+
+
+func _cmd_fire_worker(role: String, a: Dictionary):
+	return _pay(func(): return payroll.fire("org", str(a.get("id", ""))))
+
+
+func _cmd_pay_bonus(role: String, a: Dictionary):
+	return _pay(func(): return payroll.bonus("org"))
+
+
+func _cmd_pay_worker_lawyer(role: String, a: Dictionary):
+	return _pay(func(): return payroll.pay_lawyer("org", str(a.get("id", ""))))
+
+
+func _cmd_post_lookout(role: String, a: Dictionary):
+	return _pay(func(): return payroll.post_lookout(str(a.get("id", "")), str(a.get("stash", ""))))
+
+
+func _cmd_offer_worker_deal(role: String, a: Dictionary):
+	return _pay(func(): return payroll.offer_deal(str(a.get("id", ""))))
 
 
 func _cmd_family_accept(role: String, a: Dictionary):

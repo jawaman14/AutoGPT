@@ -128,6 +128,14 @@ class State:
 	var bribed := false
 	var filed := []  ## motions filed
 	var continuances := 0
+	# the payroll (the organisation's crew)
+	var payroll := false
+	var crew := 0
+	var wage_bill := 0
+	var crew_loyalty := 0  ## percent
+	var unpaid := 0
+	var cand: Array = []  ## up to four candidates: {id, name, role, skill, wage, hint}
+	var jailed: Array = []  ## crew in custody without a lawyer: {id, name, role}
 
 	func _init(snap_fn_: Callable, cmd_fn_: Callable) -> void:
 		snap_fn = snap_fn_
@@ -196,6 +204,14 @@ class State:
 		bribed = bool(c.get("bribed", false))
 		filed = c.get("motions", [])
 		continuances = int(c.get("continuances", 0))
+		var p: Dictionary = snap.get("payroll", {})
+		payroll = not p.is_empty()
+		crew = p.get("crew", []).size()
+		wage_bill = int(p.get("wage_bill", 0))
+		crew_loyalty = int(round(100.0 * float(p.get("loyalty", 0.0))))
+		unpaid = int(p.get("unpaid", 0))
+		cand = p.get("candidates", []).slice(0, 4)
+		jailed = p.get("jail", []).filter(func(j): return not j.lawyer)
 
 	func _do(name: String, args := {}) -> bool:
 		var r: Array = cmd_fn.call(name, args)
@@ -231,6 +247,30 @@ class State:
 
 	func container() -> bool:
 		return _do("island_ship", {"method": "ship", "amount": 500})
+
+	# the payroll
+	func has_cand(i: int) -> bool:
+		return i < cand.size()
+
+	func cand_line(i: int) -> String:
+		if i >= cand.size():
+			return ""
+		var c: Dictionary = cand[i]
+		var sk := float(c.skill)
+		return "%s, a %s - %s, $%d a payday. (%s)" % [c.name, Payroll.ROLES[c.role][2], "sharp" if sk >= 0.7 else ("solid" if sk >= 0.4 else "green"),
+			int(c.wage), c.hint]
+
+	func take_on(i: int) -> bool:
+		return i < cand.size() and _do("hire_worker", {"id": cand[i].id})
+
+	func crew_bonus() -> bool:
+		return _do("pay_bonus")
+
+	func jailed_name() -> String:
+		return "" if jailed.is_empty() else "%s (%s)" % [jailed[0].name, Payroll.ROLES[jailed[0].role][2]]
+
+	func lawyer_for_jailed() -> bool:
+		return not jailed.is_empty() and _do("pay_worker_lawyer", {"id": jailed[0].id})
 
 	# the court
 	func has_filed(kind: String) -> bool:

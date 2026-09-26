@@ -47,6 +47,8 @@ Family   SHIFT+F sit down with Sal Moretti: hear the offer, your man's read on i
          SHIFT+Y / SHIFT+N take or turn down the newest offer without the talk, SHIFT+P pay the tribute
 Court    arrested (with a court): SHIFT+L your lawyer - bail or a bond, a better lawyer, motions to
          suppress / discovery / more time, the plea, the witness, the judge, a deal; the appeal inside
+Crew     SHIFT+W Manny Ortega's hiring hall: hire soldiers, drivers, mules, lookouts, an accountant,
+         contract pilots; bonuses; lawyers for the jailed. Payday every 10 min - pay them or else
 Island   Isla Soberana is over the southern horizon (SOB): cheap loads, the General's MiGs, and the
          task force can't follow you past the line. SHIFT+G the General's aide on the radio:
          passage, the island's news, mules and containers with customs' odds. SHIFT+U four mules
@@ -286,7 +288,9 @@ func _unhandled_input(ev: InputEvent) -> void:
 					scene.set_hour(scene.hour + 3.0)
 			get_viewport().set_input_as_handled()
 			return
-		if ev.shift_pressed and k == KEY_L and s.court != null:
+		if ev.shift_pressed and k == KEY_W and s.payroll != null:
+			open_talk("crew")  # Manny Ortega's hiring hall
+		elif ev.shift_pressed and k == KEY_L and s.court != null:
 			open_talk("lawyer")  # your lawyer: bail, motions, the plea, a deal, the appeal
 		elif ev.shift_pressed and k == KEY_F and s.family != null:
 			open_talk("family")  # a sit-down with the Family

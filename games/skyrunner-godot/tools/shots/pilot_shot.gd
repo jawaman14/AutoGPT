@@ -9,7 +9,8 @@ extends SceneTree
 ##       gun (on foot by the hangars with a rifle from the armoury) |
 ##       island (Isla Soberana from its approach, over the horizon) | island_strip (its runway) |
 ##       debug (the F6 performance overlay, detailed) | talk (a sit-down with the Family) |
-##       talk_island (the General's aide on the radio) | court (the bail hearing, the lawyer)
+##       talk_island (the General's aide on the radio) | court (the bail hearing, the lawyer) |
+##       crew (Manny Ortega's hiring hall)
 var app: PilotApp
 var n := 0
 var q := "medium"
@@ -30,6 +31,8 @@ func _init():
 	var opts := {"seed": 1, "location": "HAR"}
 	if view == "gun":
 		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "ground_war": true})
+	elif view == "crew":
+		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "payroll": true, "island": true})
 	elif view == "court":
 		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "court": true})
 	elif view in ["talk", "talk_island"]:
@@ -102,6 +105,12 @@ func _process(_d):
 	if n in [6, 7, 8] and view == "talk" and app.talk != null:
 		app.talk.advance()  # on to the read and the answers
 	if n == 6 and view == "talk_island" and app.talk != null:
+		app.talk.advance()
+	if n == 3 and view == "crew":
+		app.s.money = 36000
+		app.s.payroll.ai["org"] = false
+		app.open_talk("crew")
+	if n in [6, 7] and view == "crew" and app.talk != null:
 		app.talk.advance()
 	if n == 3 and view == "court":
 		app.s.money = 42000

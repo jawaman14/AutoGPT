@@ -445,3 +445,57 @@ sits the law's chair):
 **The lawyer's conversation** (`dialogue/lawyer.dialogue`, Shift+L, L at the desks) walks
 through all of it: the hearing, the case as he sees it (the exact odds once discovery is in),
 each option, the witness and the judge in lowered voices, the deal, and the appeal.
+
+## 17. Hired hands: the payroll, and NPCs in every system
+
+`scripts/sim/payroll.gd` (`payroll: true` in live play, RNG seed + 109). Both outfits, the
+organisation and Los Cuervos, hire people and pay them.
+
+| Role | Wage / payday | What they do | If lost |
+|---|---|---|---|
+| Soldier | $80 | Crew the ground war's squads. An outfit raises a squad only from soldiers on its payroll; events and the Family's lent crew are exempt. | Men lost in a fight are 40% arrested, 60% dead |
+| Driver | $100 | Takes a stash truck through the checkpoints; a sharp one talks his way past (skill × 40%). No driver hired means a street driver: triple fee, less loyal. | Arrested when the truck is stopped |
+| Mule | $60 | Flies the island's airliner run (a practised mule is harder to read: odds × (1.2 − 0.4 × skill)). Short of mules, street mules. | Arrested when caught at customs |
+| Lookout | $50 | Posted at a stash house, sees a raid coming (35% + 45% × skill; not if disloyal). The house comes up empty and cold. | - |
+| Accountant | $250 | Clean books cool the task force's case every payday (−4 × skill). A sour one skims 5% of the cash. | Knows the most (flip weight 1.5) |
+| Contract pilot | $300 | Flies a run of his own every 20 min: $2,400–3,600, less likely as the case heats up. | A bust: arrested (or dead) |
+
+**The labour market and loyalty.**
+- Candidates refresh every 10 minutes. Skill shows; loyalty shows only as a hint ("did two years
+  and never said a word" vs "asked a lot of questions about the money"), right about 80% of the time.
+- Hiring costs two wages up front.
+- Each payday pays the loyal first. Paid workers gain +0.02 loyalty; unpaid ones lose 0.25.
+- Under 0.35 loyalty, each payday brings a 15% chance of trouble:
+  - they skim $500–2,000;
+  - they walk off the job;
+  - they tip the task force (a stash house, the suspicion, weighted by what they know).
+- A bonus (a wage each) buys +0.1 loyalty.
+- A fired man with a grudge may talk.
+
+**The jailed.**
+- Arrested workers get their own cases (15 minutes).
+- A flip's chance is 35% × (1 − loyalty), which:
+  - halves if the outfit paid a $2,000 lawyer (and the crew sees you look after your own);
+  - doubles with the prosecutor's deal (A at the controller's desk);
+  - is 1.5× for street hires.
+- A flip gives up what he knows:
+  - for the organisation, stash-house intel and suspicion;
+  - for Los Cuervos, cash seized and their corners raided.
+- Otherwise the worker is convicted (gone) or released (back to work).
+
+**NPCs in every system.**
+- Los Cuervos' AI hires, pays (from the cartel's cash), loses and flips people the same way. It
+  sends containers of its own through Isla Soberana's customs every 20 minutes: a glut on the
+  street, or the task force's seizure.
+- The organisation's AI (when no human boss or lieutenant sits):
+  - hires to its needs (soldiers, drivers, lookouts per stash, mules for the island, an
+    accountant and a contract pilot when rich);
+  - posts lookouts at the hottest houses;
+  - pays lawyers for the jailed who know things;
+  - gives bonuses when the crew is sour;
+  - lays people off when the money runs out.
+
+The AI prosecutor and the Family were already NPCs in these systems (sections 14, 16).
+
+**The hiring hall** (`dialogue/crew.dialogue`, Shift+W / W): Manny Ortega shows four candidates
+with their skill, wage and the hint, and handles bonuses and lawyers for the jailed.

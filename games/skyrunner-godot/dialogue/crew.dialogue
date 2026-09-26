@@ -1,0 +1,48 @@
+# The organisation's crew: Manny Ortega, who finds people - the hiring hall in
+# the back of a bodega on Calle Ocho. (Fiction.) Reads and acts through
+# Talk.State: cand_line(i), take_on(i), crew_bonus(), lawyer_for_jailed().
+
+~ start
+if not payroll
+	Manny Ortega: No crew to run in this game.
+	=> END
+Manny Ortega: [[You need people? I got people.|Come in, sit. Coffee?|Business is good, so everybody wants to work for you.]]
+if crew == 0
+	Manny Ortega: Nobody on the payroll yet. Everybody starts somewhere.
+else
+	Manny Ortega: You've got {{crew}} on the payroll - {{money_s(wage_bill)}} every payday. They're {{crew_loyalty}} percent happy, give or take.
+if unpaid > 0
+	Manny Ortega: And payday came up {{money_s(unpaid)}} short. People talk when they don't get paid. To the wrong people.
+=> hall
+
+~ hall
+- Hire {{cand_line(0)}} [if has_cand(0)]
+	do take_on(0)
+	=> hired
+- Hire {{cand_line(1)}} [if has_cand(1)]
+	do take_on(1)
+	=> hired
+- Hire {{cand_line(2)}} [if has_cand(2)]
+	do take_on(2)
+	=> hired
+- Hire {{cand_line(3)}} [if has_cand(3)]
+	do take_on(3)
+	=> hired
+- A bonus for everybody. ({{money_s(wage_bill)}}) [if crew > 0]
+	do crew_bonus()
+	Manny Ortega: [[That's how you keep people.|They'll remember that.]]
+	=> hall
+- Get a lawyer for {{jailed_name()}}. ($2,000) [if jailed_name() != ""]
+	do lawyer_for_jailed()
+	Manny Ortega: Good. Somebody with a lawyer keeps quiet. Somebody without one starts thinking.
+	=> hall
+- That's enough for today.
+	Manny Ortega: [[You know where to find me.|Take care of your people and they take care of you.]]
+	=> END
+
+~ hired
+if result != ""
+	Manny Ortega: {{result}}
+else
+	Manny Ortega: [[Good choice. I think.|I'll send word tonight.|Starts tomorrow.]]
+=> hall

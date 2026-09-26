@@ -282,6 +282,9 @@ func recruit(f: String, kind: String, at = null, pay := true):
 	if of(f).size() >= CAP[f] or squads.size() >= MAX_SQUADS:
 		return "No more squads."
 	var cost: int = COST[kind]
+	var pr = sess.payroll if pay and f != "police" else null
+	if pr != null and pr.of(f, "soldier", "free").size() < MEN[kind]:
+		return "Not enough soldiers on the payroll (%d free, %d needed)." % [pr.of(f, "soldier", "free").size(), MEN[kind]]
 	if pay:
 		if f == "org":
 			if sess.money < cost:
@@ -317,6 +320,8 @@ func recruit(f: String, kind: String, at = null, pay := true):
 	q.y = p.y
 	q.home = hq(f)
 	q.state = "holding"
+	if pr != null:
+		pr.enlist(f, q.men, q.id)  # the men are the outfit's hired soldiers
 	squads.append(q)
 	return q
 

@@ -39,7 +39,8 @@ class Truck:
 	var weapons := {}  ## a gun run's weapons (Arsenal)
 	var gun_mode := "sell"
 	var route := PackedVector2Array()  ## by road (GroundWar), else the straight line
-	var waved := false  ## a checkpoint was told to let it through (Agency)
+	var waved := false  ## a checkpoint was told to let it through (Agency), or the driver talked his way past
+	var driver := ""  ## the driver on the payroll (Payroll)
 
 	func frac(now: float) -> float:
 		return clampf((now - t0) / dur, 0.0, 1.0)
