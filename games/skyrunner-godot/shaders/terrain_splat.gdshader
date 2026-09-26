@@ -20,6 +20,14 @@ uniform vec3 rock_b : source_color = vec3(0.50, 0.44, 0.37);
 uniform vec3 sand_a : source_color = vec3(0.66, 0.58, 0.42);
 uniform vec3 sand_b : source_color = vec3(0.76, 0.68, 0.50);
 uniform vec3 seabed : source_color = vec3(0.45, 0.47, 0.36);
+// Land use (MapCity): r = town (concrete lots, asphalt streets on the block
+// grid), g = farmland (a patchwork of fields with crop rows), b = mud
+// (mangrove and swamp), a = jungle floor. Off on maps without it.
+uniform sampler2D landuse : filter_linear, repeat_disable;
+uniform float has_landuse = 0.0;
+uniform vec2 grid_origin = vec2(-4600.0, -11700.0);
+uniform float block = 110.0;
+uniform float street = 14.0;
 
 varying vec3 wpos;
 varying vec3 wnrm;
@@ -64,6 +72,20 @@ void fragment() {
 	vec3 col = mix(grass, dry, w_dry);
 	col = mix(col, rock, w_rock);
 	col = mix(col, sand, w_sand * (1.0 - w_rock));
+	if (has_landuse > 0.5) {
+		vec2 wxy = vec2(wpos.x, -wpos.z);
+		vec4 lu = texture(landuse, (wxy + 16000.0) / 32000.0);
+		float f = fract(sin(dot(floor(wxy / vec2(400.0, 300.0)), vec2(127.1, 311.7))) * 43758.5453);
+		vec3 crop = f > 0.66 ? vec3(0.60, 0.54, 0.30) : (f > 0.33 ? vec3(0.34, 0.47, 0.19) : vec3(0.46, 0.40, 0.26));
+		float rows = 0.86 + 0.14 * sin(dot(wxy, f > 0.5 ? vec2(1.0, 0.0) : vec2(0.0, 1.0)) * 1.4);
+		col = mix(col, crop * mix(1.0, rows, detail_fade) * (0.9 + 0.2 * n.r), lu.g * (1.0 - w_rock));
+		col = mix(col, vec3(0.24, 0.25, 0.16) * (0.8 + 0.4 * n.b), lu.b * 0.85);
+		col = mix(col, forest * 0.85, lu.a * 0.7);
+		vec2 gp = mod(wxy - grid_origin, block);
+		float lot = step(street * 0.5, gp.x) * step(gp.x, block - street * 0.5) * step(street * 0.5, gp.y) * step(gp.y, block - street * 0.5);
+		vec3 town = mix(vec3(0.19, 0.19, 0.2) * (0.9 + 0.2 * g.a), vec3(0.56, 0.54, 0.50) * (0.85 + 0.25 * n.r), lot);
+		col = mix(col, town, smoothstep(0.35, 0.65, lu.r));
+	}
 	float wet = 1.0 - smoothstep(-0.2, 1.4, wpos.y);
 	col = mix(col, col * 0.62, wet * step(-1.5, wpos.y));
 	col = mix(col, seabed * (0.8 + 0.3 * n.r), step(wpos.y, -1.5));

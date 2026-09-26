@@ -45,6 +45,19 @@ static func _weights(world: World, step: int) -> PackedColorArray:
 	return out
 
 
+## MapCity's land use as an RGBA texture (one texel per terrain cell) for the splat shader.
+static func landuse_texture(world: World) -> ImageTexture:
+	var G := World.GRID
+	var lu := world.map.land_use
+	var img := Image.create(G, G, false, Image.FORMAT_RGBA8)
+	for j in G:
+		for i in G:
+			var c: int = lu[j * G + i]
+			img.set_pixel(i, j, Color(1.0 if c in [MapCity.URBAN, MapCity.PORT] else 0.0, 1.0 if c == MapCity.FARM else 0.0,
+				1.0 if c in [MapCity.MANGROVE, MapCity.SWAMP] else 0.0, 1.0 if c == MapCity.JUNGLE else 0.0))
+	return ImageTexture.create_from_image(img)
+
+
 static func build(world: World, q: Quality) -> Node3D:
 	var root := Node3D.new()
 	root.name = "terrain"
@@ -52,13 +65,17 @@ static func build(world: World, q: Quality) -> Node3D:
 	var G := World.GRID
 	var h := world.terrain.get_heights()
 	var n := (G - 1) / step + 1  # vertices per side
-	var cols := _weights(world, step)
+	var cols := _weights(world, step) if q.shaded else Models.terrain_colors(world, step)
 	var mat: Material
 	if q.shaded:
 		var sm := ShaderMaterial.new()
 		sm.shader = load("res://shaders/terrain_splat.gdshader")
 		sm.set_shader_parameter("noise_pack", TexGen.noise_pack())
 		sm.set_shader_parameter("normal_pack", TexGen.normal_pack())
+		if not world.map.land_use.is_empty():
+			sm.set_shader_parameter("landuse", landuse_texture(world))
+			sm.set_shader_parameter("has_landuse", 1.0)
+			sm.set_shader_parameter("grid_origin", MapCity.CITY_C - MapCity.CITY_R)
 		mat = sm
 	else:
 		mat = Models.vertex_material()

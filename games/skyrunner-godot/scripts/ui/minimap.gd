@@ -80,6 +80,13 @@ func _draw() -> void:
 	for j in s.active_jobs:
 		var xy: Array = s.job_xy(j)
 		draw_arc(to_map(xy[0], xy[1]), 8, 0, TAU, 16, Color(0.3, 0.8, 1) if j.is_airdrop() else Color(0.3, 1, 0.3), 2.0)
+	if s.stash_net != null:  # stash houses: a square (grey when burned), trucks as dots
+		for sh in s.stash_net.stashes:
+			var sc: Color = Color(0.5, 0.5, 0.5) if sh.burned else Color(1, 0.55, 0.2).lerp(Color(1, 0.15, 0.1), clampf(sh.heat / 60.0, 0, 1))
+			draw_rect(Rect2(to_map(sh.x, sh.y) - Vector2(4, 4), Vector2(8, 8)), sc, false, 2.0)
+		for t in s.stash_net.trucks:
+			var tp: Array = t.pos(s.time)
+			draw_circle(to_map(tp[0], tp[1]), 3.5, Color(1, 0.85, 0.3))
 	for b in s.maritime.boats:
 		if b.kind == "gofast" and b.state != "delivered":
 			_cross(to_map(b.x, b.y), Color(0.3, 0.9, 1), 4)

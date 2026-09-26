@@ -63,6 +63,23 @@ static func _conifer() -> ArrayMesh:
 	return mb.mesh()
 
 
+## A red mangrove: a tangle of arching prop roots under a wide, low canopy.
+static func _mangrove() -> ArrayMesh:
+	var mb := MeshBuilder.new()
+	for r in 7:
+		var a := TAU * r / 7 + 0.4
+		var foot := [cos(a) * 0.32, sin(a) * 0.32, -0.02]
+		var knee := [cos(a) * 0.2, sin(a) * 0.2, 0.22]
+		mb.quad([foot[0] - 0.015, foot[1], foot[2]], [foot[0] + 0.015, foot[1], foot[2]], [knee[0] + 0.015, knee[1], knee[2]],
+			[knee[0] - 0.015, knee[1], knee[2]], [0.36, 0.27, 0.2, 0.0])
+		mb.quad([knee[0] - 0.015, knee[1], knee[2]], [knee[0] + 0.015, knee[1], knee[2]], [0.015, 0.0, 0.34], [-0.015, 0.0, 0.34],
+			[0.36, 0.27, 0.2, 0.0])
+	mb.cylinder(0, 0, 0.3, 0.035, 0.3, [0.36, 0.27, 0.18, 0.2], 5)
+	for b in [[0.0, 0.0, 0.72, 0.42], [0.3, 0.12, 0.66, 0.3], [-0.28, -0.1, 0.68, 0.32], [0.05, -0.3, 0.7, 0.28], [-0.1, 0.3, 0.74, 0.26]]:
+		_blob(mb, b[0], b[1], b[2], b[3], [0.14, 0.30, 0.13])
+	return mb.mesh()
+
+
 static func _bush() -> ArrayMesh:
 	var mb := MeshBuilder.new()
 	_blob(mb, 0, 0, 0.35, 0.45, [0.22, 0.36, 0.15])
@@ -90,6 +107,23 @@ static func _blob(mb: MeshBuilder, x: float, y: float, z: float, r: float, col: 
 			mb.tri(pts[0], pts[1], pts[2], [col[0] * shade, col[1] * shade, col[2] * shade, 1.0])
 
 
+## A lookup: is (x, y) inside one of the city's building footprints?
+static func _building_index(buildings: Array) -> Callable:
+	var cells := {}
+	for b in buildings:
+		var key := Vector2i(floori(b.x / 100.0), floori(b.y / 100.0))
+		if not cells.has(key):
+			cells[key] = []
+		cells[key].append(b)
+	return func(x: float, y: float) -> bool:
+		for dj in [-1, 0, 1]:
+			for di in [-1, 0, 1]:
+				for b in cells.get(Vector2i(floori(x / 100.0) + di, floori(y / 100.0) + dj), []):
+					if absf(x - b.x) <= b.w / 2 + 0.5 and absf(y - b.y) <= b.d / 2 + 0.5:
+						return true
+		return false
+
+
 static func build(world: World, q: Quality) -> Node3D:
 	var root := Node3D.new()
 	root.name = "trees"
@@ -97,7 +131,10 @@ static func build(world: World, q: Quality) -> Node3D:
 	var count := trees.size() / 4
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 5
-	var kinds := {"palm": [], "broad": [], "conifer": [], "bush": []}
+	var kinds := {"palm": [], "broad": [], "conifer": [], "bush": [], "mangrove": []}
+	var lu := world.map.land_use
+	var scrub_bush := {}  ## trees drawn as a big thorn bush (scrub land)
+	var in_building := _building_index(world.map.buildings)
 	for k in count:
 		var ht: float = trees[k * 4 + 3]
 		if k % q.tree_keep != 0 and ht < 21:  # keep the deliberate tree lines at strip ends
@@ -105,16 +142,37 @@ static func build(world: World, q: Quality) -> Node3D:
 		var z: float = trees[k * 4 + 2]
 		var r := rng.randf()
 		var kind := "broad"
-		if z < 70 and r < 0.8:
+		if not lu.is_empty():
+			var x: float = trees[k * 4]
+			var y: float = trees[k * 4 + 1]
+			if in_building.call(x, y):
+				continue  # a building's obstacle point, drawn by CityRender
+			match MapCity.at(lu, x, y):
+				MapCity.MANGROVE:
+					kind = "mangrove"
+				MapCity.SWAMP:
+					kind = "palm" if r < 0.35 else "broad"
+				MapCity.JUNGLE:
+					kind = "palm" if r < 0.25 else ("conifer" if z > 700 and r > 0.8 else "broad")
+				MapCity.SCRUB:
+					kind = "bush" if r < 0.5 else "broad"
+					if kind == "bush":
+						scrub_bush[k] = true
+				_:
+					if z < 70 and r < 0.8:
+						kind = "palm"
+					elif z > 480 or (z > 250 and r < 0.4):
+						kind = "conifer"
+		elif z < 70 and r < 0.8:
 			kind = "palm"
 		elif z > 480 or (z > 250 and r < 0.4):
 			kind = "conifer"
 		kinds[kind].append(k)
-		if q.shaded and rng.randf() < 0.35:
+		if q.shaded and rng.randf() < 0.35 and not scrub_bush.has(k):
 			kinds["bush"].append(k)
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://shaders/foliage.gdshader")
-	var meshes := {"palm": _palm(), "broad": _broadleaf(), "conifer": _conifer(), "bush": _bush()}
+	var meshes := {"palm": _palm(), "broad": _broadleaf(), "conifer": _conifer(), "bush": _bush(), "mangrove": _mangrove()}
 	for kind in kinds:
 		var list: Array = kinds[kind]
 		if list.is_empty():
@@ -132,7 +190,9 @@ static func build(world: World, q: Quality) -> Node3D:
 			var ht: float = trees[k * 4 + 3]
 			var s := ht * (1.15 if kind == "palm" else 1.0)
 			var pos := Vector3(x, z, -y)
-			if kind == "bush":
+			if kind == "bush" and scrub_bush.has(k):
+				s = ht * 0.5  # scrub: a low, wide thorn bush where a tree stood
+			elif kind == "bush":
 				s = rng.randf_range(1.5, 3.0)
 				var off := Vector2(rng.randf_range(-7, 7), rng.randf_range(-7, 7))
 				pos = Vector3(x + off.x, world.ground(x + off.x, y - off.y), -(y - off.y))

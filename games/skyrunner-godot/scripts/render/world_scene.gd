@@ -38,6 +38,7 @@ func setup(world_: World, q: Quality) -> WorldScene:
 	water = Ocean.new().setup(world, q)
 	add_child(water)
 	add_child(Vegetation.build(world, q))
+	add_child(CityRender.build(world, q))
 	for af in world.airfields:
 		var n := Models.build_airfield(world, af, q)
 		add_child(n)
@@ -163,6 +164,7 @@ func set_hour(h: float) -> void:
 	if water != null:
 		water.set_sky(sky_col)
 	Buildings.set_night(night)
+	CityRender.set_night(night)
 
 
 ## Tonight's weather (Session.weather).

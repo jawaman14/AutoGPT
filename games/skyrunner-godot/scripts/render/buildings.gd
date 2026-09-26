@@ -37,6 +37,8 @@ static func mat(key: String) -> StandardMaterial3D:
 		"asphalt": [Color(0.2, 0.2, 0.21), 0.95, 0.0],
 		"orange": [Color(1.0, 0.45, 0.05), 0.6, 0.0],
 		"green": [Color(0.2, 0.4, 0.2), 0.8, 0.0],
+		"neon": [Color(1.0, 0.25, 0.7), 0.3, 0.0],
+		"neon_cyan": [Color(0.2, 0.9, 1.0), 0.3, 0.0],
 	}
 	var s: Array = specs.get(key, specs["concrete"])
 	var m := StandardMaterial3D.new()
@@ -46,11 +48,11 @@ static func mat(key: String) -> StandardMaterial3D:
 	m.cull_mode = BaseMaterial3D.CULL_DISABLED  # you can walk inside
 	if s[0].a < 1.0:
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	if key == "window_lit":
+	if key in ["window_lit", "neon", "neon_cyan"]:
 		m.emission_enabled = true
 		m.emission = s[0]
 		m.emission_energy_multiplier = 0.0  # WorldScene raises it at night
-	if key not in ["glass", "window_lit", "water"]:
+	if key not in ["glass", "window_lit", "water", "neon", "neon_cyan"]:
 		m.normal_enabled = true
 		m.normal_texture = TexGen.normal_pack()
 		m.normal_scale = 0.5
@@ -64,6 +66,8 @@ static func mat(key: String) -> StandardMaterial3D:
 ## Night: light the windows.
 static func set_night(night: float) -> void:
 	mat("window_lit").emission_energy_multiplier = 2.2 * clampf((night - 0.3) / 0.5, 0.0, 1.0)
+	for k in ["neon", "neon_cyan"]:  # the club's signs glow a little even by day
+		mat(k).emission_energy_multiplier = 0.6 + 3.4 * clampf((night - 0.2) / 0.5, 0.0, 1.0)
 
 
 # ------------------------------------------------------------------ kit
@@ -371,13 +375,23 @@ static func airfield_site(world: World, af: Airfield) -> Node3D:
 # ------------------------------------------------------------------ headquarters
 static func hq(world: World, spec: Dictionary) -> Node3D:
 	var k := Kit.new("hq-" + spec.kind)
-	match spec.kind:
-		"org":
-			_villa(k)
-		"law":
+	match spec.get("style", ""):
+		"nightclub":
+			_nightclub(k)
+		"customs":
 			_task_force(k)
-		_:
+			_customs(k)
+		"hacienda":
 			_compound(k)
+			_hacienda(k)
+		_:
+			match spec.kind:
+				"org":
+					_villa(k)
+				"law":
+					_task_force(k)
+				_:
+					_compound(k)
 	var node := k.finish()
 	var z := world.ground(spec.x, spec.y)
 	node.position = Vector3(spec.x, z, -spec.y)
@@ -482,3 +496,66 @@ static func _compound(k: Kit) -> void:
 	for i in 2:
 		k.box(Vector3(10, 1.2, -6 + i * 5), Vector3(2.4, 2.4, 6.5), "metal_rust")
 		k.box(Vector3(10, 1.4, -9.8 + i * 5), Vector3(2.3, 1.8, 1.6), "black")
+
+
+## The organisation's front: Club Tropicana, two storeys of pink stucco on a
+## downtown corner, neon on the facade, a dance floor below and the boss's
+## office above - reached by the stairs at the back. The desk (orders) and the
+## map table (Los Cuervos) are in the office.
+static func _nightclub(k: Kit) -> void:
+	var w := 22.0
+	var d := 16.0
+	k.box(Vector3(0, 0.05, -2), Vector3(30, 0.1, 26), "concrete")  # the pavement
+	for y in [0.0, 4.2]:
+		k.wall(-w / 2, -d / 2, w / 2, -d / 2, y, 4.1, 0.3, "stucco_pink", 3.0 if y == 0 else 0.0)
+		k.wall(-w / 2, d / 2, w / 2, d / 2, y, 4.1, 0.3, "stucco_pink")
+		k.wall(-w / 2, -d / 2, -w / 2, d / 2, y, 4.1, 0.3, "stucco_pink")
+		k.wall(w / 2, -d / 2, w / 2, d / 2, y, 4.1, 0.3, "stucco_pink", 1.4 if y == 0 else 0.0)
+		k.box(Vector3(0, y + 4.15, 0), Vector3(w + 0.4, 0.2, d + 0.4), "concrete_dark")
+	# neon: the name over the door, a stripe around the parapet
+	k.box(Vector3(0, 5.6, -d / 2 - 0.25), Vector3(12, 1.6, 0.1), "neon", false)
+	k.box(Vector3(0, 8.5, -d / 2 - 0.2), Vector3(w, 0.25, 0.1), "neon_cyan", false)
+	k.box(Vector3(-w / 2 - 0.2, 8.5, 0), Vector3(0.1, 0.25, d), "neon_cyan", false)
+	k.box(Vector3(w / 2 + 0.2, 8.5, 0), Vector3(0.1, 0.25, d), "neon_cyan", false)
+	_windows(k, -w / 2 + 1.5, w / 2 - 1.5, -d / 2 - 0.16, 6.2, 6)
+	# downstairs: the bar and the dance floor
+	k.box(Vector3(-6, 0.55, 5.5), Vector3(8, 1.1, 1.2), "wood")
+	k.box(Vector3(3, 0.03, 0), Vector3(9, 0.06, 9), "neon_cyan", false)
+	k.lamp(Vector3(3, 3.4, 0), 1.6, 12.0)
+	# the stairs at the back up to the office (a ramp the walker can climb)
+	for i in 14:
+		k.box(Vector3(w / 2 - 1.6, 0.15 + i * 0.3, -6 + i * 0.5), Vector3(2.4, 0.3, 0.5), "concrete_dark")
+	k.box(Vector3(-3, 4.2 + 0.45, 3.5), Vector3(2.8, 0.9, 1.2), "wood")  # the boss's desk
+	k.box(Vector3(-3, 4.2 + 0.6, 4.7), Vector3(0.7, 1.2, 0.7), "black")
+	k.interact(Vector3(-3, 5.2, 2.2), "hq_org", "The boss's desk: tonight's orders")
+	k.box(Vector3(4, 4.2 + 0.5, 2.0), Vector3(3.0, 1.0, 2.0), "wood")
+	k.box(Vector3(4, 4.2 + 1.02, 2.0), Vector3(2.8, 0.04, 1.8), "green", false)
+	k.interact(Vector3(4, 5.2, 0.4), "hq_rival", "Map table: what we know about Los Cuervos")
+	k.lamp(Vector3(0, 7.6, 2.0))
+	# a doorman's rope and the boss's car at the kerb
+	k.box(Vector3(0, 0.5, -d / 2 - 2.0), Vector3(4, 1.0, 0.08), "red", false)
+	k.box(Vector3(9, 0.7, -d / 2 - 4.5), Vector3(4.6, 1.4, 2.0), "black")
+	k.box(Vector3(9, 1.6, -d / 2 - 4.5), Vector3(2.6, 0.6, 1.9), "glass", false)
+
+
+## The customs house extras: a lattice radar tower and a customs launch at the quay.
+static func _customs(k: Kit) -> void:
+	for sx in [-1, 1]:
+		for sz in [-1, 1]:
+			k.box(Vector3(16 + sx * 1.5, 9.0, 4 + sz * 1.5), Vector3(0.35, 18.0, 0.35), "white", false)
+	k.box(Vector3(16, 18.2, 4), Vector3(4.2, 0.4, 4.2), "white", false)
+	k.cylinder(Vector3(16, 18.4, 4), 0.3, 1.4, "metal", 8, false)
+	k.box(Vector3(16, 20.0, 4), Vector3(6.5, 0.9, 0.35), "metal", false)  # the antenna
+	k.box(Vector3(0, 9.0, -6.6), Vector3(9, 1.1, 0.1), "blue", false)  # ADUANAS
+	k.box(Vector3(-8, 0.7, -15.5), Vector3(3.0, 1.4, 11), "white")  # a customs launch hauled out
+	k.box(Vector3(-8, 1.9, -14), Vector3(2.2, 1.0, 3.0), "blue", false)
+
+
+## The hacienda: a long, low terracotta-roofed house inside the compound walls.
+static func _hacienda(k: Kit) -> void:
+	k.box(Vector3(6, 1.8, 13), Vector3(22, 3.6, 8), "stucco")
+	k.gable(Vector3(6, 3.6, 13), 22, 8, 2.2, "terracotta", 0.9)
+	for i in 5:  # the veranda posts
+		k.box(Vector3(-3 + i * 4.5, 1.4, 8.4), Vector3(0.3, 2.8, 0.3), "wood")
+	k.box(Vector3(6, 2.9, 8.4), Vector3(22, 0.2, 2.4), "terracotta", false)
+	_windows(k, -3, 15, 8.9, 1.8, 4)

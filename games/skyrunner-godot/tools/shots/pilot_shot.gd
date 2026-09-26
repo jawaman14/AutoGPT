@@ -3,6 +3,7 @@ extends SceneTree
 ##   godot --script res://tools/shots/pilot_shot.gd -- <low|medium|high> <hour> <out.png> <chase|cockpit|tower> [view] [map_seed] [sky] [moon]
 ## view: ground (default: parked at HAR) | air (climbing out near Eagle's Nest) |
 ##       org | law | rival (looking at that HQ) | overview (high above the island)
+##       city (the port city from over the harbour) | estuary | farm (map-specific: the city coast)
 ##       foot (on foot beside the parked aircraft, looking at the hangars) |
 ##       villa (on foot inside the org's villa, at the boss's desk)
 var app: PilotApp
@@ -43,6 +44,15 @@ func _init():
 		var py: float = h.y + cos(hd) * 38 - sin(hd) * 14
 		var gz := s.world.ground(h.x, h.y)
 		fixed_cam = [Vector3(px, maxf(gz, s.world.ground(px, py)) + 9.0, -py), Vector3(h.x, gz + 3.0, -h.y)]
+	elif view == "city":
+		fixed_cam = [Vector3(MapCity.CITY_C.x + 1400, 330, -(MapCity.CITY_C.y - 2200)), Vector3(MapCity.CITY_C.x - 300, 10, -MapCity.CITY_C.y)]
+	elif view == "downtown":
+		fixed_cam = [Vector3(MapCity.CITY_C.x + 700, 140, -(MapCity.CITY_C.y - 900)), Vector3(MapCity.CITY_C.x - 200, 20, -(MapCity.CITY_C.y + 300))]
+	elif view == "estuary":
+		fixed_cam = [Vector3(-9000, 420, 9200), Vector3(-12000, 0, 7000)]
+	elif view == "farm":
+		var frm := World.airfield("FRM")
+		fixed_cam = [Vector3(frm.x + 1800, 520, -(frm.y - 2600)), Vector3(frm.x - 400, 120, -frm.y)]
 	elif view == "overview":
 		var har := World.airfield("HAR")
 		fixed_cam = [Vector3(har.x - 3000, 2600, -(har.y - 4000)), Vector3(0, 200, 0)]

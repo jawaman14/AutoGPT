@@ -214,7 +214,7 @@ func _hints() -> Array:
 			out = [["RIGHT-CLICK", "send the go-fast there", ""]]
 		Roles.CONTROLLER:
 			out = [["CLICK", "unit, then track", ""], ["H", "heli", "h"], ["I", "interceptor", "i"], ["C", "cutter", "c"],
-				["R", "recall", "r"], ["E", "encryption", "e"], ["B", "aerostat", "b"], ["G", "coverage", "g"], ["T", "tac channel", "t"], ["J", "jam here", "j"], ["U", "upgrades", "u"], ["TAB", "next unit", "tab"]]
+				["R", "recall", "r"], ["E", "encryption", "e"], ["B", "aerostat", "b"], ["G", "coverage", "g"], ["T", "tac channel", "t"], ["J", "jam here", "j"], ["X", "raid stash", "x"], ["U", "upgrades", "u"], ["TAB", "next unit", "tab"]]
 			if upgrades != null and upgrades.visible:
 				out = [["U", "back to the desk", "u"], ["UP/DOWN", "select", "down"], ["ENTER", "buy", "enter"]]
 		Roles.BOSS, Roles.CHIEF:
@@ -423,6 +423,15 @@ func _law_key(k: String, snap: Dictionary) -> void:
 			upgrades.move(1 if k == "down" else -1)
 		elif k == "enter":
 			upgrades.activate()
+		return
+	if k == "x":
+		# raid the known stash house nearest the mouse (or the hottest one)
+		var known: Array = snap.get("stashes", []).filter(func(st): return not st.burned)
+		if known.is_empty():
+			status = "No stash house known yet: they warm up as loads go through them."
+			return
+		var pick = Py.max_by(known, func(st): return st.heat) if pos == null else Py.min_by(known, func(st): return PyMath.hypot(st.x - pos.x, st.y - pos.y))
+		_cmd("raid_stash", {"id": pick.id})
 		return
 	if k == "j":
 		# the jammer van: at the mouse, else on the latest DF fix

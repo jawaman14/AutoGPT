@@ -207,6 +207,13 @@ func _draw_law() -> void:
 	for z in snap.get("jammed", []):
 		_circle(z[0], z[1], z[2], Color(1, 0.3, 0.9, 0.85), 2.0)
 		_text(z[0], z[1], "JAMMED", Color(1, 0.45, 0.95))
+	for sh in snap.get("stashes", []):
+		var sc: Color = Color(0.5, 0.5, 0.5) if sh.burned else Color(1, 0.55, 0.2).lerp(Color(1, 0.15, 0.1), clampf(float(sh.heat) / 60.0, 0, 1))
+		var sp := w2m(sh.x, sh.y)
+		draw_rect(Rect2(sp - Vector2(5, 5), Vector2(10, 10)), sc, false, 2.0)
+		_text(sh.x, sh.y, "%s%s" % [sh.name, " (burned)" if sh.burned else ""], sc)
+	for t in snap.get("trucks", []):
+		draw_circle(w2m(t.x, t.y), 4.0, Color(1, 0.85, 0.3))
 	for tip in snap.get("tips", []):
 		_circle(tip.x, tip.y, tip.r, Color(1, 0.8, 0.2, 0.8), 2.0)
 		_text(tip.x, tip.y, str(tip.text).substr(0, 28), Color(1, 0.85, 0.3))
