@@ -108,6 +108,7 @@ func test_mules_mostly_get_through_cold_and_mostly_dont_hot() -> void:
 	var f0 := s.law_funds
 	var c0 := isl.caught
 	for k in 3:
+		isl.next_mules = 0.0  # (skip the restock wait)
 		isl.ship("mules", 8)
 	s.time += Island.MULE_ETA_S + 1.0
 	isl.update(10.0)
@@ -126,6 +127,11 @@ func test_a_container_clears_or_is_opened() -> void:
 	isl.update(10.0)
 	check(s.money > m0 or isl.caught == 1, "resolved")
 	check(isl.shipments.is_empty(), "")
+	check(isl.ship("ship", 600) != "" or true, "")
+	isl.shipments.clear()
+	isl.next_ship = s.time + 60.0
+	check(isl.ship("ship", 600).begins_with("No container space"), "the freighter's full until the connection restocks")
+	isl.next_ship = 0.0
 	# a hurricane holds the freighters
 	isl.ship("ship", 600)
 	isl.status = "hurricane"

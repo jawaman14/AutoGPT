@@ -40,10 +40,14 @@ const AIRSPACE_R := 11000.0  ## the MiGs' patch around the island
 const PRICE_PER_LB := 18.0  ## the island's price for a pound of product
 const STREET_PER_LB := 55.0  ## what a pound fetches on the mainland (before the market)
 const MULE_KG := 1.0
-const MULE_FEE := 1500
+const MULE_COST := 1400  ## a kilo of the pure product at the island's price, plus the mule's fee and ticket
+const MULE_VALUE := 2600  ## what that kilo fetches cut and sold on the mainland (before the market)
+const MULE_FEE := 800
 const MULE_ETA_S := 900.0
 const SHIP_ETA_S := 1500.0
 const PASSAGE_S := 2400.0
+const RESTOCK_S := 1200.0  ## the island's connection needs this long between loads for each route
+const SHIP_FREIGHT := 6000  ## the shipping line's cut and the paperwork
 const RUNNER_NODES := ["baggage_handlers", "forged_papers", "mule_school", "false_bottoms"]
 const LAW_NODES := ["sniffer_dogs", "passenger_profiling", "container_xray"]
 
@@ -62,6 +66,8 @@ var shipments: Array = []  ## {id, method, lb, n, cost, value, eta, p}
 var delivered := 0
 var caught := 0
 var intercepts := 0
+var next_mules := 0.0  ## when the connection has another batch for the mules
+var next_ship := 0.0
 var last := ""
 var _serial := 0
 var _t := 0.0
@@ -147,11 +153,11 @@ func ship_odds() -> Array:
 	if port_heat > 0.0:
 		why.append("heat x%.2f" % (1.0 + port_heat / 100.0))
 	if law_has("container_xray"):
-		p *= 1.7
-		why.append("X-ray x1.7")
+		p *= 2.0
+		why.append("X-ray x2")
 	if inspections_until > sess.time:
-		p *= 1.5
-		why.append("inspections x1.5")
+		p *= 2.0
+		why.append("inspections x2")
 	if law_has("sniffer_dogs"):
 		p *= 1.15
 		why.append("dogs x1.15")
@@ -176,24 +182,30 @@ func ship(method: String, amount: int) -> String:
 	if not open():
 		return "The island is closed: a purge. Nobody will touch our product."
 	if method == "mules":
+		if sess.time < next_mules:
+			return "The connection has nothing for the mules for %d min." % int(ceil((next_mules - sess.time) / 60.0))
 		var n := clampi(amount, 1, 8)
 		var lb := n * MULE_KG * 2.2046
-		var cost := int(lb * PRICE_PER_LB * price_mult) + n * MULE_FEE
+		var cost := int(n * (MULE_COST - MULE_FEE) * price_mult) + n * MULE_FEE
 		if sess.money < cost:
 			return "Need $%s." % Py.money(cost)
 		sess.money -= cost
+		next_mules = sess.time + RESTOCK_S
 		_serial += 1
 		shipments.append({"id": "M%d" % _serial, "method": "mules", "n": n, "lb": lb, "cost": cost,
-			"value": int(lb * STREET_PER_LB * 3.0), "eta": sess.time + MULE_ETA_S, "p": mule_odds()[0]})
+			"value": n * MULE_VALUE, "eta": sess.time + MULE_ETA_S, "p": mule_odds()[0]})
 		last = "%d mules on the airliner to San Telmo Intl ($%s)" % [n, Py.money(cost)]
 		sess.say("THE ISLAND - " + last)
 		return ""
 	if method == "ship":
+		if sess.time < next_ship:
+			return "No container space on the freighter for %d min." % int(ceil((next_ship - sess.time) / 60.0))
 		var lb := clampi(amount, 100, 1200)
-		var cost := int(lb * PRICE_PER_LB * price_mult) + 3000
+		var cost := int(lb * PRICE_PER_LB * price_mult) + SHIP_FREIGHT
 		if sess.money < cost:
 			return "Need $%s." % Py.money(cost)
 		sess.money -= cost
+		next_ship = sess.time + RESTOCK_S
 		_serial += 1
 		shipments.append({"id": "S%d" % _serial, "method": "ship", "n": 1, "lb": float(lb), "cost": cost,
 			"value": int(lb * STREET_PER_LB), "eta": sess.time + SHIP_ETA_S, "p": ship_odds()[0]})
@@ -229,6 +241,7 @@ func _resolve(sh: Dictionary) -> void:
 				sess.law_say("One of the mules talks: she was paid by a nightclub downtown")
 		if got > 0:
 			delivered += got
+			airport_heat = minf(100.0, airport_heat + 2.0 * got)  # the island flight gets watched
 			sess.econ.record_delivery("cocaine", "sea")
 		last = "Mules: %d through, %d caught (+$%s)" % [got, lost, Py.money(pay)]
 	else:
@@ -243,6 +256,7 @@ func _resolve(sh: Dictionary) -> void:
 			last = "The container was opened at the port: %d lb gone" % int(sh.lb)
 		else:
 			delivered += 1
+			port_heat = minf(100.0, port_heat + 8.0)  # somebody notices the shrimp line's volume
 			sess.money += int(sh.value)
 			sess.econ.record_delivery("cocaine", "sea")
 			last = "The container cleared customs: +$%s" % Py.money(int(sh.value))

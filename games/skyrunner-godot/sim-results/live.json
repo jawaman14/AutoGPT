@@ -1,0 +1,254 @@
+{
+  "configs": {
+    "agency": {
+      "agency": {
+        "burned_rate": 0.0,
+        "exposure": 32.625,
+        "flights": 5.4,
+        "hangout_rate": 0.0,
+        "withheld": 1881.4625
+      },
+      "law_funds": {
+        "mean": 25200.0,
+        "p10": 25200.0,
+        "p50": 25200.0,
+        "p90": 25200.0
+      },
+      "money": {
+        "mean": 94618.775,
+        "p10": 75219.0,
+        "p50": 94100.0,
+        "p90": 112286.0
+      },
+      "money_min": {
+        "mean": 16000.0,
+        "p10": 16000.0,
+        "p50": 16000.0,
+        "p90": 16000.0
+      },
+      "suspicion": {
+        "mean": 0.0,
+        "p10": 0.0,
+        "p50": 0.0,
+        "p90": 0.0
+      }
+    },
+    "all": {
+      "agency": {
+        "burned_rate": 0.0,
+        "exposure": 32.625,
+        "flights": 5.4,
+        "hangout_rate": 0.0,
+        "withheld": 2192.4
+      },
+      "family": {
+        "cons": 0.2,
+        "loans": 0.0,
+        "rat_rate": 0.25,
+        "respect": 60.9996146597191,
+        "taxed_rate": 0.9625,
+        "trial_rate": 0.0625,
+        "tribute_paid": {
+          "mean": 9125.0,
+          "p10": 6000.0,
+          "p50": 6000.0,
+          "p90": 15000.0
+        }
+      },
+      "island": {
+        "catch_rate": 0.0648180242634315,
+        "closed_frac": 0.0,
+        "intercepts": 0.0,
+        "relations": 55.375,
+        "shipments": {
+          "mean": 12.2875,
+          "p10": 11.0,
+          "p50": 13.0,
+          "p90": 13.0
+        },
+        "spent": 8859410,
+        "units_caught": 187,
+        "units_sent": 2885
+      },
+      "law_funds": {
+        "mean": 10167.625,
+        "p10": 6900.0,
+        "p50": 9500.0,
+        "p90": 12000.0
+      },
+      "money": {
+        "mean": 83435.5625,
+        "p10": 43039.0,
+        "p50": 85012.0,
+        "p90": 117359.0
+      },
+      "money_min": {
+        "mean": 11692.3375,
+        "p10": 10320.0,
+        "p50": 12000.0,
+        "p90": 12000.0
+      },
+      "suspicion": {
+        "mean": 21.7625,
+        "p10": 0.0,
+        "p50": 20.0,
+        "p90": 42.0
+      }
+    },
+    "control": {
+      "law_funds": {
+        "mean": 25200.0,
+        "p10": 25200.0,
+        "p50": 25200.0,
+        "p90": 25200.0
+      },
+      "money": {
+        "mean": 70000.0,
+        "p10": 70000.0,
+        "p50": 70000.0,
+        "p90": 70000.0
+      },
+      "money_min": {
+        "mean": 16000.0,
+        "p10": 16000.0,
+        "p50": 16000.0,
+        "p90": 16000.0
+      },
+      "suspicion": {
+        "mean": 0.0,
+        "p10": 0.0,
+        "p50": 0.0,
+        "p90": 0.0
+      }
+    },
+    "family": {
+      "family": {
+        "cons": 0.15,
+        "loans": 0.0,
+        "rat_rate": 0.0375,
+        "respect": 54.3785921730029,
+        "taxed_rate": 0.65,
+        "trial_rate": 0.0,
+        "tribute_paid": {
+          "mean": 3900.0,
+          "p10": 0.0,
+          "p50": 6000.0,
+          "p90": 6000.0
+        }
+      },
+      "law_funds": {
+        "mean": 9340.75,
+        "p10": 9200.0,
+        "p50": 9200.0,
+        "p90": 9200.0
+      },
+      "money": {
+        "mean": 56059.25,
+        "p10": 54150.0,
+        "p50": 55320.0,
+        "p90": 59320.0
+      },
+      "money_min": {
+        "mean": 15787.375,
+        "p10": 14650.0,
+        "p50": 16000.0,
+        "p90": 16000.0
+      },
+      "suspicion": {
+        "mean": 3.0,
+        "p10": 0.0,
+        "p50": 0.0,
+        "p90": 20.0
+      }
+    },
+    "island": {
+      "island": {
+        "catch_rate": 0.0691874497184232,
+        "closed_frac": 0.0,
+        "intercepts": 0.0,
+        "relations": 56.0,
+        "shipments": {
+          "mean": 10.075,
+          "p10": 9.0,
+          "p50": 10.0,
+          "p90": 11.0
+        },
+        "spent": 6903760,
+        "units_caught": 172,
+        "units_sent": 2486
+      },
+      "law_funds": {
+        "mean": 11900.0,
+        "p10": 10200.0,
+        "p50": 11800.0,
+        "p90": 14200.0
+      },
+      "money": {
+        "mean": 68109.25,
+        "p10": 47480.0,
+        "p50": 69300.0,
+        "p90": 84990.0
+      },
+      "money_min": {
+        "mean": 12000.0,
+        "p10": 12000.0,
+        "p50": 12000.0,
+        "p90": 12000.0
+      },
+      "suspicion": {
+        "mean": 0.3,
+        "p10": 0.0,
+        "p50": 0.0,
+        "p90": 0.0
+      }
+    }
+  },
+  "hours": 3.0,
+  "odds": [
+    {
+      "case": "cold",
+      "mule_p": 0.1,
+      "mule_roi": 0.67,
+      "ship_p": 0.08,
+      "ship_roi": 0.69
+    },
+    {
+      "case": "law: dogs + profiling",
+      "mule_p": 0.224,
+      "mule_roi": 0.44,
+      "ship_p": 0.092,
+      "ship_roi": 0.66
+    },
+    {
+      "case": "law: everything + crackdown",
+      "mule_p": 0.403,
+      "mule_roi": 0.11,
+      "ship_p": 0.368,
+      "ship_roi": 0.16
+    },
+    {
+      "case": "ours: all perks",
+      "mule_p": 0.028,
+      "mule_roi": 0.81,
+      "ship_p": 0.04,
+      "ship_roi": 0.76
+    },
+    {
+      "case": "both: everything",
+      "mule_p": 0.113,
+      "mule_roi": 0.65,
+      "ship_p": 0.184,
+      "ship_roi": 0.5
+    }
+  ],
+  "seconds": 18.768,
+  "seeds": 80,
+  "stand_ins": {
+    "law_every_s": 600.0,
+    "law_pay": 900.0,
+    "mule_max": 0.3,
+    "run_every_s": 300.0,
+    "run_pay": 1500,
+    "ship_max": 0.25
+  }
+}

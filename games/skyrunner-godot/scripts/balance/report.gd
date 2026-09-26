@@ -75,6 +75,9 @@ const CHANGELOG := [
 	["Upgrade trees, stash houses and markets live outside the season model",
 		"Requested: espionage, counter-surveillance and weaponry on upgrade trees; a city-coast map with stash houses; an economy where prices move with rivals, police, goods and fuel. All three act on the live game: tree nodes change sensor ranges, DF, boarding and raid odds; stash runs add a truck leg the police can stop; markets move what a load pays. The season simulator abstracts nights into zone probabilities and a fixed run value, so it doesn't see any of them.",
 		"Deliberately left out of the equilibrium: each is roughly symmetric (every runner node has a law counter - burst radio vs DF, spoofer vs the fused picture, mole vs mole hunt, armed boat vs fast cutter; a busy stash heats up and gets raided; a market the runner floods pays less), and the AI chief buys law upgrades only in live play, as forfeiture comes in. Their tests pin the mechanics (tests/test_upgrades.gd, test_city_map.gd, test_economy.gd); balancing them is a playtest job, listed under known limits."],
+	["The live-play systems got their own simulator",
+		"Requested: a balance run after the Family, Isla Soberana and the Company's double game went in. None of them are in the season model, so tools/live_balance.gd steps them directly (80 seeds x 3 simulated hours x 5 configurations; flown runs stand in as income). First run: a mule lost money in every case (ROI -0.77 to -0.86: $364 of 'sugar' for a $1,540 cost); the Family was convicted in 100% of runs because the RICO case drifted 0.3/min on its own (+54 in 3 h); respect bled to 15-19 because every declined offer cost 3 points and nothing brought it back. After a fix, the island dominated: $133k median against $70k for the control, a shipment every 10 minutes at ROI ~1.0 and our perks cancelling the task force's kit.",
+		"A mule carries a kilo of the pure product ($1,400 cost, worth $2,600); a container pays the shipping line $6,000; X-ray and inspections double the odds instead of x1.7/x1.5; the island's connection restocks each route every 20 minutes; each load that gets through warms that route (+2 heat a mule, +8 a container). RICO filings cost $4,000 and add 5-10 (+6 with a rat); the case drifts 0.1/min; a declined offer costs 1 point of respect and respect drifts back toward 50; the street tax comes at most every 45 minutes. Now: ROI per load 0.67-0.69 cold, 0.11-0.16 against the task force's whole kit and a crackdown, 0.76-0.81 with our perks; the island config ends level with the control after paying for the perks (the payoff is in longer play); the Family costs about $15k in 3 h, mostly tribute, with a rat in 4-25% of runs and a trial in 0-6%."],
 ]
 
 
@@ -286,6 +289,35 @@ static func write_report(results_dir: String, out_path: String) -> String:
 		for k in Py.sorted_by(wo.keys(), func(k): return -absf(wo[k] - base)):
 			lines.append("| %s | %s%% | %s |" % [k, Py.f(100 * wo[k], 1), _signed(100 * (wo[k] - base), 1)])
 		lines.append("")
+	var live = _load(results_dir, "live")
+	if live is Dictionary and not live.is_empty():
+		lines += ["## 7. The live-play systems: the Family, the island, the Company", "",
+			("`tools/live_balance.gd`: %d seeds x %s simulated hours per configuration, stepping those systems directly. " % [int(live["seeds"]), Py.f(live["hours"], 0)])
+			+ "Flown runs stand in as $%s every %d min; the organisation's AI takes the Family's offers by their read and trades with the island " % [Py.money(int(live["stand_ins"]["run_pay"])), int(live["stand_ins"]["run_every_s"] / 60)]
+			+ "when the odds are good; the task force's AI buys the customs tree, cracks down after a catch and files RICO when it can.", "",
+			"| configuration | money p10 / p50 / p90 | task-force funds p50 | suspicion p50 |", "|---|---|---|---|"]
+		for k in live["configs"]:
+			var c: Dictionary = live["configs"][k]
+			lines.append("| %s | $%s / $%s / $%s | $%s | %s |" % [k, Py.money(int(c["money"]["p10"])), Py.money(int(c["money"]["p50"])),
+				Py.money(int(c["money"]["p90"])), Py.money(int(c["law_funds"]["p50"])), Py.f(c["suspicion"]["p50"], 0)])
+		var al: Dictionary = live["configs"].get("all", {})
+		if al.has("family"):
+			var fm: Dictionary = al["family"]
+			lines += ["", "The Family (all systems on): tribute paid p50 $%s; asked in %s of runs; a rat in %s; the Commission trial in %s; %s cons a run; respect ends at %s." % [
+				Py.money(int(fm["tribute_paid"]["p50"])), _pct(fm["taxed_rate"]), _pct(fm["rat_rate"]), _pct(fm["trial_rate"]), Py.f(fm["cons"], 2), Py.f(fm["respect"], 0)]]
+		if al.has("island"):
+			var il: Dictionary = al["island"]
+			lines += ["", "The island: %s shipments a run (p50); %s of mules and containers caught; closed by a purge %s of the time." % [
+				Py.f(il["shipments"]["p50"], 0), _pct(il["catch_rate"]), _pct(il["closed_frac"])]]
+		if al.has("agency"):
+			var ag: Dictionary = al["agency"]
+			lines += ["", "The Company: %s flights a run; $%s 'in the mail'; hung out to dry in %s of runs; exposed in %s." % [
+				Py.f(ag["flights"], 1), Py.money(int(ag["withheld"])), _pct(ag["hangout_rate"]), _pct(ag["burned_rate"])]]
+		lines += ["", "Customs odds and expected return per dollar for one load:", "",
+			"| case | mule caught | mule ROI | container found | container ROI |", "|---|---|---|---|---|"]
+		for r in live["odds"]:
+			lines.append("| %s | %s | %s | %s | %s |" % [r["case"], _pct(r["mule_p"]), Py.f(r["mule_roi"], 2), _pct(r["ship_p"]), Py.f(r["ship_roi"], 2)])
+		lines.append("")
 	lines += ["## Known limits", "",
 		"- The tactical numbers come from one bot that flies well but plays simply: it follows valleys "
 		+ "and ducks when it sees police, but it doesn't read the police radio or bluff. Humans will do "
@@ -303,7 +335,10 @@ static func write_report(results_dir: String, out_path: String) -> String:
 		"- The upgrade trees, the city map's stash runs and the markets aren't in the season model (entry 23). "
 		+ "They're built to be symmetric, but only playtests will say whether, say, the mole or the jammer van "
 		+ "is priced right. The tactical sweep and the seasons run on the classic island; the city map shares "
-		+ "the zones and rules, not the calibration."]
+		+ "the zones and rules, not the calibration.",
+		"- The live-play simulator (section 7) doesn't fly: runs are a fixed income, the Agency's flights and the island's "
+		+ "loads flown home carry no air risk there, and what the Family's services save (a bust turned into a fine, a "
+		+ "boarding slowed) isn't counted. Read it for the economies of those systems, not for who wins."]
 	DirAccess.make_dir_recursive_absolute(out_path.get_base_dir())
 	var f := FileAccess.open(out_path, FileAccess.WRITE)
 	f.store_string("\n".join(lines) + "\n")

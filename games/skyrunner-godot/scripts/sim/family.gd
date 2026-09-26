@@ -52,7 +52,7 @@ const LOAN_DUE_S := 1800.0
 const DOCKS_S := 1800.0
 const MUSCLE_S := 1800.0
 const PAYROLL_S := 1800.0
-const RICO_CASE_COST := 2500
+const RICO_CASE_COST := 4000
 const RAT_AT := 60.0
 
 const GOOD_READS := {
@@ -89,6 +89,8 @@ var lawyer := ""  ## "" | "honest" | "con": on retainer for the next bust
 var tribute_due := 0
 var tribute_by := -1.0
 var taxed := false  ## the street tax has been asked for at least once
+var tribute_total := 0  ## all the tribute paid
+var _tax_next := 0.0
 var payroll_until := -1.0
 var knows := {}  ## stash id -> true: what the Family has learned about us
 var loans_taken := 0
@@ -268,7 +270,7 @@ func decline(id: String) -> String:
 	if o == null:
 		return "No such offer."
 	offers.erase(o)
-	respect = maxf(0.0, respect - 3.0)  # nobody says no to the Family for free
+	respect = maxf(0.0, respect - 1.0)  # nobody says no to the Family for free
 	last = "Declined: %s" % o.text
 	return ""
 
@@ -330,6 +332,7 @@ func pay_tribute() -> String:
 	if sess.money < tribute_due:
 		return "Need $%s." % Py.money(tribute_due)
 	sess.money -= tribute_due
+	tribute_total += tribute_due
 	respect = minf(100.0, respect + 10.0)
 	_did("Tribute paid: $%s. The Family is satisfied - for now" % Py.money(tribute_due))
 	tribute_due = 0
@@ -345,7 +348,7 @@ func rico_case() -> String:
 	if sess.law_funds < RICO_CASE_COST:
 		return "Need $%d in funds." % RICO_CASE_COST
 	sess.law_funds -= RICO_CASE_COST
-	rico = minf(100.0, rico + 8.0 + rng.uniform(0.0, 6.0) + (8.0 if rat else 0.0))
+	rico = minf(100.0, rico + 5.0 + rng.uniform(0.0, 5.0) + (6.0 if rat else 0.0))
 	sess.law_say("RICO: the organised-crime squad files for more wiretaps on the Morettis - case %d%%" % int(rico))
 	_check_trial()
 	return ""
@@ -421,8 +424,9 @@ func update(dt: float) -> void:
 		payroll_until = -1.0
 		sess.apply_upgrades()
 	# the street tax
-	if tribute_due <= 0 and sess.money >= TAX_AT and (not taxed or rng.random() < 0.01 * step / 10.0):
+	if tribute_due <= 0 and sess.money >= TAX_AT and now >= _tax_next and (not taxed or rng.random() < 0.02 * step / 10.0):
 		taxed = true
+		_tax_next = now + 2700.0  # at most every 45 min
 		tribute_due = int(sess.money * TAX_RATE / 1000) * 1000
 		tribute_by = now + TAX_DUE_S
 		greed = minf(1.0, greed + 0.05)
@@ -439,7 +443,9 @@ func update(dt: float) -> void:
 		_side_t = 0.0
 		_business()
 	# a racketeering case grows on its own, slowly; past RAT_AT someone may flip
-	rico = minf(100.0, rico + 0.3 * step / 60.0)
+	rico = minf(100.0, rico + 0.1 * step / 60.0)
+	# old grudges fade: respect drifts back toward 50
+	respect += clampf(50.0 - respect, -1.0, 1.0) * step / 600.0
 	if not rat and rico >= RAT_AT and rng.random() < 0.03 * step / 10.0:
 		_flip()
 	if rat:

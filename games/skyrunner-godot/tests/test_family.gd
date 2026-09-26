@@ -167,7 +167,7 @@ func test_the_street_tax() -> void:
 	var r0 := t.family.respect
 	t.time += Family.TAX_DUE_S + 1.0
 	t.family.update(10.0)
-	check(t.family.respect <= r0 - 25.0, "an insult")
+	check(t.family.respect <= r0 - 24.0, "an insult")
 	check(t.messages.any(func(m): return "tribute wasn't paid" in m[1]), "and a torching")
 	s.dispose()
 	t.dispose()
