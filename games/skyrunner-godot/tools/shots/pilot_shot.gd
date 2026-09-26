@@ -5,7 +5,8 @@ extends SceneTree
 ##       org | law | rival (looking at that HQ) | overview (high above the island)
 ##       city (the port city from over the harbour) | estuary | farm (map-specific: the city coast)
 ##       foot (on foot beside the parked aircraft, looking at the hangars) |
-##       villa (on foot inside the org's villa, at the boss's desk)
+##       villa (on foot inside the org's villa, at the boss's desk) |
+##       gun (on foot by the hangars with a rifle from the armoury)
 var app: PilotApp
 var n := 0
 var q := "medium"
@@ -24,6 +25,8 @@ func _init():
 	if a.size() > 3: cam = a[3]
 	if a.size() > 4: view = a[4]
 	var opts := {"seed": 1, "location": "HAR"}
+	if view == "gun":
+		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "ground_war": true})
 	if a.size() > 5: opts["map_seed"] = int(a[5])
 	if a.size() > 6:
 		opts["weather"] = {"sky": a[6], "moon": float(a[7]) if a.size() > 7 else 0.5}
@@ -68,7 +71,7 @@ func _areas(node: Node, action: String, out: Array) -> Array:
 
 func _process(_d):
 	n += 1
-	if n == 2 and view in ["foot", "villa"]:
+	if n == 2 and view in ["foot", "villa", "gun"]:
 		_on_foot()
 	if fixed_cam != null:
 		app.set_process(false)  # the app would move its camera back (processing re-enables on ready)
@@ -88,15 +91,18 @@ func _on_foot() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	var w := app.walker
 	w.look_enabled = false
-	var target := "hangar" if view == "foot" else "hq_org"
+	var target := "hq_org" if view == "villa" else "hangar"
+	if view == "gun" and app.gun != null:
+		app.s.arsenals.org.add("rifle", 1)  # the shot's rifle
+		app.gun.key("2")
 	var areas := _areas(app.scene, target, [])
-	if view == "foot":
+	if view != "villa":
 		areas = areas.filter(func(a): return a.get_meta("field", "") == "HAR" and str(a.get_meta("label")).begins_with("Hangar"))
 	if not areas.is_empty():
 		var p: Vector3 = areas[0].global_position
 		var back: Vector3 = areas[0].get_parent().global_transform.basis.z.normalized()
-		var dist := 48.0 if view == "foot" else 3.2
+		var dist := 3.2 if view == "villa" else 48.0
 		var spot: Vector3 = p - back * dist
 		w.place(spot.x, -spot.z, 0.0)
 		w.look_at(Vector3(p.x, w.global_position.y, p.z), Vector3.UP)
-		w.cam.rotation.x = deg_to_rad(4 if view == "foot" else -8)
+		w.cam.rotation.x = deg_to_rad(-8 if view == "villa" else 4)

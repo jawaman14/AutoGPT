@@ -164,11 +164,24 @@ Beyond the prototype:
   both under the SIL Open Font Licence, in `assets/fonts/`), and a big banner when a run pays off
   or you're busted. Original art throughout: the genre's look, nobody's assets.
 
+- **Low-poly models (Kenney, CC0).** The people, cars, guns, boats and street palms are from Kenney's
+  public-domain kits (Blocky Characters, Car Kit, Weapon Pack, Watercraft Kit, Nature Kit), in
+  `assets/models/kenney/` and loaded through `ModelLib`, which scales them to metres and turns them
+  to face forward. The nearest men in the ground war are animated characters: the faction's looks
+  (suits and vests for the organisation, bandoliers for Los Cuervos, uniforms, plain clothes and SWAT
+  black for the task force), the gun from their squad's loadout at the chest, and the kit's walk,
+  run, aim, fire and fall. Further out they're cheap MultiMesh figures. The first-person gun is the
+  Weapon Pack's; the go-fast is a speedboat, and the cutter a white hull with an orange-red stripe.
+  The aircraft stay procedural, built to the JSBSim models' dimensions. Without the model files
+  everything falls back to procedural boxes.
+
 | **Dusk on the boulevard** | **Sunset over San Telmo** | **The city at night** |
 |---|---|---|
 | ![street](docs/img/vice-street.png) | ![dusk](docs/img/vice-dusk.png) | ![night](docs/img/vice-night.png) |
 | **The lieutenant's desk** | **Take a seat: the AI plays the rest** | **A firefight at the docks** |
 | ![lieutenant](docs/img/ui-lieutenant.png) | ![seats](docs/img/ui-seats.png) | ![docks](docs/img/ground-docks.png) |
+| **The cast and the cars (Kenney CC0)** | **On foot with a rifle** | |
+| ![cast](docs/img/models-cast.png) | ![rifle](docs/img/foot-rifle.png) | |
 
 | Mid-afternoon on the runway (medium) | Dusk, climbing out near Eagle's Nest (high) | Night: edge lights on |
 |---|---|---|
@@ -275,3 +288,6 @@ LGPL allows that as long as users can relink against a modified JSBSim:
 - `SKYRUNNER_JSBSIM_SRC` points the build at any JSBSim checkout.
 
 Godot and godot-cpp are MIT.
+
+The 3D models in `assets/models/kenney/` are Kenney's (www.kenney.nl), CC0 1.0 (public domain);
+see `assets/models/kenney/LICENSE.txt`.

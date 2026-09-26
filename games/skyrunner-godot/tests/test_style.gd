@@ -41,7 +41,10 @@ func test_palm_lined_streets_and_the_grade() -> void:
 	var w := World.new()
 	var ws := WorldScene.new().setup(w, Quality.get_preset("low"))
 	var palms = ws.find_child("street-palms", true, false)
-	check(palms != null and palms.multimesh.instance_count > 200, "palms along the town's streets")
+	var n: int = palms.multimesh.instance_count if palms != null else 0
+	for c in (palms.get_children() if palms != null else []):
+		n += c.multimesh.instance_count
+	check(n > 200, "palms along the town's streets (%d)" % n)
 	check_eq(palms.visibility_range_end, 0.0, "never culled by a range measured to the island-wide batch")
 	check(ws.env.adjustment_enabled and ws.env.adjustment_saturation > 1.0, "the colour grade")
 	ws.free()

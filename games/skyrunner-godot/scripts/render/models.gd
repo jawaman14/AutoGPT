@@ -527,7 +527,17 @@ static func build_pursuer(kind: String, q: Quality = null) -> Array:
 static func build_boat(kind: String) -> Array:
 	var mb := MeshBuilder.new()
 	var lights := []
-	var root: Node3D
+	var root: Node3D = ModelLib.boat(kind)  # the Watercraft Kit's, else the boxes below
+	if root != null:
+		root.name = kind
+		if kind == "cutter":
+			var lm := MeshBuilder.new()
+			lm.box(0, 0, 0, 0.8, 0.8, 0.5, [1, 1, 1])
+			var light := lm.node("beacon", emissive(Color(0.2, 0.4, 1), 5.0))
+			light.position = Vector3(0, ModelLib.bounds(root).end.y + 0.3, 0)
+			root.add_child(light)
+			lights.append(light)
+		return [root, lights]
 	if kind == "cutter":
 		var hull := [0.92, 0.92, 0.94]
 		var trim := [0.8, 0.15, 0.1]

@@ -10,13 +10,24 @@ extends Node3D
 ## moves squads once a second; figures glide between those fixes. Men ride
 ## in their vehicle while it moves and get out around it when it stops.
 ##
+## Two levels of detail. The nearest men (NEAR_N by quality, inside NEAR_M) are
+## Kenney's Blocky Characters (ModelLib): the faction's looks, a gun from the
+## squad's loadout at the chest, and the kit's animations - walking, running
+## when routed, aiming, firing in a fight, falling. Everyone further out is a
+## MultiMesh figure in the faction's colours. Vehicles are the Car Kit's.
+## Without the model files everything falls back to the procedural boxes.
+##
 ## The look is the 1980s coast: pastel suits for the organisation, loud shirts
-## for Los Cuervos, navy for the task force; a white wedge sports car, a red
-## pickup, white-and-blue patrol cars.
+## for Los Cuervos, navy for the task force, dark suits for the Family.
 
 const RANGE_M := {"low": 800.0, "medium": 2500.0, "high": 3500.0}
-const SUIT := {"org": Color(0.96, 0.72, 0.82), "rival": Color(0.98, 0.52, 0.16), "police": Color(0.13, 0.2, 0.46)}
-const LEGS := {"org": Color(0.93, 0.93, 0.9), "rival": Color(0.2, 0.2, 0.22), "police": Color(0.1, 0.12, 0.2)}
+const SUIT := {"org": Color(0.96, 0.72, 0.82), "rival": Color(0.98, 0.52, 0.16), "police": Color(0.13, 0.2, 0.46),
+	"family": Color(0.16, 0.15, 0.17)}
+const LEGS := {"org": Color(0.93, 0.93, 0.9), "rival": Color(0.2, 0.2, 0.22), "police": Color(0.1, 0.12, 0.2),
+	"family": Color(0.12, 0.12, 0.13)}
+const NEAR_N := {"low": 12, "medium": 40, "high": 64}  ## animated characters at most
+const NEAR_M := 160.0
+const FALLEN_NEAR := 16
 const SKIN := Color(0.72, 0.52, 0.38)
 const FALLEN_S := 180.0
 
@@ -34,11 +45,14 @@ var _rng := RandomNumberGenerator.new()
 var _t := 0.0
 var _was_fighting := {}  ## squad id -> faction, last frame
 var men_pts: Array = []  ## [squad id, feet position] of every man drawn this frame (Gunplay aims at these)
+var near_n := 40
+var actors := {}  ## "squad#k" | "fallen#i" -> the character drawn up close
 
 
 func setup(world_: World, quality: String) -> void:
 	world = world_
 	range_m = RANGE_M.get(quality, 2500.0)
+	near_n = NEAR_N.get(quality, 40) if ModelLib.scene("characters/character-q") != null else 0
 	_rng.seed = 11
 	for f in SUIT:
 		bodies[f] = _mmi(_body_mesh(f), "bodies-" + f)
@@ -138,6 +152,14 @@ static func _box(st: SurfaceTool, c: Vector3, s: Vector3, col: Color) -> void:
 
 ## A vehicle for a squad: length along -Z (Godot forward), origin at the road.
 static func vehicle(faction: String, kind: String) -> Node3D:
+	var model := ModelLib.car(faction, kind)
+	if model != null:
+		return model
+	return box_vehicle(faction, kind)
+
+
+## The procedural fallback: boxes in the faction's paint.
+static func box_vehicle(faction: String, kind: String) -> Node3D:
 	var k := Buildings.Kit.new("vehicle-%s-%s" % [faction, kind])
 	var wheel := func(x: float, z: float): k.box(Vector3(x, 0.34, z), Vector3(0.28, 0.68, 0.68), "black", false)
 	if kind == "truck":
@@ -195,6 +217,7 @@ func sync(squads: Array, fights: Array, cam: Vector3, now: float, dt: float) -> 
 		men_by[f] = []
 	var head_xf := []
 	var flash_xf := []
+	var entries := []  ## every man: [key, faction, look, Transform3D, anim, tier, dist]
 	men_pts = []
 	var fighting := {}
 	for fx in fights:
@@ -245,17 +268,38 @@ func sync(squads: Array, fights: Array, cam: Vector3, now: float, dt: float) -> 
 		var basis := Basis(Vector3.UP, yaw)
 		var fwd := basis * Vector3(0, 0, -1)
 		var right := basis * Vector3(1, 0, 0)
+		var guns := _guns(d.get("loadout", {}), men)
+		var look: String = "swat" if d.faction == "police" and d.kind == "truck" else d.faction
+		var anim := "holding-both"
+		if fighting.has(id):
+			anim = "holding-both-shoot"
+		elif moving:
+			anim = "sprint" if d.state == "routed" else "walk"
 		for k in men:
 			var row := k / 4
 			var col := k % 4
 			var off: Vector3 = right * ((col - 1.5) * 1.6) - fwd * (row * 2.0) + (right * 3.2 if d.kind != "foot" else Vector3.ZERO)
 			var wp: Vector3 = g3 + off
 			wp.y = world.ground(wp.x, -wp.z) + 0.3
-			men_by[d.faction].append(Transform3D(basis, wp))
 			men_pts.append([id, wp])
-			head_xf.append(Transform3D(Basis.IDENTITY, wp + Vector3(0, 1.64, 0)))
+			var tier: String = guns[k]
+			var a := anim
+			if tier == "pistol" and anim.begins_with("holding-both"):
+				a = anim.replace("both", "right")
+			entries.append(["%s#%d" % [id, k], d.faction, look, Transform3D(basis, wp), a, tier, wp.distance_to(cam), k + id.hash()])
 			if fighting.has(id) and _rng.randf() < 0.35:
 				flash_xf.append(Transform3D(Basis.IDENTITY, wp + Vector3(0, 1.25, 0) + fwd * 0.9 + right * 0.12))
+	# the nearest men as characters, the rest as figures
+	entries.sort_custom(func(a, b): return a[6] < b[6])
+	var used := {}
+	for e in entries:
+		if used.size() < near_n and e[6] < NEAR_M:
+			_actor(e[0], e[2], e[7], e[3], e[4], e[5])
+			used[e[0]] = true
+		else:
+			var xf: Transform3D = e[3]
+			men_by[e[1]].append(xf)
+			head_xf.append(Transform3D(Basis.IDENTITY, xf.origin + Vector3(0, 1.64, 0)))
 	# a squad wiped out in a fight leaves its last men on the ground
 	for id in last_men.keys():
 		if not seen.has(id) and _was_fighting.has(id) and smooth.has(id):
@@ -283,11 +327,61 @@ func sync(squads: Array, fights: Array, cam: Vector3, now: float, dt: float) -> 
 	_fill(heads, head_xf)
 	_fill(flashes, flash_xf)
 	var dead_xf := []
-	for fl in fallen:
-		dead_xf.append(Transform3D(Basis(Vector3.UP, fl[3]) * Basis(Vector3.RIGHT, -PI / 2), fl[1] + Vector3(0, 0.15, 0)))
-	_fill(dead, dead_xf)
+	var dead_col := []
+	var near_dead := 0
 	for i in fallen.size():
-		dead.multimesh.set_instance_color(i, SUIT[fallen[i][2]])
+		var fl: Array = fallen[i]
+		if near_n > 0 and near_dead < FALLEN_NEAR and fl[1].distance_to(cam) < NEAR_M:
+			var key := "fallen#%d#%d" % [int(fl[0] * 1000.0), i]
+			_actor(key, fl[2], i, Transform3D(Basis(Vector3.UP, fl[3]), fl[1]), "die", "")
+			used[key] = true
+			near_dead += 1
+			continue
+		dead_xf.append(Transform3D(Basis(Vector3.UP, fl[3]) * Basis(Vector3.RIGHT, -PI / 2), fl[1] + Vector3(0, 0.15, 0)))
+		dead_col.append(SUIT.get(fl[2], SUIT.org))
+	_fill(dead, dead_xf)
+	for i in dead_col.size():
+		dead.multimesh.set_instance_color(i, dead_col[i])
+	for key in actors.keys():
+		if not used.has(key):
+			actors[key].queue_free()
+			actors.erase(key)
+
+
+## Each man's gun, best first, from the squad's loadout (a man without one carries a pistol).
+static func _guns(loadout: Dictionary, men: int) -> Array:
+	var out := []
+	for t in ["rpg", "mg", "rifle", "pistol"]:
+		for i in int(loadout.get(t, 0)):
+			out.append(t)
+	while out.size() < men:
+		out.append("pistol")
+	return out
+
+
+## Place (making it the first time) the character `key`, playing `anim`.
+func _actor(key: String, look: String, variant: int, xf: Transform3D, anim: String, tier: String) -> void:
+	var a: Node3D = actors.get(key)
+	if a == null:
+		a = ModelLib.character(look, variant)
+		if a == null:
+			return
+		add_child(a)
+		actors[key] = a
+	a.transform = xf  # feet where the figure's feet would be
+	if tier != "":
+		ModelLib.arm(a, tier)
+	var ap: AnimationPlayer = a.get_meta("anim")
+	if ap != null and ap.current_animation != anim and ap.assigned_animation != anim:
+		ap.play(anim, 0.15)
+		if anim == "die":
+			ap.seek(ap.current_animation_length, true)  # already down
+			ap.pause()
+
+
+## How many men are characters up close (tests).
+func near_drawn() -> int:
+	return actors.keys().filter(func(k): return not k.begins_with("fallen")).size()
 
 
 func _hide_vehicle(id: String) -> void:
@@ -303,9 +397,9 @@ func _fill(n: MultiMeshInstance3D, xf: Array) -> void:
 		mm.set_instance_transform(i, xf[i])
 
 
-## How many men are drawn (tests, the HUD).
+## How many men are drawn (tests, the HUD), near and far.
 func drawn() -> int:
-	var n := 0
+	var n := near_drawn()
 	for f in bodies:
 		n += bodies[f].multimesh.instance_count
 	return n

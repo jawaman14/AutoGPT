@@ -101,6 +101,20 @@ func _refresh_viewmodel() -> void:
 	var t := sess.foot.tier
 	if t == "":
 		return
+	var n: Node3D = ModelLib.weapon(t, 0.5)  # the Weapon Pack's, barrel forward (half size: it's that close to the eye)
+	if n == null:
+		n = _box_gun(t)
+	else:
+		n.position = Vector3(0.04, -0.06, 0.15 - ModelLib.WEAPON_LEN.get(t, 0.5) * 0.25)  # grip under the line of sight, stock at the shoulder
+		var holder := Node3D.new()
+		holder.add_child(n)
+		n = holder
+	n.position = Vector3(0.18, -0.2, -0.35)
+	viewmodel.add_child(n)
+
+
+## The fallback gun, boxes (no model files).
+static func _box_gun(t: String) -> Node3D:
 	var k := Buildings.Kit.new("gun")
 	var L: float = {"pistol": 0.22, "rifle": 0.8, "mg": 1.0, "rpg": 1.1}[t]
 	k.box(Vector3(0, 0, -L / 2), Vector3(0.05 if t == "pistol" else 0.07, 0.07, L), "black", false)
@@ -113,8 +127,7 @@ func _refresh_viewmodel() -> void:
 	var col = n.get_node_or_null("collision")
 	if col != null:
 		col.free()
-	n.position = Vector3(0.18, -0.2, -0.35)
-	viewmodel.add_child(n)
+	return n
 
 
 func _process(dt: float) -> void:

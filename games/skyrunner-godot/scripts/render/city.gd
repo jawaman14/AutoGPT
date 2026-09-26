@@ -206,29 +206,43 @@ static func _palms(world: World, roads: Array, q: Quality) -> MultiMeshInstance3
 					if cls in [MapCity.URBAN, MapCity.PORT, MapCity.BEACH] and world.ground(p.x, p.y) > 0.5:
 						spots.append(Vector3(p.x, world.ground(p.x, p.y), -p.y))
 				d += 28.0
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.use_colors = true
-	mm.mesh = Vegetation._palm(5 if q.name == "low" else 6)
-	mm.instance_count = spots.size()
+	# the Nature Kit's palms (tall and bent, alternating), else the procedural one
+	var kit := [ModelLib.palm_mesh(0, 1.0), ModelLib.palm_mesh(1, 1.0)]
+	var groups := [[], []]
 	for i in spots.size():
-		var s := rng.randf_range(9.0, 13.0)
-		var bs := Basis.from_euler(Vector3(rng.randf_range(-0.05, 0.05), rng.randf() * TAU, rng.randf_range(-0.05, 0.05))).scaled(Vector3(s, s, s))
-		mm.set_instance_transform(i, Transform3D(bs, spots[i]))
-		mm.set_instance_color(i, Color(1, 1, 1))
-	var mmi := MultiMeshInstance3D.new()
-	mmi.name = "street-palms"
-	mmi.multimesh = mm
-	# the palm mesh is built for the (double-sided) foliage shader: draw both faces
-	var pm := StandardMaterial3D.new()
-	pm.vertex_color_use_as_albedo = true
-	pm.roughness = 0.85
-	pm.cull_mode = BaseMaterial3D.CULL_DISABLED
-	mmi.material_override = pm
-	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if q.shadows else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	# no visibility range: it's measured to the batch's AABB centre, and the
-	# palms line roads across the whole island (it culled every one of them)
-	return mmi
+		groups[i % 2 if not kit[1].is_empty() else 0].append(spots[i])
+	var out: MultiMeshInstance3D = null
+	for g in 2:
+		if g == 1 and (kit[0].is_empty() or groups[1].is_empty()):
+			break
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = kit[g][0] if not kit[0].is_empty() else Vegetation._palm(5 if q.name == "low" else 6)
+		var unit: float = kit[g][1] if not kit[0].is_empty() else 1.0  # model units per metre of height
+		mm.instance_count = groups[g].size()
+		for i in groups[g].size():
+			var s := rng.randf_range(9.0, 13.0) * unit
+			var bs := Basis.from_euler(Vector3(rng.randf_range(-0.05, 0.05), rng.randf() * TAU, rng.randf_range(-0.05, 0.05))).scaled(Vector3(s, s, s))
+			mm.set_instance_transform(i, Transform3D(bs, groups[g][i]))
+		var mmi := MultiMeshInstance3D.new()
+		mmi.name = "street-palms" if g == 0 else "street-palms-bent"
+		mmi.multimesh = mm
+		if kit[0].is_empty():
+			# the procedural palm is built for the (double-sided) foliage shader: draw both faces
+			var pm := StandardMaterial3D.new()
+			pm.vertex_color_use_as_albedo = true
+			pm.roughness = 0.85
+			pm.cull_mode = BaseMaterial3D.CULL_DISABLED
+			mmi.material_override = pm
+		mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if q.shadows else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# no visibility range: it's measured to the batch's AABB centre, and the
+		# palms line roads across the whole island (it culled every one of them)
+		if out == null:
+			out = mmi
+		else:
+			out.add_child(mmi)
+			mmi.transform = Transform3D.IDENTITY
+	return out
 
 
 ## A stash house by its kind: a barn, a shack on stilts, a dockside warehouse,
