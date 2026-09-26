@@ -1,0 +1,3 @@
+https://github.com/godot-extended-libraries/godot-debug-menu (MIT, Hugo Locurcio and contributors), vendored at commit:
+ff124615a7da981722b3927343b9965a6a156718
+The editor plugin files are left out: the game loads the menu on demand (F6 in the 3D view).

@@ -48,3 +48,16 @@ func test_palm_lined_streets_and_the_grade() -> void:
 	check_eq(palms.visibility_range_end, 0.0, "never culled by a range measured to the island-wide batch")
 	check(ws.env.adjustment_enabled and ws.env.adjustment_saturation > 1.0, "the colour grade")
 	ws.free()
+
+
+
+func test_the_debug_overlay_is_safe_headless() -> void:
+	var s := Session.new({"seed": 1, "location": "HAR"})
+	var app := PilotApp.new()
+	Engine.get_main_loop().root.add_child(app)
+	app.setup(s, "low")
+	app.cycle_debug_menu()  # F6: needs a display (checked in tools/shots/pilot_shot.gd's 'debug' view)
+	check(app.debug_menu == null, "headless: no overlay, no hang")
+	check(ResourceLoader.exists("res://addons/debug_menu/debug_menu.tscn"), "the vendored add-on is there")
+	app.free()
+	s.dispose()

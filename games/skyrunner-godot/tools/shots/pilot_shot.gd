@@ -7,7 +7,8 @@ extends SceneTree
 ##       foot (on foot beside the parked aircraft, looking at the hangars) |
 ##       villa (on foot inside the org's villa, at the boss's desk) |
 ##       gun (on foot by the hangars with a rifle from the armoury) |
-##       island (Isla Soberana from its approach, over the horizon) | island_strip (its runway)
+##       island (Isla Soberana from its approach, over the horizon) | island_strip (its runway) |
+##       debug (the F6 performance overlay, detailed)
 var app: PilotApp
 var n := 0
 var q := "medium"
@@ -85,6 +86,9 @@ func _process(_d):
 		app.cam.look_at(fixed_cam[1], Vector3.UP)
 		app.cam.fov = 60
 		app.hud.visible = false
+	if n == 3 and view == "debug":
+		app.cycle_debug_menu()
+		app.cycle_debug_menu()  # the detailed overlay
 	if n == 40:
 		root.get_viewport().get_texture().get_image().save_png(out)
 		print("saved ", out)

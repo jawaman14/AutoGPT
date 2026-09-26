@@ -34,6 +34,7 @@ Flight   W/S or UP/DOWN pitch     A/D or LEFT/RIGHT roll     Q/E rudder / nosewh
          Y toggle mouse yoke (mouse position = stick)   joystick / gamepad work too
 View     C cycle camera (chase / cockpit / tower)    M big map    P pause   F2 time of day
 Seats    F3 hand the aircraft to the AI (take another seat from a station) / take it back
+Debug    F6 performance overlay: FPS, frame times, graphs (Debug Menu add-on, MIT)
 On foot  TAB get out (parked) / back in    WASD walk  SHIFT run  SPACE jump  mouse look
          Guns (with a ground war): 1-4 pistol / rifle / machine gun / RPG from the armoury  H holster  R reload  LMB fire
          E use (job board, fuel, hangar, the boss's desk)   F torch
@@ -339,6 +340,27 @@ func _unhandled_input(ev: InputEvent) -> void:
 			s.say("Time %02d:00" % int(scene.hour))
 		elif k == KEY_F3:
 			toggle_ai_pilot()
+		elif k == KEY_F6:
+			cycle_debug_menu()
+
+
+var debug_menu: CanvasLayer = null
+
+
+## F6: the performance overlay (Calinou's Debug Menu, MIT, addons/debug_menu):
+## off -> FPS and frame time -> the full graphs and hardware.
+func cycle_debug_menu() -> void:
+	if DisplayServer.get_name() == "headless":
+		return  # nothing to draw on (and its hardware query thread never returns without a GPU)
+	if debug_menu == null:
+		if not InputMap.has_action("cycle_debug_menu"):
+			InputMap.add_action("cycle_debug_menu")  # its own key would be F3, the AI pilot's
+		var scn := load("res://addons/debug_menu/debug_menu.tscn") as PackedScene
+		if scn == null:
+			return
+		debug_menu = scn.instantiate()
+		add_child(debug_menu)
+	debug_menu.style = wrapi(int(debug_menu.style) + 1, 0, 3)  # hidden, compact, detailed
 
 
 func _unhandled_key_input(_ev: InputEvent) -> void:

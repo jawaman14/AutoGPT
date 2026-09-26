@@ -299,5 +299,8 @@ LGPL allows that as long as users can relink against a modified JSBSim:
 
 Godot and godot-cpp are MIT.
 
+The performance overlay (F6) is Hugo Locurcio's Debug Menu add-on, MIT, in `addons/debug_menu/`;
+[docs/LIBRARIES.md](docs/LIBRARIES.md) surveys the other open-source Godot libraries considered.
+
 The 3D models in `assets/models/kenney/` are Kenney's (www.kenney.nl), CC0 1.0 (public domain);
 see `assets/models/kenney/LICENSE.txt`.
