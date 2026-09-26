@@ -221,14 +221,14 @@ func _hints() -> Array:
 			out = [["RIGHT-CLICK", "send the go-fast there", ""]]
 		Roles.CONTROLLER:
 			out = [["CLICK", "unit, then track", ""], ["H", "heli", "h"], ["I", "interceptor", "i"], ["C", "cutter", "c"],
-				["R", "recall", "r"], ["E", "encryption", "e"], ["B", "aerostat", "b"], ["G", "coverage", "g"], ["T", "tac channel", "t"], ["J", "jam here", "j"], ["X", "raid stash", "x"], ["V", "investigate the Agency", "v"], ["O", "RICO case", "o"], ["L", "airport crackdown", "l"], ["P", "port inspections", "p"], ["U", "upgrades", "u"], ["TAB", "next unit", "tab"]]
+				["R", "recall", "r"], ["E", "encryption", "e"], ["B", "aerostat", "b"], ["G", "coverage", "g"], ["T", "tac channel", "t"], ["J", "jam here", "j"], ["X", "raid stash", "x"], ["V", "investigate the Agency", "v"], ["O", "RICO case", "o"], ["L", "airport crackdown", "l"], ["P", "port inspections", "p"], ["N/W/K/D/Y", "prosecute (a case open)", "n"], ["U", "upgrades", "u"], ["TAB", "next unit", "tab"]]
 			if upgrades != null and upgrades.visible:
 				out = [["U", "back to the desk", "u"], ["UP/DOWN", "select", "down"], ["ENTER", "buy", "enter"]]
 		Roles.BOSS, Roles.CHIEF:
 			out = [["UP/DOWN", "order", "down"], ["LEFT/RIGHT", "change it", "right"], ["ENTER", "issue", "enter"]]
 		Roles.LIEUTENANT, Roles.PATROL:
 			out = [["UP/DOWN", "squad", "down"]]
-			out += [["C", "talk to the Family", "c"], ["G", "the General's aide", "g"], ["U/I", "mules / a container", "u"]] if role == Roles.LIEUTENANT else [["O", "RICO case", "o"]]
+			out += [["C", "talk to the Family", "c"], ["G", "the General's aide", "g"], ["U/I", "mules / a container", "u"], ["L", "the pilot's lawyer", "l"]] if role == Roles.LIEUTENANT else [["O", "RICO case", "o"]]
 	var snap = link.snapshot() if link != null else null
 	if snap is Dictionary and commands_squads(snap):
 		if squad_mode:
@@ -364,6 +364,13 @@ func _family_key(k: String, snap: Dictionary) -> bool:
 	if role in [Roles.LIEUTENANT, Roles.COPILOT] and k == "c":
 		open_talk("family")  # a sit-down with Sal Moretti
 		return true
+	if role in [Roles.LIEUTENANT, Roles.COPILOT] and k == "l" and bool(snap.get("court", {}).get("open", false)):
+		open_talk("lawyer")  # the pilot's lawyer
+		return true
+	if role == Roles.CONTROLLER and k in ["n", "w", "k", "d", "y"] and bool(snap.get("court", {}).get("open", false)):
+		# the prosecutor: no bail, a witness's immunity, the bank records, a conspiracy count, a plea offer
+		_cmd({"n": "court_no_bail", "w": "court_immunity", "k": "court_forfeiture", "d": "court_charge", "y": "court_offer_plea"}[k])
+		return true
 	if role in [Roles.LIEUTENANT, Roles.COPILOT] and k in ["y", "n", "p"]:
 		var offers: Array = fam.get("offers", [])
 		if k == "p":
@@ -422,6 +429,28 @@ static func island_lines(isl: Dictionary) -> Array:
 	if str(isl.get("last", "")) != "":
 		out.append("  Last: %s" % isl.last)
 	return out
+
+
+## The pilot's case, as the organisation sees it.
+static func court_lines(c: Dictionary) -> Array:
+	if c.is_empty() or not c.get("open", false):
+		return []
+	var out := ["THE PILOT'S CASE (%s) - %s   L the lawyer" % [str(c.stage).to_upper(), c.get("lawyer", "")]]
+	out.append("  %s" % ", ".join(c.get("charges", [])))
+	out.append("  %s - %s. The case looks %s%s." % [c.judge, c.judge_known, c.strength,
+		(", conviction %d%%" % int(100 * float(c.odds))) if c.has("odds") else ""])
+	if not c.get("plea", {}).is_empty():
+		out.append("  Plea offer: %s years" % Py.f(c.plea.years, 1))
+	if c.get("cooperating", false):
+		out.append("  THE PILOT IS COOPERATING WITH THE GOVERNMENT")
+	return out
+
+
+static func _court_law_line(c: Dictionary) -> String:
+	if c.is_empty() or not c.get("open", false):
+		return ""
+	return "PROSECUTION (%s): evidence %d%%, %d witnesses, conviction %d%%, trial in %d min, before %s. N no bail  W immunity  K bank records  D conspiracy  Y plea\n" % [
+		c.stage, int(c.get("evidence", 0)), int(c.get("witnesses", 0)), int(100 * float(c.get("odds", 0))), int(ceil(float(c.get("trial_s", 0)) / 60.0)), c.judge]
 
 
 static func _island_law_line(isl: Dictionary) -> String:
@@ -844,6 +873,9 @@ func _draw_runner(snap: Dictionary) -> void:
 		var c: Dictionary = snap.campaign
 		lines += ["", "CHAPTER %d  -  %d  %s" % [int(c.chapter), int(c.year), c.title]] + c.objectives
 	if role == Roles.COPILOT:
+		var ct := court_lines(snap.get("court", {}))
+		if not ct.is_empty():
+			lines += [""] + ct
 		var fam := family_lines(snap.get("family", {}), snap.get("agency", {}))
 		if not fam.is_empty():
 			lines += [""] + fam
@@ -1021,7 +1053,7 @@ func _draw_law(snap: Dictionary) -> void:
 		"Busts %d   boats %d   bales seized %d      Runners: bales in %d, escaped %d" % [int(sc.busts), int(sc.boats_seized), int(sc.bales_seized),
 			int(rs.bales_delivered), int(rs.escapes)],
 		"Selected unit: %s" % (sel_unit if sel_unit != null else "-  (click one on the map or pick it below)"),
-		_agency_line(snap.get("agency", {})) + _family_law_line(snap.get("family", {})) + _island_law_line(snap.get("island", {})), "CASES",
+		_agency_line(snap.get("agency", {})) + _family_law_line(snap.get("family", {})) + _island_law_line(snap.get("island", {})) + _court_law_line(snap.get("court", {})), "CASES",
 	]
 	for c in cases.slice(0, 6):
 		lines.append("  %-10s suspicion %3.0f%%   %s%s" % [c.id, c.suspicion, "\u2605".repeat(int(c.wanted)) if c.wanted else "", "   TIPPED" if c.tipped else ""])

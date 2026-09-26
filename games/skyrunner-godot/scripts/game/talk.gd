@@ -99,6 +99,35 @@ class State:
 	var mule_pct := 0
 	var ship_pct := 0
 	var price := 0.0
+	# the court (the pilot's case)
+	var court := false
+	var case_open := false
+	var stage := ""
+	var lawyer_name := ""
+	var lawyer_tier := ""
+	var judge := ""
+	var judge_known := ""
+	var bribable := false
+	var charges := ""
+	var strength := ""
+	var odds := -1  ## the conviction odds in percent, once discovery is in (-1 unknown)
+	var witnesses := -1
+	var informant := false
+	var trial_min := 0
+	var bail := 0
+	var bond := 0
+	var no_bail := false
+	var plea_years := 0.0
+	var plea_charge := ""
+	var has_plea := false
+	var release_min := 0
+	var verdict := ""
+	var years := 0.0
+	var appealed := false
+	var tampered := false
+	var bribed := false
+	var filed := []  ## motions filed
+	var continuances := 0
 
 	func _init(snap_fn_: Callable, cmd_fn_: Callable) -> void:
 		snap_fn = snap_fn_
@@ -137,6 +166,36 @@ class State:
 		mule_pct = int(round(100.0 * float(i.get("mule_p", 0.0))))
 		ship_pct = int(round(100.0 * float(i.get("ship_p", 0.0))))
 		price = float(i.get("price", 0.0))
+		var c: Dictionary = snap.get("court", {})
+		court = not c.is_empty()
+		case_open = bool(c.get("open", false))
+		stage = str(c.get("stage", ""))
+		lawyer_name = str(c.get("lawyer", "")).capitalize() if str(c.get("lawyer", "")).begins_with("the ") else str(c.get("lawyer", ""))
+		lawyer_tier = str(c.get("lawyer_tier", ""))
+		judge = str(c.get("judge", ""))
+		judge_known = str(c.get("judge_known", ""))
+		bribable = bool(c.get("bribable", false))
+		charges = ", ".join(c.get("charges", []))
+		strength = str(c.get("strength", ""))
+		odds = int(round(100.0 * float(c.get("odds")))) if c.has("odds") else -1
+		witnesses = int(c.get("witnesses", -1))
+		informant = bool(c.get("informant", false))
+		trial_min = int(ceil(float(c.get("trial_s", 0)) / 60.0))
+		bail = int(c.get("bail", 0))
+		bond = int(bail * 0.1)
+		no_bail = bool(c.get("no_bail", false))
+		var pl: Dictionary = c.get("plea", {})
+		has_plea = not pl.is_empty()
+		plea_years = float(pl.get("years", 0.0))
+		plea_charge = str(Court.CHARGES.get(str(pl.get("charge", "")), [""])[0]) if has_plea else ""
+		release_min = int(ceil(float(c.get("release_s", 0)) / 60.0))
+		verdict = str(c.get("verdict", ""))
+		years = float(c.get("years", 0.0))
+		appealed = bool(c.get("appealed", false))
+		tampered = bool(c.get("tampered", false))
+		bribed = bool(c.get("bribed", false))
+		filed = c.get("motions", [])
+		continuances = int(c.get("continuances", 0))
 
 	func _do(name: String, args := {}) -> bool:
 		var r: Array = cmd_fn.call(name, args)
@@ -172,3 +231,34 @@ class State:
 
 	func container() -> bool:
 		return _do("island_ship", {"method": "ship", "amount": 500})
+
+	# the court
+	func has_filed(kind: String) -> bool:
+		return filed.has(kind)
+
+	func post_bail(how: String) -> bool:
+		return _do("court_bail", {"how": how})
+
+	func hire(tier: String) -> bool:
+		return _do("court_hire", {"tier": tier})
+
+	func move(kind: String) -> bool:
+		return _do("court_motion", {"kind": kind})
+
+	func lean_on_witness() -> bool:
+		return _do("court_tamper")
+
+	func pay_judge() -> bool:
+		return _do("court_bribe")
+
+	func plead() -> bool:
+		return _do("court_plea")
+
+	func cooperate() -> bool:
+		return _do("court_cooperate")
+
+	func appeal() -> bool:
+		return _do("court_appeal")
+
+	func wait() -> bool:
+		return _do("court_wait")

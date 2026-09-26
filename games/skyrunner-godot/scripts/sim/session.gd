@@ -116,6 +116,7 @@ var _ai_defaults := {}  ## what each seat's AI was set to before a human took it
 var remote_stick := {}  ## a remote pilot's controls {roll, pitch, throttle, rudder, brake} (the pilot seat over the wire)
 var agency: Agency = null  ## the Company: arms flights south, protection, exposure (live play asks for it)
 var family: Family = null  ## the Morettis: help that might be a trap (live play asks for it)
+var court: Court = null  ## the pilot's case after an arrest: bail, lawyers, plea, trial, sentence (live play asks for it)
 var island: Island = null  ## Isla Soberana, over the horizon: cheap product, sovereign airspace (live play asks for it)
 var foot: FootCombat = null  ## the pilot on foot with a gun (sessions with a ground war)
 var chronicle: Chronicle = null  ## the news and the breaks between runs (Chronicle; live play asks for it)
@@ -203,6 +204,9 @@ func _init(opts := {}) -> void:
 		agency = Agency.new(self, _rng(seed + 89), _rng(seed + 101))
 	if Island.ENABLED and opts.get("island", false) and not world.map.foreign.is_empty():
 		island = Island.new(self, _rng(seed + 103))
+	if Court.ENABLED and opts.get("court", false):
+		court = Court.new(self, _rng(seed + 107))
+		court.prosecutor_ai = not (humans.has(Roles.CONTROLLER) or humans.has(Roles.CHIEF))
 	if Family.ENABLED and opts.get("family", false):
 		family = Family.new(self, _rng(seed + 97))
 		family.ai = not (humans.has(Roles.BOSS) or humans.has(Roles.LIEUTENANT))
@@ -262,6 +266,7 @@ func _init(opts := {}) -> void:
 ## Break the reference cycles (night director, campaign, bus subscribers) so a
 ## finished Session is freed; batch simulators build thousands of them.
 func dispose() -> void:
+	court = null
 	island = null
 	agency = null
 	family = null
@@ -657,6 +662,8 @@ func seat_driver(role: String, human: bool) -> void:
 				set_copilot(_ai_defaults.get(role))
 		Roles.CONTROLLER:
 			police.controller = "human" if human else "ai"
+			if court != null:
+				court.prosecutor_ai = not (human or humans.has(Roles.CHIEF))
 			if nights != null and not humans.has(Roles.CHIEF):
 				nights.law_ai = null if human else "adaptive"
 		Roles.BOSS:
@@ -669,6 +676,8 @@ func seat_driver(role: String, human: bool) -> void:
 				else:
 					nights.runner_ai = _ai_defaults.get(role, nights.runner_ai)
 		Roles.CHIEF:
+			if court != null:
+				court.prosecutor_ai = not (human or humans.has(Roles.CONTROLLER))
 			if nights != null:
 				nights.law_ai = null if (human or humans.has(Roles.CONTROLLER)) else "adaptive"
 		Roles.INTERCEPTOR:
@@ -728,6 +737,8 @@ func _cmd_boat_goto(role: String, a: Dictionary):
 
 
 func _cmd_confirm(role: String, a: Dictionary):
+	if court != null and court.holding():
+		return "You're in custody: talk to your lawyer."
 	if phase in ["crashed", "busted"]:
 		respawn()
 	return null
@@ -1424,8 +1435,8 @@ func update(dt: float, inp: ControlMapper.InputFrame = null, bot_controls: Fligh
 
 
 func _update_runner(dt: float, inp: ControlMapper.InputFrame, bot_controls: FlightModel.Controls) -> void:
-	if phase in ["crashed", "busted"]:
-		if inp.pressed.has("confirm"):
+	if phase in ["crashed", "busted", "custody"]:
+		if inp.pressed.has("confirm") and phase != "custody" and not (court != null and court.holding()):
 			respawn()
 		return
 	if turnaround_t > 0:
@@ -1559,6 +1570,8 @@ func _update_world(dt: float) -> void:
 		family.update(dt)
 	if island != null:
 		island.update(dt)
+	if court != null:
+		court.update(dt)
 
 	# maritime: cutters go where the task force suspects a drop
 	var law_goals := []
@@ -1716,6 +1729,14 @@ func _crash(reason: String) -> void:
 func _bust(how: String) -> void:
 	if agency != null and agency.quash(how):
 		return  # friends in Washington
+	if court != null:
+		# the full process: charges, the bail hearing, a lawyer, a plea or a trial
+		phase = "busted"
+		court.arrest(how)
+		last_outcome = "ARRESTED (%s). Charged: %s." % [how, court.charge_names()]
+		law_say("BUST: %s (%s)" % [squawk, how])
+		bus.emit("busted", time, "", ["runner", "law"], {"how": how})
+		return
 	if family != null and family.lawyer_bust(how):
 		return  # a very good lawyer
 	phase = "busted"
@@ -2133,6 +2154,78 @@ func _cmd_port_inspections(role: String, a: Dictionary):
 	island.inspections_until = time + 1800.0
 	law_say("Every container from Isla Soberana opened for 30 min")
 	return null
+
+
+# ------------------------------------------------------------------ the court
+func _court(fn: Callable):
+	if court == null:
+		return "No court in this game."
+	var err: String = fn.call()
+	return err if err != "" else null
+
+
+func _cmd_court_bail(role: String, a: Dictionary):
+	return _court(func(): return court.post_bail(str(a.get("how", ""))))
+
+
+func _cmd_court_hire(role: String, a: Dictionary):
+	return _court(func(): return court.hire(str(a.get("tier", ""))))
+
+
+func _cmd_court_motion(role: String, a: Dictionary):
+	return _court(func(): return court.motion(str(a.get("kind", ""))))
+
+
+func _cmd_court_tamper(role: String, a: Dictionary):
+	return _court(func(): return court.tamper())
+
+
+func _cmd_court_bribe(role: String, a: Dictionary):
+	return _court(func(): return court.bribe_judge())
+
+
+func _cmd_court_plea(role: String, a: Dictionary):
+	return _court(func(): return court.plead())
+
+
+func _cmd_court_cooperate(role: String, a: Dictionary):
+	return _court(func(): return court.cooperate())
+
+
+func _cmd_court_appeal(role: String, a: Dictionary):
+	return _court(func(): return court.appeal())
+
+
+## In custody or inside: let the time pass (the world moves on, fast).
+func _cmd_court_wait(role: String, a: Dictionary):
+	if court == null or not court.holding() or court.stage() == "bail":
+		return "Nothing to wait for."
+	var st := court.stage()
+	var t := 0.0
+	while court.open() and court.stage() == st and t < 3600.0:
+		update(2.0)
+		t += 2.0
+	return null
+
+
+func _cmd_court_no_bail(role: String, a: Dictionary):
+	return _court(func(): return court.no_bail())
+
+
+func _cmd_court_immunity(role: String, a: Dictionary):
+	return _court(func(): return court.immunity())
+
+
+func _cmd_court_forfeiture(role: String, a: Dictionary):
+	return _court(func(): return court.forfeiture())
+
+
+func _cmd_court_charge(role: String, a: Dictionary):
+	return _court(func(): return court.add_conspiracy())
+
+
+func _cmd_court_offer_plea(role: String, a: Dictionary):
+	return _court(func(): return court.offer_plea(bool(a.get("lenient", false))))
 
 
 func _cmd_family_accept(role: String, a: Dictionary):

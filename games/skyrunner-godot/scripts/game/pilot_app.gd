@@ -45,6 +45,8 @@ Crew     N transponder on/off   7 squawk code (1200 VFR / 7700 / 7600 / 7500)   
 Family   SHIFT+F sit down with Sal Moretti: hear the offer, your man's read on it, press him for
          another, take it or leave it; pay or stall the tribute (1-4 answer, ENTER go on, ESC leave)
          SHIFT+Y / SHIFT+N take or turn down the newest offer without the talk, SHIFT+P pay the tribute
+Court    arrested (with a court): SHIFT+L your lawyer - bail or a bond, a better lawyer, motions to
+         suppress / discovery / more time, the plea, the witness, the judge, a deal; the appeal inside
 Island   Isla Soberana is over the southern horizon (SOB): cheap loads, the General's MiGs, and the
          task force can't follow you past the line. SHIFT+G the General's aide on the radio:
          passage, the island's news, mules and containers with customs' odds. SHIFT+U four mules
@@ -284,7 +286,9 @@ func _unhandled_input(ev: InputEvent) -> void:
 					scene.set_hour(scene.hour + 3.0)
 			get_viewport().set_input_as_handled()
 			return
-		if ev.shift_pressed and k == KEY_F and s.family != null:
+		if ev.shift_pressed and k == KEY_L and s.court != null:
+			open_talk("lawyer")  # your lawyer: bail, motions, the plea, a deal, the appeal
+		elif ev.shift_pressed and k == KEY_F and s.family != null:
 			open_talk("family")  # a sit-down with the Family
 		elif ev.shift_pressed and k == KEY_G and s.island != null:
 			open_talk("general")  # the General's aide on the island frequency
@@ -353,6 +357,7 @@ var debug_menu: CanvasLayer = null
 var talk: TalkBalloon = null  ## a conversation on screen (the Family, the General's aide)
 var _offers_seen := {}
 var _was_on_island := false
+var _court_stage := ""
 
 
 ## Open a conversation (dialogue/<name>.dialogue) from the pilot's seat.
@@ -372,6 +377,12 @@ func _talk_cues() -> void:
 			if not _offers_seen.has(o.id):
 				_offers_seen[o.id] = true
 				s.say("%s wants a word. SHIFT+F to sit down with him." % Talk.CAPO)
+	if s.court != null:
+		# the lawyer is there at the bail hearing and when the sentence comes down
+		var st := s.court.stage()
+		if st != _court_stage and st in ["bail", "prison"]:
+			open_talk("lawyer")
+		_court_stage = st
 	var on_island: bool = s.island != null and s.parked and s.location == Island.CODE
 	if on_island and not _was_on_island:
 		open_talk("general", "landing")

@@ -432,6 +432,8 @@ func history(i: int) -> String:
 		"drug_abuse_act":
 			sess.law_funds += 3000.0
 			c.suspicion = minf(100.0, c.suspicion + 10.0)
+			if sess.court != null:
+				sess.court.mandatory = true  # mandatory minimums from now on
 		"pizza", "commission":
 			var fam = sess.family
 			if fam != null and fam.active():

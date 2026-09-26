@@ -150,6 +150,21 @@ Beyond the prototype:
   sells passage past his MiGs until a purge closes the island (section 15). His aide, Captain
   Ibarra, meets you on the ramp when you land, or on the radio (Shift+G / G): passage, the
   island's news, mules and containers with customs' odds in the answers.
+- **The court.** A bust is a federal case now:
+  - **Charges:** possession, trafficking, firearms, conspiracy.
+  - **The bail hearing:** post it all, buy a bond, or sit in custody. The prosecutor calls a rich
+    pilot or a friend of the island a flight risk.
+  - **Lawyers:** the public defender, a Calle Ocho attorney, a Brickell Avenue drug lawyer, or
+    the Family's man, who may be working for the other side.
+  - **Motions:** suppress an illegal search, discovery, continuances.
+  - **Off the books:** a witness leaned on, a judge who takes money (either can become
+    obstruction).
+  - **The outcome:** a plea, a cooperation deal that sells out the organisation, or a jury.
+  - **The sentence:** mandatory minimums after 1986, the aircraft forfeited, time inside to wait
+    out, and one appeal.
+
+  Skip bail to the island and you're a fugitive. The task force prosecutes from its desk (N W K
+  D Y), or the AI does. Talk it through with your lawyer (Shift+L; section 16).
 - **One UI, redesigned.** A single theme across every screen; real tables with titled columns (the job
   board colours the landing roll against the strip length); key caps in every footer that you can
   also click; readouts as tiles; a HUD laid out by what you need when (status chips, wanted stars,
@@ -196,8 +211,8 @@ Beyond the prototype:
 | ![lieutenant](docs/img/ui-lieutenant.png) | ![seats](docs/img/ui-seats.png) | ![docks](docs/img/ground-docks.png) |
 | **The cast and the cars (Kenney CC0)** | **On foot with a rifle** | **Isla Soberana, over the horizon** |
 | ![cast](docs/img/models-cast.png) | ![rifle](docs/img/foot-rifle.png) | ![island](docs/img/island-approach.png) |
-| **A sit-down with the Family** | **The General's aide on the ramp** | |
-| ![talk](docs/img/talk.png) | ![aide](docs/img/talk_island.png) | |
+| **A sit-down with the Family** | **The General's aide on the ramp** | **The bail hearing** |
+| ![talk](docs/img/talk.png) | ![aide](docs/img/talk_island.png) | ![court](docs/img/court.png) |
 
 | Mid-afternoon on the runway (medium) | Dusk, climbing out near Eagle's Nest (high) | Night: edge lights on |
 |---|---|---|

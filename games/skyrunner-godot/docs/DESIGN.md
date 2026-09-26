@@ -397,3 +397,51 @@ their own government tried them.
   gives the island's news (and a warning when the General's friends are in danger - relations
   under 40 are where purges happen), and takes orders for mules and containers, with customs' current
   odds in the answer text. During a purge a stranger answers.
+
+## 16. The court: lawyers, bail, pleas and juries
+
+Without a court a bust is a fine and the impound. With one (`scripts/sim/court.gd`, `court: true`
+in live play, RNG seed + 107), a bust opens a federal case against the pilot. It is modelled on
+how 1980s South Florida drug cases ran, with invented lawyers and judges.
+
+| Stage | What happens | Choices |
+|---|---|---|
+| Arrest | Charges from the case: possession (any load), importation and trafficking (over 150 lb), a firearm (weapons aboard, or armed strip guards), conspiracy (a heavy case). Evidence is built from the load, the task force's suspicion, informants, an undercover agent, witnesses (arrested soldiers talk), and whether there was a chase. The load is seized as evidence. | - |
+| Bail hearing (90 s) | A judge is drawn: Pike (hard), Ruiz (by the book) or Dunne (lives well for a judge). Bail is $10k per charge weight × the judge × 1.5 for a flight risk (rich, or the General's friend). | Post it all (returned at trial), a bond (10%, gone), or custody. The prosecutor can ask for no bail. |
+| Pretrial (20 min) | On bail you fly; a new arrest revokes it (+15 evidence). In custody the aircraft sits and you can fast-forward. | Hire a lawyer; file motions (suppress, discovery, continuance); lean on a witness or pay the judge through the Family; take a plea; sign a cooperation deal. |
+| Trial | Conviction odds: logistic((evidence − 50)/12 + judge bias × 3 − lawyer skill × 2.2 + 0.25 per witness + jury noise). A close jury can hang (retrial in 10 min, evidence −10). | Skipping the trial on the island makes you a fugitive: failure to appear, a warrant, the bail forfeit. |
+| Sentence | Years from the charges × the judge (trafficking has a 10-year minimum after the 1986 act), 2 game minutes a year up to an hour. A fine plus 30% of the cash (80% to the task force), and the aircraft is forfeited. | One appeal (15% + 40% × the lawyer's skill to reverse); or wait it out. |
+
+**The lawyers.**
+
+| Lawyer | Cost | Skill | Notes |
+|---|---|---|---|
+| The public defender | free | 0.15 | |
+| Arturo Vega | $6,000 | 0.4 | |
+| Roy Kessler | $25,000 | 0.65 | |
+| Leonard Castellano | the Family's offer | 0.7 | If the Family's offer was a con, he works for the prosecutor: +1.5 on the trial's odds and worse pleas. |
+
+Skill drives three things:
+- **Suppression:** 10% + 50% × skill, +25% when the stop had no cause (a random landing check below 40% suspicion). Success takes 30 points off the evidence.
+- **The trial's odds** (the formula above).
+- **The appeal.**
+
+**Off the books.**
+- **Leaning on a witness** ($5,000 to the Family): 35% it becomes obstruction (+20 evidence, bail revoked); otherwise one witness fewer and −12 evidence.
+- **Paying Judge Dunne** ($20,000): 30% it's a sting (45% with an undercover agent), and Judge Pike takes the case; otherwise the judge leans your way.
+
+**Deals.**
+- **The plea:** the top charge at 45% of the years (30% on the second, lenient offer), more as the evidence grows.
+- **Cooperation:** a tenth of the time. In exchange every stash house gets +35 police intel, the Family's respect drops to 0 and its RICO case jumps, and the organisation's soldiers lose heart.
+
+**The task force's side** (controller's desk N W K D Y, or the AI prosecutor when nobody human
+sits the law's chair):
+- no bail;
+- immunity for a crewman ($4,000: +1 witness, +10 evidence);
+- the bank records (a civil forfeiture: 20% of the cash, 80% of it to the task force);
+- a conspiracy count (at 50% evidence);
+- a plea offer.
+
+**The lawyer's conversation** (`dialogue/lawyer.dialogue`, Shift+L, L at the desks) walks
+through all of it: the hearing, the case as he sees it (the exact odds once discovery is in),
+each option, the witness and the judge in lowered voices, the deal, and the appeal.

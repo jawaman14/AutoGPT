@@ -1,0 +1,157 @@
+# Your lawyer, in the visiting room or on the courthouse steps: the bail
+# hearing, the case, the motions, the plea, a deal, the trial, the appeal.
+# (Fiction; the lawyers and judges are invented.) Reads and acts through
+# Talk.State: post_bail(), hire(), move(), lean_on_witness(), pay_judge(),
+# plead(), cooperate(), appeal(), wait().
+
+~ start
+if not court or not case_open
+	=> no_case
+if stage == "bail"
+	=> bail
+if stage == "prison"
+	=> prison
+if stage == "fugitive"
+	=> fugitive
+=> consult
+
+~ no_case
+Arturo Vega: [[You're not in trouble. Keep it that way.|No case, no fee. Call me when they call you.]]
+=> END
+
+~ bail
+{{lawyer_name}}: You're charged with {{charges}}. {{judge}} has the bail hearing - {{judge_known}}.
+if no_bail
+	{{lawyer_name}}: The prosecutor called you a flight risk and the judge agreed. No bail. You're held until trial.
+	- All right.
+		do post_bail("custody")
+		=> END
+{{lawyer_name}}: Bail is {{money_s(bail)}}. Post it all and you get it back if you show up for trial. A bondsman wants ten percent - {{money_s(bond)}} - and you never see it again.
+- Post the full bail. ({{money_s(bail)}}) [if money >= bail]
+	do post_bail("cash")
+	=> bailed
+- Get a bondsman. ({{money_s(bond)}}) [if money >= bond]
+	do post_bail("bond")
+	=> bailed
+- Sit tight in custody.
+	do post_bail("custody")
+	{{lawyer_name}}: Then get comfortable. The trial's in {{trial_min}} minutes.
+	=> END
+
+~ bailed
+if result != ""
+	{{lawyer_name}}: {{result}}
+	=> END
+{{lawyer_name}}: You're out. Don't get arrested again, and don't be anywhere but that courtroom in {{trial_min}} minutes.
+=> END
+
+~ consult
+if stage == "custody"
+	Narrator: The visiting room. Green paint, a steel table, a guard by the door.
+{{lawyer_name}}: [[So.|Sit down.|Here's where we are.]] {{charges}}. {{judge}} - {{judge_known}}. Trial in {{trial_min}} minutes.
+if odds >= 0
+	{{lawyer_name}}: I've seen their file. The case is {{strength}}: I'd put a conviction at {{odds}} percent. {{witnesses}} witnesses.
+	if informant
+		{{lawyer_name}}: And one of them is an informant. Somebody close to you.
+else
+	{{lawyer_name}}: Their case looks {{strength}} from here. I'd know more with discovery.
+if has_plea
+	{{lawyer_name}}: There's an offer on the table: plead to {{plea_charge}}, {{plea_years}} years.
+=> options
+
+~ options
+- Hire Arturo Vega. ($6,000) [if lawyer_tier == "public"]
+	do hire("local")
+	=> hired
+- Hire Roy Kessler, the Brickell Avenue lawyer. ($25,000) [if lawyer_tier == "public" or lawyer_tier == "local"]
+	do hire("miami")
+	=> hired
+- File a motion to suppress the search. ($3,000) [if not has_filed("suppress")]
+	do move("suppress")
+	=> filed
+- Ask for discovery. ($1,500) [if not has_filed("discovery")]
+	do move("discovery")
+	=> filed
+- Ask for more time. ($2,000) [if continuances < 2]
+	do move("continuance")
+	=> filed
+- Take the plea. [if has_plea]
+	do plead()
+	=> plea
+- "What about the witness?" [if witnesses > 0 and not tampered]
+	=> witness
+- "What about the judge?" [if bribable and not bribed]
+	=> judge_talk
+- "What if I talked to them? Named names?"
+	=> deal
+- Wait for the trial. [if stage == "custody"]
+	do wait()
+	=> END
+- That's all for now.
+	{{lawyer_name}}: [[Don't talk to anyone. Anyone.|Keep your head down.|I'll see you in court.]]
+	=> END
+
+~ hired
+if result != ""
+	{{lawyer_name}}: {{result}}
+else
+	{{lawyer_name}}: [[Let's get to work.|Good. Now tell me everything - and I mean everything.]]
+=> options
+
+~ filed
+if result != ""
+	{{lawyer_name}}: {{result}}
+else
+	{{lawyer_name}}: [[Filed.|It's in front of the judge.|Done. We'll see.]]
+=> consult
+
+~ plea
+{{lawyer_name}}: It's done. You pleaded. {{years}} years - better than it could have been.
+=> END
+
+~ witness
+{{lawyer_name}}: (quietly) I didn't hear this conversation. But certain friends of yours could... discourage a witness. If it goes wrong it's obstruction of justice, and you go back in.
+- Make the call. ($5,000 to the Family)
+	do lean_on_witness()
+	if result != ""
+		{{lawyer_name}}: {{result}}
+	=> consult
+- Forget it.
+	=> options
+
+~ judge_talk
+{{lawyer_name}}: {{judge}} has a boat, a condo in Key Biscayne and a judge's salary. People have... helped him before. Twenty thousand, cash. If it's a sting, you're finished.
+- Do it. ($20,000)
+	do pay_judge()
+	if result != ""
+		{{lawyer_name}}: {{result}}
+	=> consult
+- No.
+	=> options
+
+~ deal
+{{lawyer_name}}: A cooperation agreement. You give them the organisation - the strips, the stash houses, the people. You'd do a tenth of the time. And you'd spend the rest of your life looking over your shoulder. The Family would know within a day.
+- Sign it.
+	do cooperate()
+	{{lawyer_name}}: It's done. God help you.
+	=> END
+- Never.
+	{{lawyer_name}}: Good. I didn't want to hear it.
+	=> options
+
+~ prison
+Narrator: {{verdict}}: {{years}} years. {{release_min}} minutes left inside.
+- Appeal. ($8,000) [if not appealed]
+	do appeal()
+	if result != ""
+		{{lawyer_name}}: {{result}}
+	=> END
+- Do the time.
+	do wait()
+	=> END
+- Not now.
+	=> END
+
+~ fugitive
+{{lawyer_name}}: (on a bad line) There's a warrant. The bail's gone. If you come back, they'll be waiting at every airfield with a police post. Stay where you are.
+=> END

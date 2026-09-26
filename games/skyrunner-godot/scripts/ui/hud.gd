@@ -258,7 +258,13 @@ func refresh() -> void:
 	objectives.text = ("%d - %s\n" % [camp.chapter.year, camp.chapter.title] + "\n".join(camp.objective_lines())) if camp != null else ""
 	toasts.sync(s.messages, s.time)
 	_warnings(st, c)
-	if s.phase in ["crashed", "busted"]:
+	if s.court != null and s.court.open() and s.phase in ["busted", "custody"]:
+		var v: Dictionary = s.court.view("runner")
+		var line: String = {"bail": "THE BAIL HEARING - %d s to decide" % int(v.bail_s), "custody": "IN CUSTODY - trial in %d min" % int(ceil(v.trial_s / 60.0)),
+			"prison": "INSIDE - %d min to release" % int(ceil(v.release_s / 60.0)), "pretrial": "ON BAIL - trial in %d min" % int(ceil(v.trial_s / 60.0))}.get(str(v.stage), str(v.stage))
+		center.text = "%s\n%s" % [line, ", ".join(v.charges)]
+		hints.set_hints([["SHIFT+L", "your lawyer"]] + ([["ENTER", "walk out"]] if v.stage == "pretrial" else []))
+	elif s.phase in ["crashed", "busted"]:
 		center.text = s.last_outcome + "\n\nPress ENTER to continue"
 		hints.set_hints([["ENTER", "continue"]])
 	elif s.parked:
