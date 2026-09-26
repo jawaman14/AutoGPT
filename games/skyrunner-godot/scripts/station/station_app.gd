@@ -56,14 +56,14 @@ func setup(link_, role_: String, world_: World = null, vertical := false) -> Sta
 	link = link_
 	role = role_
 	world = world_ if world_ != null else World.new()
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	theme = UIStyle.theme()
 	var bg := ColorRect.new()
 	bg.color = Color(0.035, 0.04, 0.055)
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 	var h: BoxContainer = VBoxContainer.new() if vertical else HBoxContainer.new()
-	h.set_anchors_preset(Control.PRESET_FULL_RECT)
+	h.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	h.add_theme_constant_override("separation", 10)
 	add_child(h)
 	map = StationMap.new().setup(world)

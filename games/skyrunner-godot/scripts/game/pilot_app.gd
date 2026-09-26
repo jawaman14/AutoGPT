@@ -143,7 +143,7 @@ func _overlay(text: String, col: Color) -> Label:
 ## showing where the nose points (the 3D airframe is hidden in this view).
 func _build_glareshield() -> Control:
 	var root := Control.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var dash := ColorRect.new()
 	dash.color = Color(0.08, 0.08, 0.09)

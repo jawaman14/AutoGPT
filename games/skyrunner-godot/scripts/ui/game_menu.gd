@@ -20,7 +20,7 @@ func setup(sess: Session) -> GameMenu:
 	s = sess
 	theme = UIStyle.theme()
 	add_theme_stylebox_override("panel", UIStyle.box(Color(0.03, 0.04, 0.06, 0.94), 10, UIStyle.LINE, 1, Vector4(22, 16, 22, 14)))
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	anchor_left = 0.06
 	anchor_right = 0.94
 	anchor_top = 0.06

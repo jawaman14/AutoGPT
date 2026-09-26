@@ -1,5 +1,5 @@
 class_name ConfirmBox
-extends CenterContainer
+extends Control
 ## A modal yes/no over the whole screen ("Leave the co-pilot seat?"). The owner
 ## routes keys to `key()`: ENTER confirms, ESC cancels; the buttons do the same.
 
@@ -9,17 +9,21 @@ var msg: Label
 
 
 func setup(text: String, yes_text := "Leave", no_text := "Stay") -> ConfirmBox:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	theme = UIStyle.theme()
 	visible = false
 	var shade := ColorRect.new()
 	shade.color = Color(0, 0, 0, 0.55)
-	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	shade.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(shade)
+	var center := CenterContainer.new()  # the shade covers everything; the panel sits in the middle
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(center)
 	var p := PanelContainer.new()
 	p.add_theme_stylebox_override("panel", UIStyle.box(Color(0.07, 0.08, 0.11, 0.98), 8, UIStyle.ACCENT, 1, Vector4(22, 18, 22, 18)))
-	add_child(p)
+	center.add_child(p)
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 14)
 	p.add_child(v)

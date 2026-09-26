@@ -31,7 +31,7 @@ func setup() -> Nerves:
 	name = "nerves"
 	layer = 5  # over the 3D view, under the HUD and menus
 	overlay = ColorRect.new()
-	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	mat = ShaderMaterial.new()
 	mat.shader = load("res://shaders/nerves.gdshader")

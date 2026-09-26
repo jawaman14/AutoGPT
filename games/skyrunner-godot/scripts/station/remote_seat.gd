@@ -48,7 +48,7 @@ func setup(link_, role_: String, graphics := "medium", world: World = null) -> R
 	var ui := CanvasLayer.new()
 	add_child(ui)
 	var root := Control.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.theme = UIStyle.theme()
 	ui.add_child(root)
