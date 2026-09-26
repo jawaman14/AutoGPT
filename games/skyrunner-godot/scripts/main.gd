@@ -97,8 +97,7 @@ func start() -> void:
 			sess.say(err)
 			server = null
 		else:
-			var roles := "copilot, spotter, boat, boss" + (", controller, interceptor, cutter, chief" if mode == Roles.VERSUS else "")
-			sess.say("Hosting on port %d: friends run Skyrunner with --connect YOUR_IP:%d --role <%s>" % [server.port, server.port, roles])
+			sess.say("Hosting on port %d: friends join with --connect YOUR_IP:%d (--role pick to choose a seat; the AI plays every seat nobody takes)" % [server.port, server.port])
 	var bot = null
 	if args["watch"]:
 		bot = AutoRunner.new(sess)
@@ -121,15 +120,29 @@ func _join() -> void:
 	var port := int(a.substr(i + 1)) if i >= 0 else HostServer.DEFAULT_PORT
 	var link := NetClient.new()
 	add_child(link)
-	link.open(host, port, args["name"], args["role"])
-	if args["role"] == Roles.INTERCEPTOR or (args["role"] == Roles.COPILOT and args["seat3d"]):
+	var role: String = args["role"] if args["role"] != "pick" else ""
+	link.open(host, port, args["name"], role)
+	if role == "":
+		# the live seat list: take whatever the AI is playing
+		var picker := SeatPicker.new()
+		add_child(picker)
+		picker.setup(link)
+		picker.seated.connect(func(r):
+			picker.queue_free()
+			_seat(link, r), CONNECT_ONE_SHOT)
+		return
+	_seat(link, role)
+
+
+func _seat(link: NetClient, role: String) -> void:
+	if role == Roles.INTERCEPTOR or (role == Roles.COPILOT and args["seat3d"]):
 		var seat := RemoteSeat.new()
 		add_child(seat)
-		seat.setup(link, args["role"], args["graphics"])
+		seat.setup(link, role, args["graphics"])
 	else:
 		var st := StationApp.new()
 		add_child(st)
-		st.setup(link, args["role"])
+		st.setup(link, role)
 
 
 ## Render a few frames and save a screenshot (docs, CI smoke tests).

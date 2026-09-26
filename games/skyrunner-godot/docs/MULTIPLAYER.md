@@ -91,3 +91,38 @@ fight:
 - [Operation Greenback](https://en.wikipedia.org/wiki/Operation_Greenback) followed the laundering money and produced 125 arrests by 1982. That is why audits and front exposure exist.
 - The 1984 Comprehensive Crime Control Act let local police keep up to 80% of forfeited assets ([equitable sharing](https://en.wikipedia.org/wiki/Equitable_sharing); [Kantor et al., NBER](https://www.nber.org/papers/w23873)). Hence `seizure_share = 0.8`, and the positive loop it creates.
 - U.S. Customs flew radar-equipped Citation interceptors ([CBP](https://www.cbp.gov/newsroom/national-media-release/end-era-amo-retires-c-550-citation)). Hence the interceptor's speed advantage and its wide turning circle against slow twins.
+
+## 7. Seats: every role is the AI's until a human takes it
+
+Every role exists in every game from the first second and the AI plays it: the co-pilot, the
+spotter, the go-fast, the boss, the **lieutenant** (the organisation's soldiers on the ground), the
+task-force controller, the police pilot, the cutter captain, the chief and the **patrol commander**
+(the narcotics squads). A player who joins mid-game sees the live seat list and takes any seat the
+AI holds; the AI hands it over at once. Leaving hands it back. Dropping (a lost connection) holds
+the seat for 30 s with the AI minding it, and the reconnect token from the welcome takes it back.
+`Seats` (`scripts/sim/seats.gd`) is the one table; `Session.seat_driver` flips each system between
+its AI and the human, symmetrically, so a seat handed back behaves exactly as before (the boss's
+AI planner used to never come back).
+
+Per P3 and P7 this means no seat is ever empty and no table waits for a full house: two friends
+can play the pilot and the patrol commander against eight AI seats, and a third can sit down as the
+lieutenant twenty minutes in.
+
+### Protocol v3 (TCP, one JSON object per line)
+
+| Direction | Message | Meaning |
+|---|---|---|
+| client -> host | `{"t":"hello","v":3,"name":"Ana","role":""?,"token":"..."?}` | join; no role = the lobby; a held seat's token takes it back |
+| client -> host | `{"t":"claim","role":"lieutenant"}` / `{"t":"release"}` | take a seat from the AI / give it back |
+| client -> host | `{"t":"say","text":"...","to":"all"\|"side"}` | table talk |
+| client -> host | `{"t":"cmd",...}`, `{"t":"input",...}` | as v2 (only from a seat) |
+| host -> client | `{"t":"welcome","role":"","token":"...","mode":...,"seed":...}` | joined |
+| host -> client | `{"t":"seats","seats":[{role,side,who,name}],"players":[{name,role}],"you":"..."}` | the live roster, on every change and once a second |
+| host -> client | `{"t":"claimed","role":"..."}` / `{"t":"claim_failed","msg":"..."}` | the answer to a claim |
+| host -> client | `{"t":"chat","from","role","side","text","to"}` | table talk (side talk only to that side) |
+| host -> client | `{"t":"snap",...}` | role-filtered snapshots, only to players in a seat |
+
+v2 clients that name a role in the hello still go straight into it.
+
+From the game: the lobby's **Join** with "pick a seat" (or `--connect HOST:PORT --role pick`) opens
+the seat picker; `--role lieutenant` or `--role patrol` sits straight down at those desks.

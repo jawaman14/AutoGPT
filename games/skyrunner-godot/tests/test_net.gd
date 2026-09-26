@@ -11,6 +11,7 @@ var clients: Array = []
 func before_each() -> void:
 	sess = Session.new({"seed": 4, "mode": Roles.VERSUS})
 	srv = HostServer.new()
+	srv.attach(sess)
 	check_eq(srv.start(0, Roles.VERSUS, "127.0.0.1"), null, "server listening")
 
 
@@ -118,7 +119,7 @@ func test_controller_sees_tracks_not_truth() -> void:
 func test_seat_rules() -> void:
 	var p := _client("X", "pilot")  # the host flies
 	_pump_until(func(): return p.error != null, 3.0)
-	check(p.error != null and "isn't open" in p.error, str(p.error))
+	check(p.error != null and "taken" in p.error, str(p.error))
 	var a := _client("A", "spotter")
 	check(_pump_until(func(): return a.welcome != null), "spotter joins")
 	var b := _client("B", "spotter")
@@ -167,7 +168,7 @@ func test_wire_protocol_is_python_compatible() -> void:
 	var got := []
 	var sent := false
 	var end := Time.get_ticks_msec() + 4000
-	while Time.get_ticks_msec() < end and got.size() < 2:
+	while Time.get_ticks_msec() < end and not got.any(func(g): return g is Dictionary and g.get("t") == "snap"):
 		peer.poll()
 		srv._process(0.0)
 		srv.pump(sess)
@@ -183,6 +184,7 @@ func test_wire_protocol_is_python_compatible() -> void:
 	if got.size() >= 2:
 		check_eq(got[0].t, "welcome")
 		check_eq(got[0].role, "spotter")
-		check_eq(got[1].t, "snap")
-		check_eq(int(got[1].v), Snapshot.PROTOCOL_VERSION)
+		var snap = Py.first(got, func(g): return g.get("t") == "snap")
+		check(snap != null, "a snapshot for the v2 client")
+		check_eq(int(snap.v), Snapshot.PROTOCOL_VERSION)
 	peer.disconnect_from_host()

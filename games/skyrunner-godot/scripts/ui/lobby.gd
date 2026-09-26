@@ -25,7 +25,7 @@ var hints: KeyHints
 
 const MODES := [["Sandbox (solo)", "solo"], ["Campaign 1979-", "campaign"], ["Co-op: friends crew for you", "coop"],
 	["Versus: friends run the task force", "versus"], ["Task-force desk vs AI runners", "police"]]
-const JOIN_ROLES := ["copilot", "spotter", "boat", "boss", "controller", "interceptor", "cutter", "chief"]
+const JOIN_ROLES := ["", "copilot", "spotter", "boat", "boss", "lieutenant", "controller", "interceptor", "cutter", "chief", "patrol"]
 
 
 func _ready() -> void:
@@ -123,7 +123,7 @@ func _ready() -> void:
 	addr.custom_minimum_size = Vector2(200, 0)
 	role_ob = OptionButton.new()
 	for r in JOIN_ROLES:
-		role_ob.add_item(r)
+		role_ob.add_item(r if r != "" else "pick a seat")
 	name_le = LineEdit.new()
 	name_le.placeholder_text = "your name"
 	var join := Button.new()

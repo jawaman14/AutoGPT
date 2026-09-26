@@ -107,7 +107,7 @@ func setup(link_, role_: String, world_: World = null, vertical := false) -> Sta
 		orders = board.orders
 		list.row_activated.connect(func(_i): _key("enter"))
 	else:
-		if Roles.side(role) == "runner" and role != Roles.SPOTTER and role != Roles.BOAT:
+		if Roles.side(role) == "runner" and not role in [Roles.SPOTTER, Roles.BOAT, Roles.LIEUTENANT]:
 			_build_runner_tiles()
 		if role == Roles.COPILOT:
 			tabs = TabBar.new()
@@ -168,6 +168,11 @@ func setup(link_, role_: String, world_: World = null, vertical := false) -> Sta
 		elif a != "":
 			_key(a))
 	body.add_child(hints)
+	if role in [Roles.LIEUTENANT, Roles.PATROL]:
+		squad_mode = true  # the whole desk is the squads
+		list.row_selected.connect(func(i):
+			if i >= 0 and i < _list_keys.size():
+				sel_squad = _list_keys[i])
 	if role in [Roles.BOSS, Roles.CHIEF] and orders == null:
 		orders = HQOrders.new("runner" if role == Roles.BOSS else "law")
 	_build_buttons()
@@ -221,10 +226,12 @@ func _hints() -> Array:
 				out = [["U", "back to the desk", "u"], ["UP/DOWN", "select", "down"], ["ENTER", "buy", "enter"]]
 		Roles.BOSS, Roles.CHIEF:
 			out = [["UP/DOWN", "order", "down"], ["LEFT/RIGHT", "change it", "right"], ["ENTER", "issue", "enter"]]
+		Roles.LIEUTENANT, Roles.PATROL:
+			out = [["UP/DOWN", "squad", "down"]]
 	var snap = link.snapshot() if link != null else null
 	if snap is Dictionary and commands_squads(snap):
 		if squad_mode:
-			out = [["Q", "back to the desk", "q"], ["CLICK", "squad", ""], ["RIGHT-CLICK", "send it", ""], ["TAB", "next squad", "tab"],
+			out = ([] if role in [Roles.LIEUTENANT, Roles.PATROL] else [["Q", "back to the desk", "q"]]) + out.slice(0, 1 if role in [Roles.LIEUTENANT, Roles.PATROL] else 0) + [["CLICK", "squad", ""], ["RIGHT-CLICK", "send it", ""], ["TAB", "next squad", "tab"],
 				["A", "checkpoint here" if _own() == "police" else "ambush here", "a"], ["M", "melt away", "m"], ["H", "hold", "h"], ["D", "disband", "d"],
 				["F/V/K", "raise foot / car / truck", "f"]]
 		else:
@@ -317,11 +324,18 @@ func _key(k: String) -> void:
 	if role == Roles.COPILOT and k in ["1", "2", "3"]:
 		tabs.current_tab = int(k) - 1
 		return
-	if k == "q" and commands_squads(snap):
+	if k == "q" and commands_squads(snap) and not role in [Roles.LIEUTENANT, Roles.PATROL]:
 		squad_mode = not squad_mode
 		status = "Squads: click one, right-click to send it" if squad_mode else ""
 		return
 	if squad_mode and _squad_key(k, snap):
+		return
+	if role in [Roles.LIEUTENANT, Roles.PATROL]:
+		if k in ["up", "down"]:
+			GameMenu.list_move(list, 1 if k == "down" else -1)
+			var i := GameMenu.selected(list)
+			if i >= 0 and i < _list_keys.size():
+				sel_squad = _list_keys[i]
 		return
 	match role:
 		Roles.BOSS, Roles.CHIEF:
@@ -528,7 +542,7 @@ func _on_map_click(button: int, p: Vector2) -> void:
 ## Seats that can order the ground war's squads (with one running).
 func commands_squads(snap: Dictionary) -> bool:
 	var g = snap.get("ground")
-	return g is Dictionary and not g.is_empty() and role in [Roles.BOSS, Roles.CHIEF, Roles.CONTROLLER]
+	return g is Dictionary and not g.is_empty() and role in [Roles.BOSS, Roles.CHIEF, Roles.CONTROLLER, Roles.LIEUTENANT, Roles.PATROL]
 
 
 func _own() -> String:
@@ -623,8 +637,12 @@ func _process(delta: float) -> void:
 				_draw_hq(snap)
 			Roles.CONTROLLER:
 				_draw_law(snap)
+			Roles.LIEUTENANT, Roles.PATROL:
+				_draw_squads(snap)
 			_:
 				_draw_runner(snap)
+	if link is NetClient and not link.players.is_empty():
+		subtitle.text = "  ".join(link.players.map(func(p): return "%s (%s)" % [p.name, p.role if p.role != "" else "lobby"]))
 	status_lbl.text = status if status != "" else ("Link lost: %s" % link.error if link.error != null and not link.alive() else "")
 	hints.set_hints(_hints())
 
@@ -794,6 +812,55 @@ func _draw_hq(snap: Dictionary) -> void:
 	subtitle.text = head
 	board.update(ss)
 	order_rows = board.rows
+
+
+## The lieutenant's and the patrol commander's desk: our squads, their
+## weapons and orders, the armoury, who holds the streets, the commander's log.
+func _draw_squads(snap: Dictionary) -> void:
+	var law := role == Roles.PATROL
+	title.text = "PATROL COMMAND" if law else "LIEUTENANT"
+	var g: Dictionary = snap.get("ground", {})
+	if g.is_empty():
+		info.text = "No ground war in this game."
+		return
+	var mine := _my_squads(snap)
+	var cells := []
+	var colors := {}
+	for i in mine.size():
+		var d: Dictionary = mine[i]
+		cells.append([d.id, d.kind, "%d/%d" % [int(d.men), int(d.men0)], Arsenal.describe(d.loadout), d.tactic if d.tactic != "" else d.order, d.state])
+		if d.state == "fighting":
+			colors[i] = UIStyle.RED
+		elif d.state == "routed":
+			colors[i] = UIStyle.AMBER
+	_set_list("squads", mine.map(func(d): return d.id), cells, colors, [{"title": "Squad", "min": 70}, {"title": "Unit", "min": 60},
+		{"title": "Men", "align": "right", "mono": true, "min": 60}, {"title": "Weapons", "expand": true, "ratio": 2},
+		{"title": "Orders", "min": 110}, {"title": "State", "min": 90}])
+	var ars: Dictionary = snap.get("arsenal", {})
+	var lines := ["%s: %s, %d rounds" % ["Police arsenal" if law else "Armoury", Arsenal.describe(ars.get("stock", {})), int(ars.get("ammo", 0))]]
+	if law:
+		lines.append("Funds $%s   arrests %d   officers down %d" % [Py.money(int(snap.get("law_funds", 0))), int(g.get("arrests", 0)), int(g.get("officers_down", 0))])
+	else:
+		lines.append("Cash $%s" % Py.money(int(snap.get("money", 0))))
+	lines.append("")
+	lines.append("STREETS (who's out there)")
+	var ctl: Dictionary = g.get("control", {})
+	for m in ctl:
+		var c: Dictionary = ctl[m]
+		var tot: float = c.org + c.rival + c.police
+		if tot > 1.0:
+			lines.append("  %-6s ours %2.0f%%   Los Cuervos %2.0f%%   police %2.0f%%" % [m,
+				100.0 * (c.police if law else c.org) / tot, 100.0 * c.rival / tot, 100.0 * (c.org if law else c.police) / tot])
+	var fights: Array = g.get("fights", [])
+	if not fights.is_empty():
+		lines += ["", "SHOTS FIRED"] + fights.map(func(f): return "  %s vs %s, %.0f s" % [f.a, f.b, float(f.age)])
+	lines += ["", "COMMANDER (%s)" % ("AI" if g.get("commander", {}).get("ai", true) else "you")]
+	lines += g.get("commander", {}).get("log", []).map(func(l): return "  " + str(l))
+	var news: Array = snap.get("chronicle", {}).get("news", [])
+	if not news.is_empty():
+		lines += ["", "NEWS"] + news.slice(-4).map(func(n): return "  " + str(n.text))
+	info.text = "\n".join(lines)
+	detail.text = "Selected: %s" % (sel_squad if sel_squad != null else "- (click a squad, or UP/DOWN)")
 
 
 func _draw_law(snap: Dictionary) -> void:

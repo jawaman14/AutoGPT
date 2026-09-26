@@ -14,6 +14,12 @@ var latest = null
 var welcome = null
 var error = null
 var acks := {}
+var token := ""  ## the host's reconnect token (from the welcome); send it again to take back a held seat
+var seats: Array = []  ## the live roster: [{role, side, who, name}]
+var players: Array = []  ## [{name, role}]
+var chat_log: Array = []  ## [{from, role, side, text, to}]
+var claim_error = null
+signal role_changed(role: String)
 var _buf := PackedByteArray()
 var _seq := 0
 var _hello_sent := false
@@ -49,7 +55,10 @@ func poll() -> void:
 		_closed = true
 		return
 	if not _hello_sent:
-		peer.put_data(HostServer.line({"t": "hello", "v": Snapshot.PROTOCOL_VERSION, "name": name_, "role": role}))
+		var hello := {"t": "hello", "v": Snapshot.PROTOCOL_VERSION, "name": name_, "role": role}
+		if token != "":
+			hello["token"] = token
+		peer.put_data(HostServer.line(hello))
 		_hello_sent = true
 	for l in HostServer.read_lines(peer, _buf):
 		var msg = JSON.parse_string(l)
@@ -58,6 +67,23 @@ func poll() -> void:
 		match msg.get("t"):
 			"welcome":
 				welcome = msg
+				token = str(msg.get("token", token))
+				if str(msg.get("role", "")) != role:
+					role = str(msg.get("role", ""))
+					role_changed.emit(role)
+			"seats":
+				seats = msg.get("seats", [])
+				players = msg.get("players", [])
+			"claimed":
+				claim_error = null
+				role = str(msg.get("role", ""))
+				latest = null
+				role_changed.emit(role)
+			"claim_failed":
+				claim_error = str(msg.get("msg", ""))
+			"chat":
+				chat_log.append(msg)
+				Py.keep_last(chat_log, 50)
 			"error":
 				error = str(msg.get("msg", "error"))
 				close()
@@ -65,6 +91,39 @@ func poll() -> void:
 				latest = msg
 			"ack":
 				acks[int(msg.get("seq", 0))] = [bool(msg.get("ok")), str(msg.get("msg", ""))]
+
+
+## Take a seat (the AI hands it over), or leave it (back to the AI).
+func claim(role_: String) -> void:
+	_put({"t": "claim", "role": role_})
+
+
+func release() -> void:
+	_put({"t": "release"})
+
+
+## Table talk: to everyone, or to your side only.
+func say(text: String, to := "all") -> void:
+	_put({"t": "say", "text": text, "to": to})
+
+
+## Reconnect with the same token (a dropped seat is held for Seats.HOLD_S).
+func reconnect() -> void:
+	peer = StreamPeerTCP.new()
+	_buf = PackedByteArray()
+	_hello_sent = false
+	_closed = false
+	error = null
+	role = ""
+	var err := peer.connect_to_host(host, port)
+	if err != OK:
+		error = "Can't connect to %s:%d (%s)" % [host, port, error_string(err)]
+		_closed = true
+
+
+func _put(msg: Dictionary) -> void:
+	if not _closed and peer.get_status() == StreamPeerTCP.STATUS_CONNECTED:
+		peer.put_data(HostServer.line(msg))
 
 
 func send_command(cmd: String, args := {}) -> int:

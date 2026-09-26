@@ -111,6 +111,8 @@ var _news_seen := 0
 var stash_net: StashNet = null  ## the organisation's stash houses (maps that have them)
 var _stash_ai_t := 0.0
 var arsenals := {}  ## "org" | "law" | "rival" -> Arsenal (Arsenal.REALISM)
+var seats: Seats  ## who holds each role: the AI, or a human (Seats)
+var _ai_defaults := {}  ## what each seat's AI was set to before a human took it
 var chronicle: Chronicle = null  ## the news and the breaks between runs (Chronicle; live play asks for it)
 var ground: GroundWar = null  ## squads, firefights and turf on the roads (GroundWar; live play asks for it)
 var arng: PyRandom  ## gun runs and arsenal draws, off the board and parity streams
@@ -235,6 +237,10 @@ func _init(opts := {}) -> void:
 			police.set_aerostat(true)
 		if features.has("encryption"):
 			police.set_encryption(true)
+	var local := humans.duplicate()
+	if runner_active() and not opts.get("pilot_ai", false):
+		local[Roles.PILOT] = opts.get("name", "pilot")  # the host flies
+	seats = Seats.new(self, local)
 
 
 ## Break the reference cycles (night director, campaign, bus subscribers) so a
@@ -610,6 +616,64 @@ func _cmd_pump(role: String, a: Dictionary):
 
 func _cmd_call_boat(role: String, a: Dictionary):
 	return call_boat(Py.truthy(a.get("brief", false)))
+
+
+## Flip one role between its AI and a human (Seats calls this; every switch is
+## symmetric, so a seat handed back works exactly as it did before).
+func seat_driver(role: String, human: bool) -> void:
+	match role:
+		Roles.COPILOT:
+			if human:
+				_ai_defaults[role] = copilot if copilot != "human" else _ai_defaults.get(role)
+				set_copilot("human")
+			else:
+				set_copilot(_ai_defaults.get(role))
+		Roles.CONTROLLER:
+			police.controller = "human" if human else "ai"
+			if nights != null and not humans.has(Roles.CHIEF):
+				nights.law_ai = null if human else "adaptive"
+		Roles.BOSS:
+			if nights != null:
+				if human:
+					_ai_defaults[role] = nights.runner_ai
+					nights.runner_ai = null
+				else:
+					nights.runner_ai = _ai_defaults.get(role, nights.runner_ai)
+		Roles.CHIEF:
+			if nights != null:
+				nights.law_ai = null if (human or humans.has(Roles.CONTROLLER)) else "adaptive"
+		Roles.INTERCEPTOR:
+			if not human:
+				command(role, "release_unit", {})
+		Roles.LIEUTENANT:
+			if ground != null:
+				ground.commanders["org"].ai = not human
+		Roles.PATROL:
+			if ground != null:
+				ground.commanders["police"].ai = not human
+	var who := "joined as" if human else "handed back"
+	var name: String = humans.get(role, seats.seats[role].name if seats != null else "")
+	var text := ("%s %s %s." % [name, who, role]) if human else ("%s is back on the AI." % role)
+	say(text)
+	law_say(text)
+
+
+## The cutter captain: send a cutter (the one at sea, or launch one) to x, y.
+func _cmd_cutter_goto(role: String, a: Dictionary):
+	var p = _point(a)
+	if p == null:
+		return "Bad arguments for cutter_goto: need x and y"
+	var cutters := maritime.boats.filter(func(b): return b.kind == "cutter" and b.state != "sunk")
+	var c = Py.first(cutters, func(b): return str(b.id) == str(a.get("id", ""))) if a.has("id") else (cutters[0] if not cutters.is_empty() else null)
+	if c == null:
+		if police.stock.get("cutter", 0) <= 0:
+			return "No cutter available."
+		police.stock["cutter"] -= 1
+		c = maritime.new_cutter(p)
+		radio.transmit(time, "police", c.id, "underway", [c.x, c.y])
+	c.goal = p
+	c.state = "patrol"
+	return null
 
 
 func _cmd_boat_goto(role: String, a: Dictionary):
@@ -1446,11 +1510,12 @@ func _update_world(dt: float) -> void:
 	for t in police.tips:
 		if time - t.t < 600 and t.text in ["possible airdrop", "DF fix"]:
 			law_goals.append([t.x, t.y])
-	if police.controller == "ai" and not law_goals.is_empty() and features.has("cutters") and police.stock.get("cutter", 0) > 0:
+	var cutter_ai: bool = police.controller == "ai" and (seats == null or not seats.human(Roles.CUTTER))
+	if cutter_ai and not law_goals.is_empty() and features.has("cutters") and police.stock.get("cutter", 0) > 0:
 		police.stock["cutter"] -= 1
 		var c := maritime.new_cutter(law_goals.back())
 		radio.transmit(time, "police", c.id, "underway to suspected drop", [c.x, c.y])
-	maritime.update(dt, law_goals if police.controller == "ai" else [])
+	maritime.update(dt, law_goals if cutter_ai else [])
 	for ev in maritime.events:
 		_maritime_event(ev[0], ev[1])
 	maritime.events.clear()

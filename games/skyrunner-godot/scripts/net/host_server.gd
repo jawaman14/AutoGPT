@@ -3,17 +3,24 @@ extends Node
 ## Listen server: the host runs the only simulation; remote seats send commands
 ## and receive role-filtered snapshots (port of net/server.py).
 ##
-## Transport: TCP, one JSON object per line - the same wire protocol as the
-## Python game, so Python station clients can join a Godot host and vice versa.
-##   client -> server  {"t":"hello","v":2,"name":"Rosa","role":"copilot"}
+## Transport: TCP, one JSON object per line (protocol v3; v2 clients that name
+## their role in the hello still join straight into it).
+##   client -> server  {"t":"hello","v":3,"name":"Rosa","role":"copilot"?,"token":"..."?}
+##                     {"t":"claim","role":"lieutenant"}  {"t":"release"}
+##                     {"t":"say","text":"...","to":"all"|"side"}
 ##                     {"t":"cmd","seq":7,"name":"kick","args":{"count":2}}
 ##                     {"t":"input","roll":0.2,"pitch":-0.1,"throttle":0.8}  (police pilot)
-##   server -> client  {"t":"welcome","role":"copilot","mode":"coop","seed":7}
-##                     {"t":"error","msg":"..."}
-##                     {"t":"ack","seq":7,"ok":true,"msg":"ok"}
-##                     {"t":"snap",...}  (Snapshot.build)
-## Sockets are polled from _process; the Session is only touched in pump() and
-## publish(), which the game loop calls around its update.
+##   server -> client  {"t":"welcome","role":"","mode":"coop","seed":7,"token":"..."}
+##                     {"t":"seats","seats":[{role,side,who,name}],"players":[{name,role}],"you":"..."}
+##                     {"t":"claimed","role":"..."}  {"t":"claim_failed","msg":"..."}
+##                     {"t":"chat","from":"Rosa","role":"copilot","side":"runner","text":"...","to":"all"}
+##                     {"t":"error","msg":"..."}  {"t":"ack","seq":7,"ok":true,"msg":"ok"}
+##                     {"t":"snap",...}  (Snapshot.build; only to players in a seat)
+## Every role is the AI's until someone claims it (Session.seats). Joining
+## without a role puts you in the lobby with the live seat list; a dropped
+## player's seat is held for Seats.HOLD_S and the welcome's token takes it back.
+## Sockets are polled from _process; commands reach the Session in pump(),
+## which the game loop calls around its update.
 
 const DEFAULT_PORT := 47800
 const MAX_LINE := 1 << 20
@@ -26,6 +33,8 @@ class Conn:
 	var buf := PackedByteArray()
 	var role := ""
 	var name := ""
+	var token := ""
+	var v := 3
 	var joined := false
 	var t0 := 0
 
@@ -37,8 +46,11 @@ var world_seed := 7
 var conns: Array = []
 var clients := {}  ## role -> Conn
 var inbox: Array = []  ## [role, seq, name, args]
-var joins: Array = []  ## ["join"|"leave", role, name]
 var sticks := {}  ## role -> [roll, pitch, throttle]
+var sess = null  ## the Session the seats belong to (set by attach or the first pump)
+var chat_log: Array = []  ## [from, role, side, text, to]
+var _seats_rev := -1
+var _seats_t := 0.0
 var _seq := 0
 var _last_pub := -1e9
 
@@ -126,29 +138,84 @@ func _process(_dt: float) -> void:
 			_drop(c)
 
 
+func attach(sess_) -> void:
+	sess = sess_
+
+
 func _hello(c: Conn, hello: Dictionary) -> void:
 	var role := str(hello.get("role", ""))
 	var name := str(hello.get("name", "player")).substr(0, 32)
+	var v := int(hello.get("v", -1))
 	var err := ""
-	if hello.get("t") != "hello" or int(hello.get("v", -1)) != Snapshot.PROTOCOL_VERSION:
+	if hello.get("t") != "hello" or not (v in [2, Snapshot.PROTOCOL_VERSION]):
 		err = "Protocol mismatch (server v%d)." % Snapshot.PROTOCOL_VERSION
-	elif not Roles.valid(role) or role == Roles.PILOT or not (role in Roles.MODE_ROLES.get(mode, [])):
-		err = "Role %s isn't open in %s mode." % [role, mode]
-	elif clients.has(role):
-		err = "%s is already taken." % role
+	elif sess == null:
+		err = "The host isn't ready yet."
+	elif role != "" and not Roles.valid(role):
+		err = "No such role %s." % role
+	elif v == 2 and role == "":
+		err = "Protocol v2 needs a role."
 	if err != "":
 		c.peer.put_data(line({"t": "error", "msg": err}))
 		_drop(c)
 		return
-	c.role = role
 	c.name = name
+	c.v = v
+	c.token = str(hello.get("token", "")).substr(0, 64)
+	if c.token == "":
+		c.token = "%08x%08x" % [randi(), randi()]
+	# a returning player takes back the seat held for them
+	var held: String = sess.seats.held_for(c.token)
+	if held != "" and role == "":
+		role = held
+	if role != "":
+		var why: String = sess.seats.claim(role, name, c.token)
+		if why != "":
+			c.peer.put_data(line({"t": "error", "msg": why}))
+			_drop(c)
+			return
+		c.role = role
+		clients[role] = c
 	c.joined = true
-	clients[role] = c
-	c.peer.put_data(line({"t": "welcome", "role": role, "mode": mode, "seed": world_seed}))
-	joins.append(["join", role, name])
+	c.peer.put_data(line({"t": "welcome", "role": c.role, "mode": mode, "seed": world_seed, "token": c.token, "v": Snapshot.PROTOCOL_VERSION}))
+	_seats_rev = -1  # everyone gets the new roster
 
 
 func _message(c: Conn, msg: Dictionary) -> void:
+	match msg.get("t"):
+		"claim":
+			var role := str(msg.get("role", ""))
+			if c.role != "":
+				sess.seats.release(c.role)
+				clients.erase(c.role)
+				c.role = ""
+			var why: String = sess.seats.claim(role, c.name, c.token)
+			if why != "":
+				c.peer.put_data(line({"t": "claim_failed", "msg": why}))
+			else:
+				c.role = role
+				clients[role] = c
+				c.peer.put_data(line({"t": "claimed", "role": role}))
+			_seats_rev = -1
+			return
+		"release":
+			if c.role != "":
+				sess.seats.release(c.role)
+				clients.erase(c.role)
+				sticks.erase(c.role)
+				c.role = ""
+				c.peer.put_data(line({"t": "claimed", "role": ""}))
+				_seats_rev = -1
+			return
+		"say":
+			var text := str(msg.get("text", "")).strip_edges().substr(0, 200)
+			if text != "":
+				chat(c.name, c.role, text, "side" if msg.get("to") == "side" else "all")
+			return
+	if c.role == "":
+		if msg.get("t") == "cmd":
+			c.peer.put_data(line({"t": "ack", "seq": int(msg.get("seq", 0)), "ok": false, "msg": "Claim a seat first."}))
+		return
 	if msg.get("t") == "cmd" and msg.get("args", {}) is Dictionary:
 		var args := {}
 		var raw: Dictionary = msg.get("args", {})
@@ -165,11 +232,39 @@ func _message(c: Conn, msg: Dictionary) -> void:
 
 func _drop(c: Conn) -> void:
 	conns.erase(c)
-	if c.joined and clients.get(c.role) == c:
+	if c.joined and c.role != "" and clients.get(c.role) == c:
 		clients.erase(c.role)
 		sticks.erase(c.role)
-		joins.append(["leave", c.role, c.name])
+		if sess != null:
+			sess.seats.release(c.role, true)  # held for them: the token takes it back
+		_seats_rev = -1
 	c.peer.disconnect_from_host()
+
+
+## A chat line: to everyone, or to one side's players (and the host, who sees
+## both sides' as a spectator of the table's talk only when it's to all).
+func chat(from: String, role: String, text: String, to := "all") -> void:
+	var side := Roles.side(role) if role != "" else ""
+	var msg := {"t": "chat", "from": from, "role": role, "side": side, "text": text, "to": to}
+	chat_log.append([from, role, side, text, to])
+	Py.keep_last(chat_log, 50)
+	for c in conns:
+		if c.joined and (to == "all" or (c.role != "" and Roles.side(c.role) == side)):
+			c.peer.put_data(line(msg))
+	if sess != null:
+		var t := "[%s%s] %s: %s" % ["team " if to == "side" else "", role if role != "" else "lobby", from, text]
+		if to == "all" or side == "runner":
+			sess.say(t)
+		if to == "all" or side == "law":
+			sess.law_say(t)
+
+
+func _broadcast_seats() -> void:
+	var roster: Array = sess.seats.roster()
+	var players := conns.filter(func(c): return c.joined).map(func(c): return {"name": c.name, "role": c.role})
+	for c in conns:
+		if c.joined:
+			c.peer.put_data(line({"t": "seats", "seats": roster, "players": players, "you": c.role}))
 
 
 func _send(role: String, msg: Dictionary) -> void:
@@ -180,34 +275,14 @@ func _send(role: String, msg: Dictionary) -> void:
 
 # ------------------------------------------------------------ game side
 ## Apply joins/leaves and queued commands. Call from the game loop.
-func pump(sess: Session) -> void:
-	for j in joins:
-		var role: String = j[1]
-		var name: String = j[2]
-		if j[0] == "join":
-			sess.humans[role] = name
-			if role == Roles.COPILOT:
-				sess.set_copilot("human")
-			elif role == Roles.CONTROLLER:
-				sess.police.controller = "human"
-			elif role == Roles.BOSS and sess.nights != null:
-				sess.nights.runner_ai = null
-			elif role == Roles.CHIEF and sess.nights != null:
-				sess.nights.law_ai = null
-			sess.say("%s joined as %s." % [name, role])
-			sess.law_say("%s joined as %s." % [name, role])
-		else:
-			sess.humans.erase(role)
-			if role == Roles.COPILOT:
-				sess.set_copilot(null)
-			elif role == Roles.CONTROLLER:
-				sess.police.controller = "ai"
-			elif role == Roles.INTERCEPTOR:
-				sess.command(role, "release_unit", {})
-			elif role == Roles.CHIEF and sess.nights != null and not sess.humans.has(Roles.CONTROLLER):
-				sess.nights.law_ai = "adaptive"
-			sess.say("%s (%s) left." % [name, role])
-	joins.clear()
+func pump(sess_: Session) -> void:
+	sess = sess_
+	sess.seats.tick(sess.time)
+	var now := Time.get_ticks_msec() / 1000.0
+	if sess.seats.rev != _seats_rev or now - _seats_t > 1.0:
+		_seats_rev = sess.seats.rev
+		_seats_t = now
+		_broadcast_seats()
 	for role in sticks:
 		sess.set_pilot_input(role, sticks[role][0], sticks[role][1], sticks[role][2])
 	for m in inbox:

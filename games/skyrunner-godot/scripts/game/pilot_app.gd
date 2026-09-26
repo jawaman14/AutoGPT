@@ -92,6 +92,8 @@ func setup(sess: Session, graphics := "high", bot_ = null, server_ = null) -> Pi
 	quality = Quality.get_preset(graphics)
 	bot = bot_
 	server = server_
+	if server != null:
+		server.attach(sess)
 	name = "PilotApp"
 	scene = WorldScene.new().setup(sess.world, quality)
 	add_child(scene)

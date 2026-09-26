@@ -7,7 +7,7 @@ extends RefCounted
 ## radar tracks, tips and its own units - never the runner's true position.
 ## Everything is plain JSON so any client (Godot, web, bot) can consume it.
 
-const PROTOCOL_VERSION := 2
+const PROTOCOL_VERSION := 3
 
 
 static func _r(v, nd := 1) -> float:

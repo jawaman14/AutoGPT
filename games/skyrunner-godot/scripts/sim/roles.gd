@@ -15,7 +15,10 @@ const CONTROLLER := "controller"
 const INTERCEPTOR := "interceptor"  ## police pilot: flies one unit in 3D
 const CUTTER := "cutter"
 const CHIEF := "chief"  ## the task force's HQ
-const ALL := [PILOT, COPILOT, SPOTTER, BOAT, BOSS, CONTROLLER, INTERCEPTOR, CUTTER, CHIEF]
+const LIEUTENANT := "lieutenant"  ## the organisation's soldiers on the ground (GroundWar)
+const PATROL := "patrol"  ## the task force's narcotics squads on the ground (GroundWar)
+const ALL := [PILOT, COPILOT, SPOTTER, BOAT, BOSS, LIEUTENANT, CONTROLLER, INTERCEPTOR, CUTTER, CHIEF, PATROL]
+const _SQUADS := ["squad_order", "recruit_squad", "disband_squad"]
 
 const SOLO := "solo"  ## human pilot vs AI law
 const POLICE := "police"  ## human controller vs AI runners
@@ -37,20 +40,22 @@ static var PERMISSIONS := {
 	INTERCEPTOR: ["claim_unit", "release_unit", "chat"],
 	CUTTER: ["cutter_goto", "chat"],
 	CHIEF: ["hq", "chat", "squad_order", "recruit_squad", "disband_squad"],
+	LIEUTENANT: _SQUADS + ["chat", "gun_mode", "sell_weapons", "buy_weapons", "set_cache"],
+	PATROL: _SQUADS + ["raid_stash", "chat"],
 }
 
 ## Roles a human can take in each mode. Everything else is AI or absent.
 const MODE_ROLES := {
 	SOLO: [PILOT],
-	POLICE: [CONTROLLER, INTERCEPTOR, CUTTER, CHIEF],
-	COOP: [PILOT, COPILOT, SPOTTER, BOAT, BOSS],
+	POLICE: [CONTROLLER, INTERCEPTOR, CUTTER, CHIEF, PATROL],
+	COOP: [PILOT, COPILOT, SPOTTER, BOAT, BOSS, LIEUTENANT],
 	VERSUS: ALL,
 	CAMPAIGN: [PILOT, COPILOT, SPOTTER, BOAT],
 }
 
 
 static func side(role: String) -> String:
-	return "law" if role in [CONTROLLER, INTERCEPTOR, CUTTER, CHIEF] else "runner"
+	return "law" if role in [CONTROLLER, INTERCEPTOR, CUTTER, CHIEF, PATROL] else "runner"
 
 
 static func allowed(role: String, command: String) -> bool:
