@@ -192,6 +192,22 @@ Beyond the prototype:
   - Every flight key and gamepad button can be rebound. The remapping and button names come from Input Helper.
   - Each analogue control is bound by moving it: yoke, throttle lever, rudder pedals, left and right toe brakes. They can be on several USB devices, which are matched by name, so replugging or reordering them doesn't matter.
   - Each has invert, deadzone and expo. Everything is saved to `user://controls.cfg`.
+- **Fire, smoke and weather you can see.**
+  - Crashed police aircraft and your own wreck burn, and burned-out stash houses smoke; the smoke leans downwind.
+  - RPGs going off in the ground war's fights, and your own, blow up with flash, sparks, smoke and debris that tumbles on the physics engine (Jolt).
+  - Bales throw up a splash when they hit the sea.
+  - Storms soak the world: darker ground, shining roads, rain rings on the sea. It dries off slowly afterwards.
+  - Sprites are Kenney's Particle Pack (CC0).
+- **Street furniture.** KayKit's CC0 City Builder Bits in town:
+  - lamp posts that light at night;
+  - traffic lights at the junction;
+  - hydrants, benches, dumpsters and bins.
+- **Your pack (I on foot).**
+  - Carry spare guns, rounds and medkits, up to 24 kg; over 12 kg you slow down.
+  - 5 uses a medkit.
+  - Climbing back in returns the guns to the armoury.
+  - Arrested, the pack is evidence for the task force.
+- **Read aloud (F8).** Conversations and radio calls in the operating system's voice.
 - **Colour-safe palette and screen filters.**
   - Under simulated colour blindness, the neon status colours collapse into each other. Examples: "on" green vs the pink accent under protanopia, and warning amber vs danger red under deuteranopia.
   - The colour-safe palette (F8) switches to Okabe–Ito-style colours that stay apart under all three simulations. `test_accessibility` checks every pair: ΔE ≥ 20.
@@ -246,8 +262,10 @@ Beyond the prototype:
 | ![talk](docs/img/talk.png) | ![aide](docs/img/talk_island.png) | ![court](docs/img/court.png) |
 | **Manny Ortega's hiring hall** | **The same, colour-safe palette** | **Through the VHS filter (F9)** |
 | ![crew](docs/img/crew.png) | ![crew-safe](docs/img/crew-safe.png) | ![vhs](docs/img/vhs.png) |
-| **Controls (F8): keys, buttons, yoke, pedals** | | |
-| ![controls](docs/img/controls.png) | | |
+| **Controls (F8): keys, buttons, yoke, pedals** | **Downtown: KayKit street furniture, a burning wreck** | **The same street in a storm: wet** |
+| ![controls](docs/img/controls.png) | ![street](docs/img/street-fire.png) | ![rain](docs/img/street-rain.png) |
+| **Your pack (I, on foot)** | | |
+| ![pack](docs/img/pack.png) | | |
 
 | Mid-afternoon on the runway (medium) | Dusk, climbing out near Eagle's Nest (high) | Night: edge lights on |
 |---|---|---|
@@ -360,7 +378,9 @@ synthesized in `scripts/game/sound.gd`. The conversations run on Nathan Hoad's D
 Locurcio's Debug Menu add-on, MIT, in `addons/debug_menu/`. Key and button remapping uses Nathan Hoad's
 Input Helper (MIT, `addons/input_helper/`). The VHS filter is Henrique Lacreta Alves' SimpleGodotCRTShader
 (MIT, `addons/crt_shader/`), and the colour-blindness simulation is GATO's shader (MPL-2.0, unmodified, in
-`addons/gato_screen_filters/`).
+`addons/gato_screen_filters/`). Fire and smoke use Kenney's Particle Pack (CC0, `assets/fx/kenney_particles/`); the
+street furniture is Kay Lousberg's KayKit City Builder Bits (CC0, `assets/models/kaykit/city/`). Physics runs on
+Jolt, built into Godot.
 [docs/LIBRARIES.md](docs/LIBRARIES.md) surveys the other open-source Godot libraries considered.
 
 The 3D models in `assets/models/kenney/` are Kenney's (www.kenney.nl), CC0 1.0 (public domain);

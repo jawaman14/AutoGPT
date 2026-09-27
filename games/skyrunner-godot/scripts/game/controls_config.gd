@@ -166,11 +166,12 @@ static func load_file(path := PATH) -> bool:
 
 
 # ------------------------------------------------------------ the look
-## {palette: "neon"|"safe", filter: ScreenFilter mode}
+## {palette: "neon"|"safe", filter: ScreenFilter mode, speak: read aloud}
 static func settings() -> Dictionary:
 	var cf := ConfigFile.new()
 	cf.load(SETTINGS_PATH)
-	return {"palette": cf.get_value("look", "palette", "neon"), "filter": cf.get_value("look", "filter", "off")}
+	return {"palette": cf.get_value("look", "palette", "neon"), "filter": cf.get_value("look", "filter", "off"),
+		"speak": cf.get_value("look", "speak", false)}
 
 
 static func save_setting(key: String, value) -> void:

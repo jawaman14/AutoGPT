@@ -10,6 +10,7 @@
 // after dark.
 shader_type spatial;
 render_mode cull_back;
+global uniform float rain_wet;
 
 uniform float night = 0.0;
 uniform float neon = 1.0;  // 0 turns the neon and the deco trim off
@@ -68,8 +69,8 @@ void fragment() {
 	float strip = wall * has_neon * step(1.3, below_top) * step(below_top, 1.62);
 	vec3 neon_col = h1 < 0.5 ? vec3(1.0, 0.2, 0.62) : vec3(0.2, 0.9, 1.0);
 	col = mix(col, neon_col * 0.7, strip);
-	ALBEDO = col;
-	ROUGHNESS = mix(0.85, 0.15, win);
+	ALBEDO = col * (1.0 - 0.18 * rain_wet);
+	ROUGHNESS = mix(mix(0.85, 0.15, win), 0.2, rain_wet * 0.8);
 	METALLIC = 0.0;
 	EMISSION = win * lit * night * vec3(1.0, 0.78, 0.48) * mix(2.2, 1.4, fade) + strip * neon_col * (0.3 + 4.5 * night);
 }

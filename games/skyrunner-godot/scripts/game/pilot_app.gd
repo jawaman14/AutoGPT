@@ -30,6 +30,7 @@ Screen   F9 filter: off / VHS / colour-blindness simulations (protan, deutan, tr
 On foot  TAB get out (parked) / back in    WASD walk  SHIFT run  SPACE jump  mouse look
          Guns (with a ground war): 1-4 pistol / rifle / machine gun / RPG from the armoury  H holster  R reload  LMB fire
          E use (job board, fuel, hangar, the boss's desk)   F torch
+         I your pack: spare guns, rounds, medkits (24 kg; over 12 kg you slow down)   5 medkit
 Ground   J job board   L load planner & fuel   H hangar, gear, crew (LEFT/RIGHT: upgrade trees)
 Crew     N transponder on/off   7 squawk code (1200 VFR / 7700 / 7600 / 7500)   U autopilot
          K kick a bale   O call the boat (SHIFT+O: the 1 s codeword - harder to DF)
@@ -114,9 +115,13 @@ func setup(sess: Session, graphics := "high", bot_ = null, server_ = null) -> Pi
 	add_child(nerves)
 	sound = Soundscape.new().setup(self)  # engine, wind, radio, the world, the music
 	add_child(sound)
+	effects = FX.new()
+	effects.name = "effects"
+	add_child(effects)
 	ControlsConfig.ensure()  # the flight keys as actions, with the player's saved bindings
 	var look := ControlsConfig.settings()
 	UIStyle.set_palette(look.palette)
+	Speech.set_enabled(bool(look.speak))
 	screen_filter = ScreenFilter.new()
 	add_child(screen_filter)
 	screen_filter.set_mode(look.filter)
@@ -272,6 +277,15 @@ func _unhandled_input(ev: InputEvent) -> void:
 				if gk in ["1", "2", "3", "4", "h", "r"] and gun.key(gk):
 					get_viewport().set_input_as_handled()
 					return
+			if s.foot != null and k == KEY_5:
+				var err: String = s.foot.use_medkit()
+				s.say(err if err != "" else "Patched up: %d health." % int(s.foot.hp))
+				get_viewport().set_input_as_handled()
+				return
+			if s.foot != null and k == KEY_I:
+				toggle_pack()
+				get_viewport().set_input_as_handled()
+				return
 			match k:
 				KEY_E:
 					walker.use()
@@ -371,8 +385,11 @@ func _unhandled_input(ev: InputEvent) -> void:
 
 
 var debug_menu: CanvasLayer = null
+var effects: FX = null  ## fire, smoke, explosions, splashes
+var _bale_state := {}
 var screen_filter: ScreenFilter = null
 var controls_menu: ControlsMenu = null
+var pack_menu: PackMenu = null
 var sound: Soundscape = null
 var talk: TalkBalloon = null  ## a conversation on screen (the Family, the General's aide)
 var _offers_seen := {}
@@ -432,6 +449,25 @@ func _flight_press(ev: InputEvent) -> bool:
 			_pressed[n] = true
 			return true
 	return false
+
+
+## I on foot: the pack - what you carry, its weight, and trading with the armoury.
+func toggle_pack() -> void:
+	if pack_menu != null and is_instance_valid(pack_menu):
+		pack_menu.close()
+		return
+	pack_menu = PackMenu.new()
+	pack_menu.foot = s.foot
+	pack_menu.near_aircraft = func() -> bool: return walker != null and walker.global_position.distance_to(player.global_position) < 15.0
+	ui.add_child(pack_menu)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if walker != null:
+		walker.look_enabled = false
+	pack_menu.closed.connect(func():
+		pack_menu = null
+		if gun != null:
+			gun._refresh_viewmodel()
+		_menu_closed())
 
 
 ## F8: the controls panel (keys, buttons, axes, the palette).
@@ -515,6 +551,7 @@ func _toggle_on_foot() -> void:
 	on_foot = true
 	if s.foot != null:
 		gun = Gunplay.new().setup(s, walker, squads, ui)
+		gun.fx = effects
 		add_child(gun)
 	for m in menus.values():
 		m.visible = false
@@ -681,6 +718,8 @@ func _foot_input() -> ControlMapper.InputFrame:
 
 
 func _foot_hud() -> void:
+	if s.foot != null:
+		walker.speed_scale = s.foot.speed_factor()
 	var lines := []
 	if walker.focus != null:
 		lines.append("[E] " + str(walker.focus.get_meta("label")))
@@ -691,7 +730,7 @@ func _foot_hud() -> void:
 		if s.time - msg[0] < 8:
 			ml.append(msg[1])
 	foot_prompt.text = "\n".join(lines + ml.slice(-2))
-	foot_prompt.visible = not foot_prompt.text.is_empty() and _active_menu() == null
+	foot_prompt.visible = not foot_prompt.text.is_empty() and _active_menu() == null and pack_menu == null
 
 
 static func _basis(heading: float, pitch := 0.0, roll := 0.0) -> Basis:
@@ -723,6 +762,7 @@ func _sync_scene(dt: float) -> void:
 	_sync_pursuers(dt)
 	_sync_squads(dt)
 	_sync_maritime()
+	_sync_effects(dt)
 	var aer = s.police.sensors.site("AER")
 	scene.show_aerostat(aer != null and aer.active)
 	if not on_foot:
@@ -779,6 +819,14 @@ func _sync_maritime() -> void:
 			bale_nodes[blid] = n
 		var bl = live_bales[blid]
 		bale_nodes[blid].position = MeshBuilder.to_godot([bl.x, bl.y, bl.z])
+		# a bale hitting the water throws up a splash; on land, a puff of dust
+		if _bale_state.get(blid, "") == "falling" and bl.state != "falling" and effects != null:
+			var at: Vector3 = bale_nodes[blid].position
+			if bl.state == "floating":
+				effects.splash(Vector3(at.x, 0.0, at.z), 1.6)
+			else:
+				effects.puff(at, 2.0)
+		_bale_state[blid] = bl.state
 	# AI runs (police-vs-AI games, rival gangs)
 	for a in s.smugglers:
 		var key := "ai:%s" % a.id
@@ -791,6 +839,40 @@ func _sync_maritime() -> void:
 			boat_nodes[key][0].position = MeshBuilder.to_godot([a.x, a.y, a.z])
 			boat_nodes[key][0].basis = _basis(a.heading)
 			boat_nodes[key][0].visible = a.active()
+
+
+## Fire and smoke where things burn: crashed police aircraft and cars, our own
+## wreck, burned-out stash houses; RPGs going off in the ground war's fights.
+func _sync_effects(dt: float) -> void:
+	if effects == null:
+		return
+	var w: Dictionary = s.weather if s.weather != null else {}
+	var toward := deg_to_rad(float(w.get("wind_dir", 250.0)) + 180.0)
+	effects.wind = Vector3(sin(toward), 0, -cos(toward)) * float(w.get("wind_kt", 8.0)) * 0.514
+	# the camera's never far from the aircraft or the walker
+	var camp: Vector3 = walker.global_position if walker != null else MeshBuilder.to_godot([s.state.x, s.state.y, s.state.alt])
+	for u in s.police.units:
+		var uid: int = u.get_instance_id()
+		if u.state == "crashed" and pursuer_nodes.has(uid):
+			var at: Vector3 = pursuer_nodes[uid][0].position
+			if at.distance_to(camp) < 8000.0:
+				effects.burn("wreck-%d" % uid, at, 3.0)
+	if s.phase == "crashed":
+		effects.burn("player", player.position, 3.5)
+	if s.stash_net != null:
+		for st in s.stash_net.stashes:
+			if st.burned:
+				var p := Vector3(st.x, s.world.ground(st.x, st.y) + 7.0, -st.y)
+				if p.distance_to(camp) < 6000.0:
+					effects.smoke("stash-%s" % st.id, p, 6.0)
+	effects.sweep()
+	if s.ground != null:
+		for f in s.ground.fights:
+			if f.over or int(f.a.loadout.get("rpg", 0)) + int(f.b.loadout.get("rpg", 0)) == 0:
+				continue
+			var p := Vector3(f.x + randf_range(-30, 30), s.world.ground(f.x, f.y) + 1.0, -(f.y + randf_range(-30, 30)))
+			if p.distance_to(camp) < 3000.0 and randf() < dt * 0.3:
+				effects.blast(p, 3.0)
 
 
 func _sync_pursuers(dt: float) -> void:

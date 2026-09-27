@@ -5,7 +5,7 @@ extends CanvasLayer
 ## names the button for the pad in use). Every analogue control - yoke, throttle
 ## lever, pedals, toe brakes - is bound by moving it (FlightAxes.capture), from
 ## any device, with invert, deadzone and expo. The colour-safe palette is here
-## too. Everything is saved to user:// when the panel closes.
+## too, and reading aloud (the OS voice). Everything is saved to user:// when the panel closes.
 
 signal closed
 
@@ -14,6 +14,7 @@ var status: Label
 var key_rows := {}  ## action -> the Label showing its bindings
 var axis_rows := {}  ## control -> {desc: Label, bar: ProgressBar, tune: Label}
 var palette_btn: Button
+var speak_btn: Button
 var waiting_key := ""  ## an action waiting for its new key or button
 var capturing := ""  ## an axis control waiting to be moved
 
@@ -92,6 +93,8 @@ func _ready() -> void:
 	v.add_child(foot)
 	palette_btn = _btn("", _toggle_palette)
 	foot.add_child(palette_btn)
+	speak_btn = _btn("", _toggle_speech)
+	foot.add_child(speak_btn)
 	foot.add_child(_btn("Defaults", func():
 		ControlsConfig.reset()
 		status.text = "Back to the defaults."
@@ -123,6 +126,7 @@ func _refresh() -> void:
 		axis_rows[c].desc.text = "move it ..." if capturing == c else ControlsConfig.axes.describe(c)
 		axis_rows[c].tune.text = "dz %.2f  expo %.1f" % [b.deadzone, b.expo]
 	palette_btn.text = "Colours: %s" % ("colour-safe" if UIStyle.palette == "safe" else "neon")
+	speak_btn.text = "Read aloud: %s" % ("on" if Speech.enabled else "off")
 
 
 func _rebind(n: String) -> void:
@@ -157,6 +161,17 @@ func _toggle_palette() -> void:
 	UIStyle.set_palette("neon" if UIStyle.palette == "safe" else "safe")
 	ControlsConfig.save_setting("palette", UIStyle.palette)
 	status.text = "Colours: %s - new screens use it now; restart for everything." % UIStyle.palette
+	_refresh()
+
+
+func _toggle_speech() -> void:
+	Speech.set_enabled(not Speech.enabled)
+	ControlsConfig.save_setting("speak", Speech.enabled)
+	if Speech.enabled and not Speech.available():
+		status.text = "Read aloud is on, but this machine has no speech voices (Linux: install speech-dispatcher)."
+	else:
+		status.text = "Read aloud: conversations and radio calls." if Speech.enabled else "Read aloud off."
+		Speech.say("Read aloud is on.", true)
 	_refresh()
 
 

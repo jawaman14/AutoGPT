@@ -35,7 +35,8 @@ var radio: AudioStreamPlayer
 var ui: AudioStreamPlayer
 var music: AudioStreamPlayer
 var world := {}  ## key -> AudioStreamPlayer3D (rotors, sirens, outboards)
-var _msgs := 0
+var _last_msg = null  ## the newest radio message heard
+var _last_msg_set := false
 var _law := 0
 var _mag := -1
 var _t := 0.0
@@ -393,17 +394,27 @@ func _process(dt: float) -> void:
 		_mag = foot.mag
 	else:
 		_mag = -1
-	# the radio: a squelch when a call comes in
-	if s.messages.size() != _msgs:
-		if s.messages.size() > _msgs and flying:
-			radio.stream = squelch()
-			radio.play()
-		_msgs = s.messages.size()
+	_radio(s, flying)
 	_t += dt
 	if _t < 0.1:
 		return
 	_t = 0.0
 	_world_sounds(s)
+
+
+## The radio: a squelch when a call comes in, and the call read aloud when
+## that's on. (The log keeps only the last 8 lines: compare the newest.)
+func _radio(s, flying: bool) -> void:
+	var newest = s.messages.back() if not s.messages.is_empty() else null
+	if newest == _last_msg:
+		return
+	if newest != null and _last_msg_set:
+		if flying and radio != null:
+			radio.stream = squelch()
+			radio.play()
+		Speech.say(str(newest[1]))
+	_last_msg = newest
+	_last_msg_set = true
 
 
 func _world_sounds(s) -> void:

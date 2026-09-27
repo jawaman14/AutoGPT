@@ -11,7 +11,10 @@ extends SceneTree
 ##       debug (the F6 performance overlay, detailed) | talk (a sit-down with the Family) |
 ##       talk_island (the General's aide on the radio) | court (the bail hearing, the lawyer) |
 ##       crew (Manny Ortega's hiring hall) | crew_safe (the same in the colour-safe palette) |
-##       controls (the F8 controls panel) | vhs (climbing out, through the F9 VHS filter)
+##       controls (the F8 controls panel) | vhs (climbing out, through the F9 VHS filter) |
+##       pack (on foot with a rifle, the I pack panel open) |
+##       street (at eye level in town: KayKit lamps and props, a burning wreck, a blast; wet
+##       if the weather argument is "storm")
 var app: PilotApp
 var n := 0
 var q := "medium"
@@ -20,6 +23,7 @@ var out := "shot.png"
 var cam := "chase"
 var view := "ground"
 var fixed_cam = null  ## [position, look_at] for the HQ / overview views
+var street_fire := Vector2.ZERO
 
 
 func _init():
@@ -30,12 +34,14 @@ func _init():
 	if a.size() > 3: cam = a[3]
 	if a.size() > 4: view = a[4]
 	var opts := {"seed": 1, "location": "HAR"}
-	if view == "gun":
+	if view in ["gun", "pack"]:
 		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "ground_war": true})
 	elif view in ["crew", "crew_safe"]:
 		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "payroll": true, "island": true})
 	elif view == "court":
 		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "court": true})
+	elif view == "street":
+		opts["map_seed"] = MapCity.SEED
 	elif view in ["talk", "talk_island"]:
 		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "family": true, "island": true})
 	if a.size() > 5: opts["map_seed"] = int(a[5])
@@ -60,6 +66,24 @@ func _init():
 		var py: float = h.y + cos(hd) * 38 - sin(hd) * 14
 		var gz := s.world.ground(h.x, h.y)
 		fixed_cam = [Vector3(px, maxf(gz, s.world.ground(px, py)) + 9.0, -py), Vector3(h.x, gz + 3.0, -h.y)]
+	elif view == "street":
+		# stand on the arterial where it passes closest to downtown
+		var at := Vector2.ZERO
+		var along := Vector2.RIGHT
+		var best := INF
+		for r in s.world.map.roads:
+			for i in r.size() - 1:
+				var p0 := Vector2(r[i][0], r[i][1])
+				var p1 := Vector2(r[i + 1][0], r[i + 1][1])
+				var q := Geometry2D.get_closest_point_to_segment(MapCity.CITY_C, p0, p1)
+				if q.distance_to(MapCity.CITY_C) < best:
+					best = q.distance_to(MapCity.CITY_C)
+					at = q - (p1 - p0).normalized() * 60.0
+					along = (p1 - p0).normalized()
+		var eye := at + along * 10.0 + Vector2(-along.y, along.x) * 2.5
+		var look := at + along * 90.0
+		street_fire = look + Vector2(-along.y, along.x) * 3.0
+		fixed_cam = [Vector3(eye.x, s.world.ground(eye.x, eye.y) + 2.2, -eye.y), Vector3(look.x, s.world.ground(look.x, look.y) + 3.0, -look.y)]
 	elif view == "city":
 		fixed_cam = [Vector3(MapCity.CITY_C.x + 1400, 330, -(MapCity.CITY_C.y - 2200)), Vector3(MapCity.CITY_C.x - 300, 10, -MapCity.CITY_C.y)]
 	elif view == "downtown":
@@ -89,7 +113,7 @@ func _areas(node: Node, action: String, out: Array) -> Array:
 
 func _process(_d):
 	n += 1
-	if n == 2 and view in ["foot", "villa", "gun"]:
+	if n == 2 and view in ["foot", "villa", "gun", "pack"]:
 		_on_foot()
 	if fixed_cam != null:
 		app.set_process(false)  # the app would move its camera back (processing re-enables on ready)
@@ -109,6 +133,21 @@ func _process(_d):
 		app.talk.advance()  # on to the read and the answers
 	if n == 6 and view == "talk_island" and app.talk != null:
 		app.talk.advance()
+	if view == "street" and n == 3:
+		app.scene.set_weather(app.s.weather)  # the fixed camera stops the app, which would apply it
+		if app.s.weather.get("sky", "") == "storm":
+			app.scene.fx.set_wet(1.0)
+		var g := app.s.world.ground(street_fire.x, street_fire.y)
+		app.effects.burn("demo", Vector3(street_fire.x, g, -street_fire.y), 3.0)
+	if view == "street" and n == 34:
+		var g := app.s.world.ground(street_fire.x, street_fire.y)
+		app.effects.blast(Vector3(street_fire.x + 25.0, g + 1.5, -street_fire.y - 10.0), 4.0)
+	if n == 4 and view == "pack" and app.s.foot != null:
+		app.s.money = 5000
+		app.s.foot.pack_add("pistol")
+		app.s.foot.pack_add("ammo", 90)
+		app.s.foot.pack_add("medkit")
+		app.toggle_pack()
 	if n == 3 and view == "controls":
 		app.toggle_controls()
 	if n == 3 and view == "vhs":
@@ -144,7 +183,7 @@ func _on_foot() -> void:
 	var w := app.walker
 	w.look_enabled = false
 	var target := "hq_org" if view == "villa" else "hangar"
-	if view == "gun" and app.gun != null:
+	if view in ["gun", "pack"] and app.gun != null:
 		app.s.arsenals.org.add("rifle", 1)  # the shot's rifle
 		app.gun.key("2")
 	var areas := _areas(app.scene, target, [])

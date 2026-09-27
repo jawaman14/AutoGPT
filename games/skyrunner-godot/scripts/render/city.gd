@@ -12,6 +12,7 @@ const PALETTE := [Color(0.96, 0.7, 0.76), Color(0.68, 0.9, 0.8), Color(0.8, 0.72
 
 static var _mat: ShaderMaterial
 static var _lamp_mat: StandardMaterial3D
+static var _road_mat: StandardMaterial3D
 
 
 static func city_material() -> ShaderMaterial:
@@ -20,6 +21,13 @@ static func city_material() -> ShaderMaterial:
 		_mat.shader = load("res://shaders/city.gdshader")
 		_mat.set_shader_parameter("noise_pack", TexGen.noise_pack())
 	return _mat
+
+
+## Wet asphalt after rain: darker, and it shines.
+static func set_wet(w: float) -> void:
+	if _road_mat != null:
+		_road_mat.albedo_color = Color(0.2, 0.2, 0.21).darkened(0.35 * w)
+		_road_mat.roughness = lerpf(0.95, 0.25, w)
 
 
 static func set_night(n: float) -> void:
@@ -41,6 +49,7 @@ static func build(world: World, q: Quality) -> Node3D:
 			root.add_child(_crane(b))
 	root.add_child(_roads(world, l.roads))
 	root.add_child(_lamps(world, l.roads))
+	root.add_child(_props(world, l.roads))
 	root.add_child(_palms(world, l.roads, q))
 	for st in l.stashes:
 		root.add_child(stash_house(world, st))
@@ -135,54 +144,148 @@ static func _roads(world: World, roads: Array) -> MeshInstance3D:
 	var m := StandardMaterial3D.new()
 	m.albedo_color = Color(0.2, 0.2, 0.21)
 	m.roughness = 0.95
+	_road_mat = m
 	m.cull_mode = BaseMaterial3D.CULL_DISABLED
 	mi.material_override = m
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return mi
 
 
-## Street lamps along the roads in town, a glowing head every 45 m on alternate sides.
-static func _lamps(world: World, roads: Array) -> MultiMeshInstance3D:
-	var spots := []
+## KayKit's City Builder Bits (CC0, assets/models/kaykit/city): each part's
+## scale to real metres (the kit is about a road tile to the unit).
+const KIT := "res://assets/models/kaykit/city/%s.gltf"
+const KIT_SCALE := {"streetlight": 7.5, "trafficlight_A": 6.5, "firehydrant": 4.0, "bench": 4.5, "dumpster": 5.0, "trash_A": 5.0}
+const LAMP_ARM := Vector3(-0.21, 0.93, 0.0)  ## the lamp head on the kit's pole, in kit units
+
+
+## The first mesh in a KayKit part (null when the kit isn't there).
+static func kit_mesh(part: String) -> Mesh:
+	if not ResourceLoader.exists(KIT % part):
+		return null
+	var scn := (load(KIT % part) as PackedScene).instantiate()
+	var found: Mesh = null
+	var stack := [scn]
+	while not stack.is_empty() and found == null:
+		var n: Node = stack.pop_back()
+		if n is MeshInstance3D:
+			found = n.mesh
+		stack.append_array(n.get_children())
+	scn.free()
+	return found
+
+
+static func _mm_of(mesh: Mesh, xfs: Array, name_: String, range_end: float) -> MultiMeshInstance3D:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = mesh
+	mm.instance_count = xfs.size()
+	for i in xfs.size():
+		mm.set_instance_transform(i, xfs[i])
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = name_
+	mmi.multimesh = mm
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mmi.visibility_range_end = range_end
+	return mmi
+
+
+## Street lamps along the roads in town, every 45 m on alternate sides: KayKit's
+## pole with its arm over the road, and a glowing head that lights up at night.
+static func _lamps(world: World, roads: Array) -> Node3D:
+	var root := Node3D.new()
+	root.name = "lamps"
+	var poles := []
+	var heads := []
+	var k: float = KIT_SCALE.streetlight
 	for r in roads:
 		var run := 0.0
-		for k in r.size() - 1:
-			var a := Vector2(r[k][0], r[k][1])
-			var b := Vector2(r[k + 1][0], r[k + 1][1])
+		for i in r.size() - 1:
+			var a := Vector2(r[i][0], r[i][1])
+			var b := Vector2(r[i + 1][0], r[i + 1][1])
 			var dir := (b - a).normalized()
 			var side := Vector2(-dir.y, dir.x)
 			var d := 0.0
 			while d < a.distance_to(b):
-				var p := a + dir * d + side * (7.0 if int(run / 45.0) % 2 == 0 else -7.0)
+				var s := 1.0 if int(run / 45.0) % 2 == 0 else -1.0
+				var p := a + dir * d + side * 5.3 * s  # the kerb: the road is 9 m wide, palms at 6.2 m, buildings from 7 m
 				var cls := MapCity.at(world.map.land_use, p.x, p.y)
 				if cls in [MapCity.URBAN, MapCity.PORT] or world.airfield_at(p.x, p.y, 200.0) != null:
-					spots.append(Vector3(p.x, world.ground(p.x, p.y) + 7.0, -p.y))
+					var g := world.ground(p.x, p.y)
+					# the kit's arm reaches along -x: turn it to point back over the road
+					var toward := Vector3(-side.x * s, 0, side.y * s)
+					var basis := Basis(Vector3.UP, atan2(toward.z, -toward.x)).scaled(Vector3.ONE * k)
+					var base := Vector3(p.x, g, -p.y)
+					poles.append(Transform3D(basis, base))
+					heads.append(Transform3D(Basis.IDENTITY, base + basis * LAMP_ARM + Vector3(0, -0.25, 0)))
 				d += 45.0
 				run += 45.0
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
+	var pole := kit_mesh("streetlight")
+	if pole != null:
+		root.add_child(_mm_of(pole, poles, "poles", 3500.0))
 	var sm := SphereMesh.new()
-	sm.radius = 0.45
-	sm.height = 0.9
+	sm.radius = 0.4
+	sm.height = 0.5
 	sm.radial_segments = 6
 	sm.rings = 3
-	mm.mesh = sm
-	mm.instance_count = spots.size()
-	for i in spots.size():
-		mm.set_instance_transform(i, Transform3D(Basis.IDENTITY, spots[i]))
+	if pole == null:  # no kit: the old floating heads at the top of an invisible pole
+		heads = poles.map(func(x): return Transform3D(Basis.IDENTITY, x.origin + Vector3(0, 7.0, 0)))
+	var mmi := _mm_of(sm, heads, "heads", 6000.0)
 	_lamp_mat = StandardMaterial3D.new()
 	_lamp_mat.albedo_color = Color(1.0, 0.8, 0.5)
 	_lamp_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_lamp_mat.emission_enabled = true
 	_lamp_mat.emission = Color(1.0, 0.75, 0.45)
 	_lamp_mat.emission_energy_multiplier = 0.0
-	var mmi := MultiMeshInstance3D.new()
-	mmi.name = "lamps"
-	mmi.multimesh = mm
 	mmi.material_override = _lamp_mat
-	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	mmi.visibility_range_end = 6000.0
-	return mmi
+	root.add_child(mmi)
+	return root
+
+
+## Street furniture (KayKit): traffic lights at the town's junctions, and along
+## its streets fire hydrants, benches, dumpsters and bins, spaced out.
+static func _props(world: World, roads: Array) -> Node3D:
+	var root := Node3D.new()
+	root.name = "street-props"
+	var xfs := {"trafficlight_A": [], "firehydrant": [], "bench": [], "dumpster": [], "trash_A": []}
+	# junctions: the ground war's road graph merges crossings; three or more ways in town
+	var g := RoadGraph.new(roads)
+	for i in g.road_nodes:
+		if g.adj[i].size() < 3:
+			continue
+		var c: Vector2 = g.nodes[i]
+		if MapCity.at(world.map.land_use, c.x, c.y) != MapCity.URBAN:
+			continue
+		for corner in [Vector2(7, 7), Vector2(-7, -7)]:
+			var p: Vector2 = c + corner
+			xfs.trafficlight_A.append(_prop_xf(world, p, atan2(corner.x, corner.y), KIT_SCALE.trafficlight_A))
+	var order := ["firehydrant", "bench", "trash_A", "dumpster"]
+	var n := 0
+	for r in roads:
+		var run := 0.0
+		for i in r.size() - 1:
+			var a := Vector2(r[i][0], r[i][1])
+			var b := Vector2(r[i + 1][0], r[i + 1][1])
+			var dir := (b - a).normalized()
+			var side := Vector2(-dir.y, dir.x)
+			var d := 22.0
+			while d < a.distance_to(b):
+				var s := -1.0 if int(run / 90.0) % 2 == 0 else 1.0
+				var p := a + dir * d + side * 5.6 * s
+				if MapCity.at(world.map.land_use, p.x, p.y) == MapCity.URBAN:
+					var part: String = order[n % order.size()]
+					n += 1
+					xfs[part].append(_prop_xf(world, p, atan2(-side.x * s, -side.y * s), KIT_SCALE[part]))
+				d += 90.0
+				run += 90.0
+	for part in xfs:
+		var m := kit_mesh(part)
+		if m != null and not xfs[part].is_empty():
+			root.add_child(_mm_of(m, xfs[part], part, 1500.0))
+	return root
+
+
+static func _prop_xf(world: World, p: Vector2, yaw: float, k: float) -> Transform3D:
+	return Transform3D(Basis(Vector3.UP, yaw).scaled(Vector3.ONE * k), Vector3(p.x, world.ground(p.x, p.y), -p.y))
 
 
 ## Palms down both sides of the town's streets and along the waterfront, every 28 m.

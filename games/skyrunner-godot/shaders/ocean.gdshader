@@ -7,6 +7,7 @@ shader_type spatial;
 render_mode blend_mix, cull_disabled, depth_draw_opaque, specular_schlick_ggx;
 
 uniform sampler2D heightmap : filter_linear;
+global uniform float rain_wet;
 uniform sampler2D noise_pack : filter_linear_mipmap, repeat_enable;
 uniform float map_size = 32000.0;
 uniform float amp = 1.0;
@@ -55,6 +56,20 @@ void fragment() {
 	vec4 n1 = texture(noise_pack, p * 0.012 + vec2(t * 0.004, t * 0.002));
 	vec4 n2 = texture(noise_pack, p * 0.05 - vec2(t * 0.01, -t * 0.006));
 	vec3 ripple = normalize(vec3((n1.r - 0.5) * 0.35 + (n2.b - 0.5) * 0.25, 1.0, (n1.b - 0.5) * 0.35 + (n2.r - 0.5) * 0.25));
+	// raindrops: expanding rings, one per 1.4 m cell at a random phase, near the camera only
+	float near_cam = 1.0 - smoothstep(60.0, 220.0, length(wpos.xz - CAMERA_POSITION_WORLD.xz));
+	if (rain_wet > 0.01 && near_cam > 0.0) {
+		vec2 rp = p / 1.4;
+		vec2 cell = floor(rp);
+		float h = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453);
+		vec2 c = (vec2(h, fract(h * 7.31)) - 0.5) * 0.5;
+		vec2 f = fract(rp) - 0.5 - c;
+		float ph = fract(TIME * 1.3 + h * 9.0);
+		float d = length(f);
+		float ring = exp(-pow((d - ph * 0.45) * 22.0, 2.0)) * (1.0 - ph);
+		ripple.xz += normalize(f + 1e-4) * ring * 0.9 * rain_wet * near_cam;
+		ripple = normalize(ripple);
+	}
 	NORMAL = normalize((VIEW_MATRIX * vec4(normalize(ripple + vec3(0.0, 0.0, 0.0)), 0.0)).xyz * 0.5 + NORMAL * 0.5);
 	vec3 col = mix(shallow, mid, smoothstep(0.5, 8.0, depth));
 	col = mix(col, deep, smoothstep(8.0, 45.0, depth));

@@ -18,6 +18,9 @@ this game's constraints:
 | [Input Helper](https://github.com/nathanhoad/godot_input_helper) (Nathan Hoad), v4.7.0 | MIT | Rebinding the flight keys and gamepad buttons (F8), and naming a button for the pad in use (Xbox, PlayStation, Switch, Steam Deck). The runtime only, instanced on demand (`scripts/game/controls_config.gd`). We save the events ourselves: its text format turns physical keys into layout keycodes and pins joypad buttons to pad 0. |
 | [SimpleGodotCRTShader](https://github.com/henriquelalves/SimpleGodotCRTShader) (Henrique Lacreta Alves) | MIT | The F9 VHS filter, with gentler uniforms than the demo's (`scripts/render/screen_filter.gd`). |
 | [GATO screen filters](https://github.com/Nokorpo/gato-godot-accessibility-toolkit) (Iseltec) | MPL-2.0 | Its colour-blindness matrices: the F9 simulations and `test_accessibility`, which found the neon palette failing and checks the colour-safe one. The shader is vendored unmodified, with its licence (MPL is per file). |
+| [Kenney Particle Pack](https://github.com/shorepine/kenney) | CC0 | Fire, flame, smoke, spark, splash-ring and dirt sprites (`assets/fx/kenney_particles/`, 128 px) for `scripts/render/fx.gd`: burning wrecks, smoking stash houses, RPG blasts, splashes when bales hit the sea. |
+| [KayKit City Builder Bits](https://github.com/KayKit-Game-Assets/KayKit-City-Builder-Bits-1.0) (Kay Lousberg) | CC0 | The street furniture in town: lamp posts with their arms over the road (the glowing heads light up at night), traffic lights at the junction, hydrants, benches, dumpsters and bins (`assets/models/kaykit/city/`). |
+| [Jolt Physics](https://github.com/godotengine/godot) (built into Godot 4.4) | MIT | The 3D physics engine (`physics/3d/physics_engine`). All 386 tests pass on it; only the on-foot colliders and the blast debris use physics. The simulation never does. |
 | [Kenney UI Audio](https://github.com/Calinou/kenney-ui-audio) (via Calinou) | CC0 | The UI's clicks (a conversation's answer, toggles) in `assets/audio/kenney_ui/`. |
 | [Kenney's 3D kits](https://github.com/shorepine/kenney) | CC0 | The people, cars, guns, boats and palms (`assets/models/kenney/`, see the README). |
 | [JSBSim](https://github.com/JSBSim-Team/jsbsim) | LGPL-2.1 | The flight model, through our own GDExtension (already in use). |
@@ -92,16 +95,32 @@ The simulation shader only shows the problem; the colour-safe palette is the fix
 
 | Also looked at | Licence | Verdict |
 |---|---|---|
-| [GATO text-to-speech](https://github.com/Nokorpo/gato-godot-accessibility-toolkit) | MPL-2.0 | Next for accessibility: reading the conversations and menus aloud through the OS voice. |
-| [GodotShaderWarmup](https://github.com/Koisuji02/GodotShaderWarmup) | MIT | A GDExtension plus manifests to pre-compile shaders. Only if the animated Kenney characters or the island stutter on first sight. Measure with F6 first. |
+| [GATO text-to-speech](https://github.com/Nokorpo/gato-godot-accessibility-toolkit) | MPL-2.0 | Done in the fourth pass. Its plugin wraps Godot's own `DisplayServer.tts_*`, so `scripts/game/speech.gd` calls that directly: conversations and radio calls, read aloud (F8). |
+| [GodotShaderWarmup](https://github.com/Koisuji02/GodotShaderWarmup) | MIT | Still not adopted. It's a native binary per platform, and first-sight stutter can't be measured on this GPU-less build box. Godot 4.5 has a built-in shader baker that does the same job, so the move is to upgrade the engine, then measure with F6. |
 | [Phantom Camera](https://github.com/ramokz/phantom-camera), [Shaker](https://github.com/Eneskp3441/Shaker) | MIT | Tour cameras; screen shake for gunfire and turbulence. Small, later. |
 | [Maaack's Game/Menus Template](https://github.com/Maaack/Godot-Game-Template) | MIT | We have our own lobby and menus. |
 | [GdUnit4](https://github.com/MikeSchulze/gdUnit4), [Vest](https://github.com/foxssake/vest) | MIT | We have our own runner. |
 | [gdtoolkit](https://github.com/Scony/godot-gdscript-toolkit) | MIT | gdlint/gdformat in CI: worth a try, but noisy on a codebase this size until it's configured. |
 | [Godot SQLite](https://github.com/2shady4u/godot-sqlite), [Talo](https://github.com/TaloDev/godot) | MIT | Saves are JSON and the game is self-hosted; nothing to gain. |
 | [License Manager](https://kenyoni-software.github.io/godot-addons/addons/licenses) | MIT | Could generate an in-game credits screen from the licences we already vendor. |
-| [KayKit City Builder Bits](https://github.com/KayKit-Game-Assets) | CC0 | Streetlights and traffic lights for the city. Optional art. |
+| [KayKit City Builder Bits](https://github.com/KayKit-Game-Assets) | CC0 | Adopted in the fourth pass (above). |
 | [Simplified Flight Simulation](https://github.com/fbcosentino/godot-simplified-flightsim) | MIT | We fly JSBSim. |
+
+## The fourth pass: physics, textures, weather, fire, water, inventory (September 2026)
+
+The gaps asked about, checked one by one on GitHub (the only reachable source):
+
+| Want | Looked at | Verdict |
+|---|---|---|
+| Fire, smoke, explosions | [GDQuest godot-visual-effects](https://github.com/GDQuest/godot-visual-effects), [Kenney Particle Pack](https://github.com/shorepine/kenney) | GDQuest's shaders are MIT, but its art is **CC-BY-NC-SA** (non-commercial), so none of it was copied. The effects are ours: Kenney's CC0 sprites on `CPUParticles3D`, which draws the same on every renderer, the compatibility one included. |
+| Water | [godot4-oceanfft](https://github.com/tessarakkt/godot4-oceanfft), [GodotOceanWaves](https://github.com/2Retr0/GodotOceanWaves), [Waterways](https://github.com/Arnklit/WaterGenGodot) | FFT oceans need compute shaders (Forward+ only), and Waterways is for Godot 3 rivers. Our ocean shader gained rain rings instead (below), plus splashes. |
+| Rain and weather | [Sky3D](https://github.com/TokisanGames/Sky3D) (MIT, all renderers) | It would replace a sky we already have (sun, moon phases, clouds, a storm deck, lightning). What was missing was the world *getting wet*: a `rain_wet` shader global now darkens the ground and facades, puts a sheen on the roads, and rings the sea. It soaks through in about 2.5 minutes of storm and dries over about 15. |
+| Fog | Godot's `FogVolume` (Forward+ only), Sky3D's fog | Storm fog already closes in. Sea fog as *weather* would change the simulation's visibility and the radar, which the parity replays pin down, so it's left for a sim-side change. |
+| Physics | Jolt (built into 4.4), [godot-jolt](https://github.com/godot-jolt/godot-jolt) (now archived upstream) | Switched to the built-in Jolt. Blasts now throw debris that tumbles and settles on the ground (capped, and it clears itself). Bales stay simulation-driven, because the airdrop's outcome is the simulation's. |
+| Textures | [Kenney Prototype Textures](https://github.com/shorepine/kenney); Poly Haven and ambientCG are unreachable (not on GitHub) | The terrain, city and water are procedural (`texgen.gd`, splat shaders) at any resolution. Photo textures would clash with the low-poly look, so nothing was taken. |
+| Inventory | [GLoot](https://github.com/peter-kish/gloot) (MIT, 4.4+), [Expresso Inventory System](https://github.com/expressobits/inventory-system) (MIT, C++), [Inventory Manager](https://github.com/Rubonnek/inventory-manager) | GLoot is the best of them, but its `Inventory` is a scene-tree Node, and ours has to live in the host-authoritative simulation and replicate. An on-foot pack of six kinds of thing is about 100 lines of `FootCombat`: it has a weight limit, slows you when heavy, keeps the other gun when you switch, takes and returns to the armoury, and holds medkits. Arrested, it becomes the task force's evidence. GLoot is the pick if inventory grows into containers, trading or grids. |
+| Street props | [KayKit City Builder Bits](https://github.com/KayKit-Game-Assets/KayKit-City-Builder-Bits-1.0) | Adopted (above). |
+| Read aloud | GATO TTS | Adopted as Godot's own TTS (above). |
 
 ## Looked at, not a fit
 

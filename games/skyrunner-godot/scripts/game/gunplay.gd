@@ -27,6 +27,9 @@ var _rng := RandomNumberGenerator.new()
 var last_result := ""  ## what the last shot did (tests, the HUD)
 
 
+var fx: FX = null  ## the seat's effects layer (explosions)
+
+
 func setup(sess_: Session, walker_: Walker, squads_: SquadRender, ui: Node) -> Gunplay:
 	sess = sess_
 	walker = walker_
@@ -183,6 +186,8 @@ func trigger() -> String:
 				hit = ["", 0.0]
 	last_result = f.hit(hit[0], hit[1]) if hit[0] != "" else "miss"
 	_tracer(origin + dir * 0.6, end)
+	if f.tier == "rpg" and fx != null:
+		fx.blast(end, 3.0)  # the rocket goes off where it lands
 	# recoil: the view climbs, the gun kicks back
 	cam.rotation.x = clampf(cam.rotation.x + KICK[f.tier], -1.4, 1.4)
 	viewmodel.position = Vector3(0, 0.01, 0.06)

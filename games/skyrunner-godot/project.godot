@@ -15,6 +15,21 @@ window/size/viewport_height=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
+[physics]
+
+3d/physics_engine="Jolt Physics"
+
 [rendering]
 
 renderer/rendering_method="forward_plus"
+
+[shader_globals]
+
+rain_wet={
+"type": "float",
+"value": 0.0
+}
+
+[audio]
+
+general/text_to_speech=true

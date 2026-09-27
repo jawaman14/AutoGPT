@@ -13,6 +13,13 @@ var wind_kt := 8.0
 var wind_dir := 250.0
 var overcast := 0.0  ## 0 clear .. 1 storm deck (dims the sun, greys the fog)
 var moon_illum := 0.5
+## How soaked the world is (0..1): the "rain_wet" shader global - darker ground,
+## a sheen on the city and the roads, rings on the sea. Wets through in a few
+## minutes of storm, dries over a quarter of an hour.
+var wet := 0.0
+const WET_S := 150.0
+const DRY_S := 900.0
+var _wet_sent := -1.0
 var _flash := 0.0
 var _next_flash := 8.0
 var _rng := RandomNumberGenerator.new()
@@ -81,11 +88,23 @@ func apply(w: Dictionary) -> void:
 	scene.set_hour(scene.hour)
 
 
+func set_wet(w: float) -> void:
+	w = clampf(w, 0.0, 1.0)
+	if _wet_sent >= 0.0 and absf(w - _wet_sent) < 0.002:
+		wet = w
+		return
+	wet = w
+	_wet_sent = w
+	RenderingServer.global_shader_parameter_set("rain_wet", wet)
+	CityRender.set_wet(wet)
+
+
 func light_scale() -> float:
 	return 1.0 - 0.6 * overcast
 
 
 func _process(dt: float) -> void:
+	set_wet(wet + (dt / WET_S if sky == "storm" else -dt / DRY_S))
 	var cam := get_viewport().get_camera_3d()
 	if cam != null and rain.emitting:
 		rain.global_position = cam.global_position + Vector3(0, 22, 0)

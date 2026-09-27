@@ -81,6 +81,7 @@ func _next(id: String) -> void:
 		b.pressed.connect(choose.bind(i))
 		choices.add_child(b)
 	hint.text = "1-%d answer   ESC walk away" % _answers.size() if not _answers.is_empty() else "ENTER go on   ESC walk away"
+	Speech.line(line.character if line.text != "" else "", line.text, _answers.map(func(r): return str(r.text)))
 	panel.offset_top = -150.0 - 38.0 * _answers.size()  # room for every answer
 
 

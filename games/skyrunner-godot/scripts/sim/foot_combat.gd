@@ -16,6 +16,11 @@ extends RefCounted
 ##   - at 0 health you're down: with police close, arrested (the bust); else
 ##     you wake up at the aircraft $500 lighter, the gun gone
 ##   - a patrol that reaches a wanted man on foot who isn't shooting arrests him
+##   - the pack: what you carry besides the gun in your hands - spare weapons,
+##     rounds, medkits - up to CARRY_KG, and over HEAVY_KG it slows you. Switching
+##     guns keeps the other in the pack; climbing in, the guns and rounds go back
+##     to the armoury (medkits stay with you). Go down and the pack is lost;
+##     arrested, the guns and rounds go to the task force's armoury.
 
 const LIVE_M := 300.0
 const LIVE_OUT_M := 350.0
@@ -25,6 +30,11 @@ const MAG := {"pistol": 12, "rifle": 30, "mg": 100, "rpg": 1}
 const DAMAGE := {"pistol": 34.0, "rifle": 55.0, "mg": 45.0, "rpg": 250.0}
 const ACCURACY := {"pistol": 0.07, "rifle": 0.1, "mg": 0.09, "rpg": 0.05}  ## an AI man's hit chance per round at 50 m
 const KEYS := {"1": "pistol", "2": "rifle", "3": "mg", "4": "rpg"}
+const KG := {"pistol": 1.0, "rifle": 3.6, "mg": 10.5, "rpg": 6.5, "ammo": 0.025, "medkit": 0.8}  ## per item; per round
+const CARRY_KG := 24.0
+const HEAVY_KG := 12.0  ## heavier than this and you slow down, to 60% at the limit
+const MEDKIT_COST := 150
+const MEDKIT_HP := 45.0
 
 var sess  ## Session
 var rng: PyRandom
@@ -43,6 +53,7 @@ var shot_rival_t := -1e9
 var down := ""  ## "" | "hospital" | "arrested": the walker's cue to end the walk
 var hits_taken := 0
 var kills := 0
+var pack := {}  ## item -> count ("ammo": rounds): what you carry besides the gun in your hands
 var _t := 0.0
 
 
@@ -60,10 +71,85 @@ func enter(x_: float, y_: float) -> void:
 	angry.clear()
 
 
-## Climbing back in: the gun and its rounds go back in the armoury.
+## Climbing back in: the guns and rounds go back in the armoury; medkits stay with you.
 func leave() -> void:
 	holster()
+	if armoury() != null:
+		for t in MAG:
+			armoury().stock[t] += int(pack.get(t, 0))
+		armoury().ammo += int(pack.get("ammo", 0))
+	var kits := int(pack.get("medkit", 0))
+	pack.clear()
+	if kits > 0:
+		pack["medkit"] = kits
 	active = false
+
+
+## Everything you carry, the gun in your hands and its rounds included.
+func weight() -> float:
+	var kg := 0.0
+	for k in pack:
+		kg += KG.get(k, 0.0) * int(pack[k])
+	if tier != "":
+		kg += KG[tier] + KG.ammo * (mag + reserve)
+	return kg
+
+
+## Walking and running speed: full up to HEAVY_KG, 60% at CARRY_KG.
+func speed_factor() -> float:
+	return 1.0 - 0.4 * clampf((weight() - HEAVY_KG) / (CARRY_KG - HEAVY_KG), 0.0, 1.0)
+
+
+## Put `n` of `item` in the pack: guns and rounds from the armoury, medkits
+## bought (at the aircraft). Returns "" or why not.
+func pack_add(item: String, n := 1) -> String:
+	if not KG.has(item) or n <= 0:
+		return "No such thing."
+	if weight() + KG[item] * n > CARRY_KG + 1e-6:
+		return "Too heavy - you're carrying %.1f of %.0f kg." % [weight(), CARRY_KG]
+	if item == "medkit":
+		if sess.money < MEDKIT_COST * n:
+			return "A medkit is $%d." % MEDKIT_COST
+		sess.money -= MEDKIT_COST * n
+	elif armoury() == null:
+		return "No armoury."
+	elif item == "ammo":
+		n = mini(n, armoury().ammo)
+		if n <= 0:
+			return "No rounds in the armoury."
+		armoury().ammo -= n
+	else:
+		if armoury().take(item, n) < n:
+			return "No %s in the armoury." % Arsenal.TIERS[item].name.to_lower()
+	pack[item] = int(pack.get(item, 0)) + n
+	return ""
+
+
+## Leave `n` of `item` behind: guns and rounds back in the armoury.
+func pack_drop(item: String, n := 1) -> String:
+	n = mini(n, int(pack.get(item, 0)))
+	if n <= 0:
+		return "You're not carrying that."
+	pack[item] -= n
+	if pack[item] == 0:
+		pack.erase(item)
+	if armoury() != null:
+		if item == "ammo":
+			armoury().ammo += n
+		elif MAG.has(item):
+			armoury().stock[item] += n
+	return ""
+
+
+## Patch yourself up.
+func use_medkit() -> String:
+	if int(pack.get("medkit", 0)) <= 0:
+		return "No medkit."
+	if hp >= HP:
+		return "You're fine."
+	pack_drop("medkit")
+	hp = minf(HP, hp + MEDKIT_HP)
+	return ""
 
 
 func move(x_: float, y_: float, moving_ := false) -> void:
@@ -76,7 +162,9 @@ func armoury():
 	return sess.arsenals.get("org")
 
 
-## Draw a weapon of `tier` from the armoury. Returns "" or why not.
+## Draw a weapon of `tier`: from the pack, else off the armoury's rack (if you
+## can carry it), with rounds from the pack, then the armoury, up to four
+## magazines and what you can carry. Returns "" or why not.
 func draw(t: String) -> String:
 	if not Arsenal.REALISM or armoury() == null:
 		return "No armoury."
@@ -85,21 +173,37 @@ func draw(t: String) -> String:
 	if tier == t:
 		return ""
 	holster()
-	if armoury().take(t, 1) == 0:
-		return "No %s in the armoury." % Arsenal.TIERS[t].name.to_lower()
+	if int(pack.get(t, 0)) > 0:
+		pack[t] -= 1
+		if pack[t] == 0:
+			pack.erase(t)
+	else:
+		if weight() + KG[t] > CARRY_KG + 1e-6:
+			return "Too heavy for a %s - you're carrying %.1f of %.0f kg (I: your pack)." % [Arsenal.TIERS[t].name.to_lower(), weight(), CARRY_KG]
+		if armoury().take(t, 1) == 0:
+			return "No %s in the armoury." % Arsenal.TIERS[t].name.to_lower()
 	tier = t
 	var want: int = MAG[t] * 4
-	var got := mini(want, armoury().ammo)
-	armoury().ammo -= got
+	var carried := int(pack.get("ammo", 0))
+	var from_pack := mini(want, carried)
+	pack["ammo"] = carried - from_pack
+	if pack.ammo == 0:
+		pack.erase("ammo")
+	var room := int(floor((CARRY_KG - weight()) / KG.ammo))
+	var from_rack := clampi(mini(want - from_pack, armoury().ammo), 0, maxi(0, room))
+	armoury().ammo -= from_rack
+	var got := from_pack + from_rack
 	mag = mini(MAG[t], got)
 	reserve = got - mag
 	return ""
 
 
+## Put the gun away: it goes in the pack with its rounds.
 func holster() -> void:
-	if tier != "" and armoury() != null:
-		armoury().stock[tier] += 1
-		armoury().ammo += mag + reserve
+	if tier != "":
+		pack[tier] = int(pack.get(tier, 0)) + 1
+		if mag + reserve > 0:
+			pack["ammo"] = int(pack.get("ammo", 0)) + mag + reserve
 	tier = ""
 	mag = 0
 	reserve = 0
@@ -255,13 +359,22 @@ func _down(how: String) -> void:
 	if how == "hospital":
 		var fee := mini(maxi(0, sess.money), 500)
 		sess.money -= fee
-		sess.say("You went down. You wake up by the aircraft, $%d lighter; the gun's gone." % fee)
+		sess.say("You went down. You wake up by the aircraft, $%d lighter; the gun and your pack are gone." % fee)
+	elif how == "arrested" and sess.arsenals.has("law"):
+		# the guns and rounds on you go into evidence, then the task force's armoury
+		var law = sess.arsenals.law
+		holster()
+		for t in MAG:
+			law.stock[t] += int(pack.get(t, 0))
+		law.ammo += int(pack.get("ammo", 0))
 	tier = ""
 	mag = 0
 	reserve = 0
+	pack.clear()
 	hp = HP
 
 
 func dict() -> Dictionary:
 	return {"active": active, "hp": int(hp), "tier": tier, "mag": mag, "reserve": reserve, "kills": kills, "down": down,
+		"pack": pack.duplicate(), "kg": snappedf(weight(), 0.1),
 		"armoury": armoury().to_dict().stock if armoury() != null else {}}

@@ -1,0 +1,4 @@
+KayKit City Builder Bits 1.0 by Kay Lousberg (www.kaylousberg.com), CC0.
+https://github.com/KayKit-Game-Assets/KayKit-City-Builder-Bits-1.0 @ 6397691
+Only the street furniture: streetlight, trafficlight_A, firehydrant, bench, dumpster, trash_A (+ the shared texture).
+Placed along the city streets by scripts/render/city.gd.

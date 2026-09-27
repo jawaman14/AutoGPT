@@ -1,0 +1,2 @@
+Kenney Particle Pack (CC0), www.kenney.nl, via https://github.com/shorepine/kenney ("2d/Particle Pack/PNG (Transparent)").
+Downscaled to 128 px RGBA for billboards: fire, flame, smoke, spark, scorch, circle (splash ring), dirt.

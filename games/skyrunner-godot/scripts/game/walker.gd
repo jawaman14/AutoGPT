@@ -24,6 +24,7 @@ var world: World
 var focus: Area3D = null  ## the interaction point in front of you
 var _last_dry := Vector3.ZERO
 var look_enabled := true
+var speed_scale := 1.0  ## a heavy pack slows you (FootCombat.speed_factor)
 
 
 func setup(w: World) -> Walker:
@@ -120,7 +121,7 @@ func _physics_process(dt: float) -> void:
 		dir = (global_transform.basis * Vector3(side, 0, -fwd))
 		dir.y = 0
 		dir = dir.normalized() if dir.length() > 0.01 else Vector3.ZERO
-	var speed := RUN if Input.is_physical_key_pressed(KEY_SHIFT) else WALK
+	var speed := (RUN if Input.is_physical_key_pressed(KEY_SHIFT) else WALK) * speed_scale
 	velocity.x = dir.x * speed
 	velocity.z = dir.z * speed
 	if is_on_floor():

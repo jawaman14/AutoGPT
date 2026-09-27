@@ -28,6 +28,7 @@ uniform float has_landuse = 0.0;
 uniform vec2 grid_origin = vec2(-4600.0, -11700.0);
 uniform float block = 110.0;
 uniform float street = 14.0;
+global uniform float rain_wet;  // 0 dry .. 1 soaked (WeatherFX)
 
 varying vec3 wpos;
 varying vec3 wnrm;
@@ -92,8 +93,11 @@ void fragment() {
 	col *= 0.82 + 0.3 * m.a;  // macro patches: the island isn't one shade of green
 	col = mix(col, col * vec3(1.05, 0.97, 0.85), smoothstep(0.55, 0.8, m.r) * (1.0 - w_rock));
 
+	// after rain: darker ground, a sheen on the flats (steep rock sheds it)
+	float soak = rain_wet * (1.0 - wet) * (0.55 + 0.45 * wnrm.y);
+	col *= 1.0 - 0.3 * soak;
 	ALBEDO = col;
-	ROUGHNESS = mix(mix(0.92, 0.85, w_rock), 0.3, wet);
+	ROUGHNESS = mix(mix(mix(0.92, 0.85, w_rock), 0.3, wet), 0.35, soak);
 	SPECULAR = 0.3;
 	NORMAL_MAP = texture(normal_pack, uv * (w_rock > 0.5 ? 0.6 : 1.0)).rgb;
 	NORMAL_MAP_DEPTH = mix(0.6, 1.4, w_rock) * detail_fade;
