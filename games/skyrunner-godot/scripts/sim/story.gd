@@ -68,9 +68,9 @@ const CHAPTERS := [
 	[1986, "Kingpin",
 		"The mandatory minimums pass, the Commission trial starts in New York, and every\n"
 		+ "faction on the coast wants what's ours. Build it big enough that it doesn't\n"
-		+ "matter who talks: eighty grand in cash and product, and walk away.",
+		+ "matter who talks: sixty-five grand in cash and product, and walk away.",
 		[],
-		[["net_worth", "Be worth $80,000 (cash and product)", 80000]]],
+		[["net_worth", "Be worth $65,000 (cash and product)", 65000]]],
 ]
 
 var index := 0

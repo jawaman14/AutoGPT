@@ -639,7 +639,7 @@ The game had grown a dozen systems, all on from the first minute. The story (`st
 | The Task Force | 1983 | the federal court | 3 hot loads delivered, the case under 60% |
 | Isla Soberana | 1984 | the island, mules | a load home from the island |
 | The Company | 1985 | the Agency | a job for the Company, 4 guns sold to it |
-| Kingpin | 1986 | (all open) | $80,000 in cash, stock and street money |
+| Kingpin | 1986 | (all open) | $65,000 in cash, stock and street money |
 
 **How it works**
 - `Session.enable_system(key)` builds a system mid-game. Each system has always had its own random stream, so one that arrives in 1983 behaves as it would have from the start.
@@ -649,18 +649,18 @@ The game had grown a dozen systems, all on from the first minute. The story (`st
 - **Saves and entry points.** The story is saved in `story.json`, and loading rebuilds every system its chapters opened. `--chapter N` skips ahead.
 - **Open mode.** `--unlocks open`, or the lobby's Unlocks: Open, has everything from the first minute, cocaine included.
 
-**Pacing** (BALANCE §7, 40 AI runs of 12 hours with the street war on from 1981, flown runs as a stand-in income):
+**Pacing** (BALANCE §7, 40 AI runs of 12 hours with the street war on from 1981; a flight every 15 minutes rolls the tactical sweep's odds, `AirRisk`):
 
 | Chapter | Reached by the AI |
 |---|---|
 | 1980 | about 1 hour, every run |
 | 1981 | about 3 hours, every run |
-| 1983 | about 5 hours, 95% of runs |
-| 1985 | about 5.5 hours, 93% of runs |
-| 1986 | about 7 hours, 90% of runs |
-| The end | 70% of runs finish within 12 hours, at about 8 hours |
+| 1983 | about 5.5 hours, 92% of runs |
+| 1985 | about 7 hours, 85% of runs |
+| 1986 | about 8 hours, 80% of runs |
+| The end | 67% of runs finish within 12 hours, at about 8.5 hours |
 
-The stand-in's flown runs count as the pilot's deliveries (every other one hot), as a player's jobs do. The island's product lands as stock (section 15), so it's sold at the street's pace, not paid on arrival; the Kingpin's goal went from $200k to $80k with it (BALANCE entry 30: the best net worth in 1986 is now $57k-$133k).
+The stand-in's flown runs count as the pilot's deliveries (every other one hot), as a player's jobs do. The island's product lands as stock (section 15), so it's sold at the street's pace, not paid on arrival; the Kingpin's goal went from $200k to $80k with it (BALANCE entry 30), then to $65k once the stand-in's flights could be busted or crash (entry 31: about 2 busts and 2 crashes a story, $8k in fines and $5k in repairs).
 
 A human who trucks the cash home without waiting for the AI's pickups goes faster.
 

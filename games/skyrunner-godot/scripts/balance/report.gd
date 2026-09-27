@@ -96,6 +96,9 @@ const CHANGELOG := [
 	["Isla Soberana lands as stock",
 		"Entry 29 left the island as the long game's money engine: a cleared container or a mule run paid its pounds at the street price straight into the bank - 500 lb sold at once, with no dealers, buyers' caps, stash or trucks, where every other load had gone through logistics since entry 28. A container cost about $15k and was worth about $27.5k, found 8% of the time: about +$10k every 20 minutes, $150k-$800k over a 12-hour story. Now, with logistics on, the island's product lands in a stash: a container in the stash by the docks, mules' pounds in the one by the airport (the same place, Warehouse 7 by the port; the nearest stash if it's burned), and it's sold like any other load, as fast as the corners and the buyers take it. Without logistics the old payout stays, so every other config is unchanged.",
 		"The story's stand-in buys from the island only when the stash runs low (under 150 lb, as it buys its own loads), except to bring the 1984 chapter's one load. It spends about $28k a run there now. The 1986 goal, $200k, was set against the island's payouts: the best net worth in 1986 is now $57k-$133k (median about $90k), so the Kingpin asks $80k in cash, product and street money. 1986 in 90% of 12-hour runs, the end in 70% (section 7); the other configs reproduce entry 29."],
+	["Flights that can go wrong",
+		"The live-play simulator didn't fly: runs were a fixed income, so a bust's fine (at least $1,500 plus a quarter of the bank, or the court's bail and lawyers once it opens), the cash bags seized aboard and a crash's repairs never happened, and the story's goals rested on that. First try: roll each flight against the pooled calibration (every tactic the bot flew, evenly). That busts a quarter of all flights; over 12 hours the story's pilot was busted 12 times, paid $52k in fines, and finished 7.5% of runs, most of them stuck in 1982 with the bank goal eaten a quarter at a time. No player keeps flying low into a standing task force.",
+		"Now each flight rolls what the tactical sweep measured for the police's posture as the session has it (tipped off at suspicion 60+, the balloon up, or heavy / standard / light by units in stock), flying the tactic that did best against it - high, against standard police: 0 of 30 busted - and stays on the ground when even that one is busted more than a quarter of the time (AirRisk). A flight every 15 minutes (the bot's took 13-19), paying so the mean income is the stand-in's; busts and crashes go through the session. Three hours, all systems with logistics, the war and the court: money p50 $16.6k against $23.8k at a fixed income, from 0.6 busts and 0.7 crashes a run - a bust in the court costs bail, lawyers and the bags aboard. The story: about 2 busts and 2 crashes, $8k in fines and $5k in repairs a run; 1986 in 80% of runs, and at $80k the end in 42.5%. The best net worth in 1986 of the runs that fell short was $46k-$80k, most of them $68k-$80k, so the Kingpin asks $65k: the end in 67.5% (section 7). The other configurations don't fly and reproduce entry 30."],
 ]
 
 
@@ -357,6 +360,14 @@ static func write_report(results_dir: String, out_path: String) -> String:
 				Py.f(w.get("fights", 0), 1), Py.f(w.get("org_lost", 0), 1), Py.f(w.get("rival_lost", 0), 1), Py.f(w.get("police_lost", 0), 1), Py.f(w.get("org_arrested", 0), 1),
 				Py.f(w["squads"], 1), Py.f(w["rival_squads"], 1), Py.f(w["police_squads"], 1), Py.f(w["burned"], 1),
 				Py.f(wr["suspicion"]["p50"], 0), Py.f(wr["suspicion"]["p90"], 0)]]
+		var air = _load(results_dir, "live-air")
+		if air is Dictionary and air.get("configs", {}).has("air") and air["configs"].has("noair"):
+			var ar: Dictionary = air["configs"]["air"]
+			var a: Dictionary = ar["air"]
+			lines += ["", "Air risk (all systems with logistics, the street war and the court; %d seeds x %s hours): money p50 $%s with each flight rolling the tactical sweep's odds, against $%s for the same systems at a fixed income. A run flew %s flights (paid $%s each when they counted), with %s busts, %s crashes, $%s in fines, $%s in repairs and %s minutes held by the court; the pilot stayed on the ground %s times with the police tipped off." % [
+				int(air["seeds"]), Py.f(air["hours"], 0), Py.money(int(ar["money"]["p50"])), Py.money(int(air["configs"]["noair"]["money"]["p50"])),
+				Py.f(a["flights"], 1), Py.money(int(a["pay"])), Py.f(a["busts"], 2), Py.f(a["crashes"], 2), Py.money(int(a["fines"])),
+				Py.money(int(a["repairs"])), Py.f(a["held_min"], 0), Py.f(a["lay_low"], 1)]]
 		var story = _load(results_dir, "live-story")
 		if story is Dictionary and story.get("configs", {}).has("story"):
 			var st: Dictionary = story["configs"]["story"]
@@ -369,6 +380,9 @@ static func write_report(results_dir: String, out_path: String) -> String:
 			var worth := ""
 			if st["story"].has("net_worth"):
 				worth = ", net worth (cash, product and street money) p50 $%s" % Py.money(int(st["story"]["net_worth"]["p50"]))
+			if st.has("air"):
+				worth += "; with air risk: %s busts, %s crashes, $%s in fines and $%s in repairs a run" % [Py.f(st["air"]["busts"], 1),
+					Py.f(st["air"]["crashes"], 1), Py.money(int(st["air"]["fines"])), Py.money(int(st["air"]["repairs"]))]
 			if st.has("island"):
 				worth += "; $%s a run spent on the island's product" % Py.money(int(float(st["island"]["spent"]) / maxf(1.0, float(story["seeds"]))))
 			lines += ["", "The story (%d seeds x %s hours, the same stand-ins, chapters opening the systems): reached %s. Money p50 $%s at the end%s." % [
@@ -406,9 +420,11 @@ static func write_report(results_dir: String, out_path: String) -> String:
 		+ "They're built to be symmetric, but only playtests will say whether, say, the mole or the jammer van "
 		+ "is priced right. The tactical sweep and the seasons run on the classic island; the city map shares "
 		+ "the zones and rules, not the calibration.",
-		"- The live-play simulator (section 7) doesn't fly: runs are a fixed income, the Agency's flights and the island's "
-		+ "loads flown home carry no air risk there, and what the Family's services save (a bust turned into a fine, a "
-		+ "boarding slowed) isn't counted. Read it for the economies of those systems, not for who wins."]
+		"- The live-play simulator (section 7) doesn't fly. In most configurations runs are a fixed income; the air and story "
+		+ "configurations roll the tactical sweep's odds per flight (AirRisk, entry 31), with the pilot flying the tactic that "
+		+ "did best against the police's posture. That's a pilot who has learned the game, flying as well as the bot: a "
+		+ "human's skill, bluffing and reading the police radio aren't modelled. What the Family's services save (a boarding "
+		+ "slowed) isn't counted. Read it for the economies of those systems, not for who wins."]
 	DirAccess.make_dir_recursive_absolute(out_path.get_base_dir())
 	var f := FileAccess.open(out_path, FileAccess.WRITE)
 	f.store_string("\n".join(lines) + "\n")

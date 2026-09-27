@@ -15,6 +15,11 @@ extends SceneTree
 ##   - the story config plays the chapters (Story): systems open as it goes (the
 ##     flown runs count as its deliveries, every other one hot); the
 ##     AI buys rifles once guns open and sells the Company four at a time
+##   - air risk (the air and story configs): a flight every AIR_EVERY_S rolls the
+##     tactical sweep's odds for the police's posture (AirRisk), busts and crashes
+##     going through the session (the fine or the court, repairs); a delivered
+##     flight pays so the mean income is RUN_PAY's. -- 80 3 air runs it beside
+##     noair, the same systems at a fixed income
 ##
 ##   godot --headless --script res://tools/live_balance.gd -- [seeds] [hours] [config [first seed]]
 ##   (one config writes sim-results/live-<config>.json; the story's is run -- 40 12 story)
@@ -28,6 +33,7 @@ const LAW_EVERY_S := 600.0
 const MULE_MAX := 0.3
 const SHIP_MAX := 0.25
 const STEP := 10.0
+const AIR_EVERY_S := 900.0  ## with air risk: a flight every 15 min (the bot's flights take 13-19), paying three RUN_PAYs
 const DECAY_SHARE := 0.1  ## of PoliceSystem's decay: its full rate assumes nobody's watching; the war keeps them looking
 
 var seeds := 60
@@ -52,12 +58,20 @@ func _initialize() -> void:
 		"all": {"family": true, "island": true, "agency": true, "chronicle": true, "payroll": true, "trade": true, "career": true},
 		"logistics": {"trade": true, "career": true, "payroll": true, "family": true, "agency": true, "logistics": true},
 		"war": {"family": true, "island": true, "agency": true, "chronicle": true, "payroll": true, "trade": true, "career": true, "ground_war": true},
-		"story": {"story": true, "career": true},
+		"air": {"family": true, "island": true, "agency": true, "chronicle": true, "payroll": true, "trade": true, "career": true,
+			"ground_war": true, "logistics": true, "court": true, "air": true},
+		"noair": {"family": true, "island": true, "agency": true, "chronicle": true, "payroll": true, "trade": true, "career": true,
+			"ground_war": true, "logistics": true, "court": true},
+		"story": {"story": true, "career": true, "air": true},
 	}
-	if a.size() > 2:  # one config only
+	if a.size() > 2 and a[2] == "air":  # the air risk against the same systems without it
+		configs = {"noair": configs.noair, "air": configs.air}
+	elif a.size() > 2:  # one config only
 		configs = {a[2]: configs[a[2]]}
 	else:
 		configs.erase("story")  # a campaign, not three hours: its own run (-- 40 12 story)
+		configs.erase("air")  # its own run too (-- 80 3 air, with noair beside it), so the others stay comparable
+		configs.erase("noair")
 	var first := int(a[3]) if a.size() > 3 else 1  # the first seed (to rerun one)
 	var out := {"seeds": seeds, "hours": hours, "stand_ins": {"run_pay": RUN_PAY, "run_every_s": RUN_EVERY_S,
 		"law_pay": LAW_PAY, "law_every_s": LAW_EVERY_S, "mule_max": MULE_MAX, "ship_max": SHIP_MAX}, "configs": {}}
@@ -93,6 +107,14 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 		"spent_island": 0, "earned_island": 0}
 	var t := 0.0
 	var next_run := RUN_EVERY_S
+	# air risk: each flight rolls the tactical sweep's odds (AirRisk) through the
+	# session's own bust and crash; a delivered flight pays so that, against the
+	# police as they start, the mean income is RUN_PAY's
+	var air = null
+	if extra.get("air", false):
+		air = {"rng": Session._rng(sd + 131), "pay": int(RUN_PAY * AIR_EVERY_S / RUN_EVERY_S / float(AirRisk.odds(s).delivered)),
+			"flights": 0, "busts": 0, "crashes": 0, "fines": 0, "repairs": 0, "held_s": 0.0, "lay_low": 0}
+		next_run = AIR_EVERY_S
 	var next_law := LAW_EVERY_S
 	var next_trade := 600.0
 	var last_caught := 0
@@ -118,11 +140,20 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 				s.command(Roles.BOSS, "buy_weapons", {"tier": "rifle", "n": 2})
 			if s.agency != null and s.agency.active() and int(s.arsenals.org.stock.get("rifle", 0)) >= 4 and int(t) % 600 == 0:
 				s.trade.sell("agency", "guns", 4, "rifle", "", true)  # careful: not into a checkpoint
+		var held: bool = air != null and s.court != null and s.court.holding()
+		if air != null:
+			if s.court != null:
+				s.court.update(STEP)  # bail, pleas, the trial: the court's own AI defaults
+			if held:
+				air.held_s += STEP  # no flying from a cell
 		if t >= next_run:
-			next_run += RUN_EVERY_S
-			s.money += RUN_PAY
-			if s.story != null:  # the story counts the pilot's flown jobs; every other one hot
-				s.bus.emit("job_delivered", t, "", ["runner"], {"job_id": -1, "pay": RUN_PAY, "dest": "", "hot": int(t / RUN_EVERY_S) % 2 == 0,
+			next_run += RUN_EVERY_S if air == null else AIR_EVERY_S
+			var pay: int = RUN_PAY if air == null else int(air.pay)
+			if held or (air != null and not _fly(s, air)):
+				pay = 0
+			s.money += pay
+			if s.story != null and pay > 0:  # the story counts the pilot's flown jobs; every other one hot
+				s.bus.emit("job_delivered", t, "", ["runner"], {"job_id": -1, "pay": pay, "dest": "", "hot": int(t / (RUN_EVERY_S if air == null else AIR_EVERY_S)) % 2 == 0,
 					"good": "", "lb": 0.0, "agency": false, "origin": ""})
 		if t >= next_law:
 			next_law += LAW_EVERY_S
@@ -135,7 +166,8 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 		if s.agency != null:
 			s.agency.update(STEP)
 			if int(t) % 1800 == 0 and s.agency.active():
-				_agency_flight(s)
+				if not held:
+					_agency_flight(s, air)
 		if s.chronicle != null:
 			s.chronicle.update(STEP)
 		if s.payroll != null:
@@ -247,6 +279,9 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 			"dealers": s.payroll.of("org", "dealer").filter(func(w): return w.status in ["free", "assigned"]).size() if s.payroll != null else 0,
 			"bulk": s.trade.bulk_log.size(),
 			"stock_value": s.trade.stock.cocaine * s.trade.street_price("cocaine", "town") + s.trade.stock.marijuana * s.trade.street_price("marijuana", "town")}
+	if air != null:
+		r["air"] = {"lay_low": air.lay_low, "flights": air.flights, "busts": air.busts, "crashes": air.crashes, "fines": air.fines, "repairs": air.repairs,
+			"held_min": air.held_s / 60.0, "pay": air.pay}
 	if s.story != null:
 		r["story"] = {"chapter": s.story.index + 1 + (1 if s.story.completed_all else 0), "minutes": chapter_min,
 			"net_worth": float(s.money) + (s.trade.stock_value() if s.trade != null else 0.0) + (s.logistics.cash_out() if s.logistics != null else 0.0), "nw_max": nw_max}
@@ -257,11 +292,39 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 	return r
 
 
+## A flight's roll (air risk on): a bust or a crash goes through the session, as in
+## live play - the fine or the court, the Company's phone call, the Family's
+## lawyer, the cash bags aboard, the repairs. True when it came home.
+func _fly(s: Session, air: Dictionary) -> bool:
+	var o := AirRisk.odds(s)
+	if not o.fly:
+		air.lay_low += 1  # every way in is watched: stay on the ground
+		return false
+	var roll: float = air.rng.random()
+	air.flights += 1
+	var m0 := s.money
+	if roll < o.bust:
+		air.busts += 1
+		s._bust("intercepted, flying %s against a %s task force" % [o.tactic, o.posture])
+		air.fines += maxi(0, m0 - s.money)
+	elif roll < o.bust + o.crash:
+		air.crashes += 1
+		s._crash("a hard landing")
+		air.repairs += maxi(0, m0 - s.money)
+	else:
+		return air.rng.random() < float(o.delivered) / maxf(0.01, 1.0 - o.bust - o.crash)  # landed; paid if it counted
+	if not (s.court != null and s.court.holding()):
+		s.phase = "parked"
+	return false
+
+
 ## An Agency flight, flown and delivered (the air risk isn't modelled here).
-func _agency_flight(s: Session) -> void:
+func _agency_flight(s: Session, air = null) -> void:
 	var j = s.agency.job_from(World.airfield("QRY"), s.world.airfields)
 	if j == null:
 		return
+	if air != null and not _fly(s, air):
+		return  # the Company's cargo went down with us (or its phone call got us out)
 	if s.agency.flight_done(j):
 		s.money -= mini(maxi(0, s.money), 1500 + int(maxi(0, s.money) * 0.25))  # the sting: a bust's fine
 		return
@@ -305,6 +368,10 @@ func _mean(rows: Array, sect: String, key: String) -> float:
 func _summary(rows: Array) -> Dictionary:
 	var sm := {"money": _stats(rows.map(func(r): return r.money)), "money_min": _stats(rows.map(func(r): return r.money_min)),
 		"law_funds": _stats(rows.map(func(r): return r.law_funds)), "suspicion": _stats(rows.map(func(r): return r.suspicion))}
+	if rows.any(func(r): return r.has("air")):
+		sm["air"] = {}
+		for k in ["lay_low", "flights", "busts", "crashes", "fines", "repairs", "held_min", "pay"]:
+			sm["air"][k] = _mean(rows, "air", k)
 	if rows.any(func(r): return r.has("family")):
 		sm["family"] = {"cons": _mean(rows, "family", "cons"), "loans": _mean(rows, "family", "loans"),
 			"rat_rate": _rate(rows, "family", "rat"), "trial_rate": _rate(rows, "family", "gone"),
@@ -345,7 +412,8 @@ func _summary(rows: Array) -> Dictionary:
 			var at := rows.filter(func(r): return r.has("story") and r.story.minutes.size() > n).map(func(r): return r.story.minutes[n])
 			reached.append({"chapter": n + 1, "share": float(at.size()) / rows.size(), "min_p50": _pct(at, 0.5)})
 		sm["story"] = {"chapter": _stats(rows.map(func(r): return r.story.chapter)), "reached": reached,
-			"net_worth": _stats(rows.filter(func(r): return r.has("story")).map(func(r): return r.story.net_worth))}
+			"net_worth": _stats(rows.filter(func(r): return r.has("story")).map(func(r): return r.story.net_worth)),
+			"nw_1986": rows.filter(func(r): return r.has("story") and r.story.nw_max > 0.0).map(func(r): return int(r.story.nw_max))}
 	if rows.any(func(r): return r.has("agency")):
 		sm["agency"] = {"flights": _mean(rows, "agency", "flights"), "hangout_rate": _rate(rows, "agency", "hung_out"),
 			"burned_rate": _rate(rows, "agency", "burned"), "withheld": _mean(rows, "agency", "withheld"),
