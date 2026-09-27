@@ -155,7 +155,8 @@ static func _roads(world: World, roads: Array) -> MeshInstance3D:
 ## scale to real metres (the kit is about a road tile to the unit).
 const KIT := "res://assets/models/kaykit/city/%s.gltf"
 const KIT_SCALE := {"streetlight": 7.5, "trafficlight_A": 6.5, "firehydrant": 4.0, "bench": 4.5, "dumpster": 5.0, "trash_A": 5.0}
-const LAMP_ARM := Vector3(-0.21, 0.93, 0.0)  ## the lamp head on the kit's pole, in kit units
+const LAMP_ARM := Vector3(-0.21, 0.93, 0.0)
+const GRID_BLOCK := 110.0  ## the town's street grid (terrain_splat.gdshader's `block`)  ## the lamp head on the kit's pole, in kit units
 
 
 ## The first mesh in a KayKit part (null when the kit isn't there).
@@ -258,6 +259,30 @@ static func _props(world: World, roads: Array) -> Node3D:
 		for corner in [Vector2(7, 7), Vector2(-7, -7)]:
 			var p: Vector2 = c + corner
 			xfs.trafficlight_A.append(_prop_xf(world, p, atan2(corner.x, corner.y), KIT_SCALE.trafficlight_A))
+	# and where the town's painted street grid (terrain_splat.gdshader: 110 m blocks
+	# from the city's corner) crosses the arterials - every third crossing
+	var go: Vector2 = MapCity.CITY_C - MapCity.CITY_R
+	var k := 0
+	for r in roads:
+		for i in r.size() - 1:
+			var a := Vector2(r[i][0], r[i][1])
+			var b := Vector2(r[i + 1][0], r[i + 1][1])
+			for axis in [0, 1]:
+				var lo := minf(a[axis], b[axis])
+				var hi := maxf(a[axis], b[axis])
+				if hi - lo < 1.0:
+					continue
+				var line := ceilf((lo - go[axis]) / GRID_BLOCK) * GRID_BLOCK + go[axis]
+				while line <= hi:
+					var t := (line - a[axis]) / (b[axis] - a[axis])
+					var p := a.lerp(b, t)
+					if MapCity.at(world.map.land_use, p.x, p.y) == MapCity.URBAN:
+						k += 1
+						if k % 3 == 0:
+							var dir := (b - a).normalized()
+							var side := Vector2(-dir.y, dir.x) * (5.3 if k % 2 == 0 else -5.3)
+							xfs.trafficlight_A.append(_prop_xf(world, p + side + dir * 7.0, atan2(-dir.x, -dir.y), KIT_SCALE.trafficlight_A))
+					line += GRID_BLOCK
 	var order := ["firehydrant", "bench", "trash_A", "dumpster"]
 	var n := 0
 	for r in roads:

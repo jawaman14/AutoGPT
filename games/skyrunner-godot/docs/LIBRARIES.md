@@ -115,7 +115,7 @@ The gaps asked about, checked one by one on GitHub (the only reachable source):
 | Fire, smoke, explosions | [GDQuest godot-visual-effects](https://github.com/GDQuest/godot-visual-effects), [Kenney Particle Pack](https://github.com/shorepine/kenney) | GDQuest's shaders are MIT, but its art is **CC-BY-NC-SA** (non-commercial), so none of it was copied. The effects are ours: Kenney's CC0 sprites on `CPUParticles3D`, which draws the same on every renderer, the compatibility one included. |
 | Water | [godot4-oceanfft](https://github.com/tessarakkt/godot4-oceanfft), [GodotOceanWaves](https://github.com/2Retr0/GodotOceanWaves), [Waterways](https://github.com/Arnklit/WaterGenGodot) | FFT oceans need compute shaders (Forward+ only), and Waterways is for Godot 3 rivers. Our ocean shader gained rain rings instead (below), plus splashes. |
 | Rain and weather | [Sky3D](https://github.com/TokisanGames/Sky3D) (MIT, all renderers) | It would replace a sky we already have (sun, moon phases, clouds, a storm deck, lightning). What was missing was the world *getting wet*: a `rain_wet` shader global now darkens the ground and facades, puts a sheen on the roads, and rings the sea. It soaks through in about 2.5 minutes of storm and dries over about 15. |
-| Fog | Godot's `FogVolume` (Forward+ only), Sky3D's fog | Storm fog already closes in. Sea fog as *weather* would change the simulation's visibility and the radar, which the parity replays pin down, so it's left for a sim-side change. |
+| Fog | Godot's `FogVolume` (Forward+ only), Sky3D's fog | Storm fog already closes in. Sea fog is now weather in its own right (DESIGN §20). It's opt-in and has its own random stream, so the parity replays are untouched, and it's drawn as the environment's exponential fog, which works on every renderer. |
 | Physics | Jolt (built into 4.4), [godot-jolt](https://github.com/godot-jolt/godot-jolt) (now archived upstream) | Switched to the built-in Jolt. Blasts now throw debris that tumbles and settles on the ground (capped, and it clears itself). Bales stay simulation-driven, because the airdrop's outcome is the simulation's. |
 | Textures | [Kenney Prototype Textures](https://github.com/shorepine/kenney); Poly Haven and ambientCG are unreachable (not on GitHub) | The terrain, city and water are procedural (`texgen.gd`, splat shaders) at any resolution. Photo textures would clash with the low-poly look, so nothing was taken. |
 | Inventory | [GLoot](https://github.com/peter-kish/gloot) (MIT, 4.4+), [Expresso Inventory System](https://github.com/expressobits/inventory-system) (MIT, C++), [Inventory Manager](https://github.com/Rubonnek/inventory-manager) | GLoot is the best of them, but its `Inventory` is a scene-tree Node, and ours has to live in the host-authoritative simulation and replicate. An on-foot pack of six kinds of thing is about 100 lines of `FootCombat`: it has a weight limit, slows you when heavy, keeps the other gun when you switch, takes and returns to the armoury, and holds medkits. Arrested, it becomes the task force's evidence. GLoot is the pick if inventory grows into containers, trading or grids. |
@@ -133,3 +133,12 @@ The gaps asked about, checked one by one on GitHub (the only reachable source):
 | [GUT](https://github.com/bitwes/Gut) | We have our own headless test runner (`tools/test.sh`, 320+ tests); moving buys nothing. |
 
 Sources: [awesome-godot](https://github.com/godotengine/awesome-godot) (the curated list), and each project's repository above.
+
+## Godot 4.5: not yet
+
+The shader baker (the fix for first-sight stutter) is the only 4.5 feature we want. The upgrade isn't done yet, for three reasons:
+- **JSBSim.** `native/` would have to be rebuilt against the 4.5 `godot-cpp`, and the flight model has to stay bit-identical for the parity fixtures.
+- **Vendored addons.** Dialogue Manager, Input Helper and the rest need re-checking against 4.5.
+- **Measurement.** Stutter can't be measured on this build box, which has no GPU.
+
+It's a branch of its own: rebuild `native/`, run the whole suite and the parity fixtures, then measure F6 frame times on real hardware before and after the baker.

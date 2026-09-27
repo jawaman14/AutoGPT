@@ -269,6 +269,7 @@ var events: Array = []  ## runner-facing messages
 var law_events: Array = []  ## controller-facing messages
 var score := {"busts": 0, "clean_stops": 0, "bales_seized": 0, "boats_seized": 0}
 var visibility := 1.0  ## weather and moon: scales how far crews see (Session.set_weather)
+var heli_grounded := false  ## dense sea fog: the helicopters can't fly (Session.set_weather)
 var no_customs := false  ## the tower chief is on the organisation's payroll tonight
 var sensors: SensorNet
 var detections := {}
@@ -413,6 +414,8 @@ func launch(kind: String, base_code = null, target_id = null, goal = null, near 
 		return "Cutters are launched by the maritime desk."  # handled by Session/maritime
 	if stock.get(kind, 0) <= 0:
 		return "No %s available." % kind
+	if kind == "heli" and heli_grounded:
+		return "Fog: the helicopters are grounded."
 	var bases := police_bases()
 	var base: Airfield
 	if base_code:

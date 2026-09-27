@@ -50,6 +50,9 @@ func _init():
 	if a.size() > 5: opts["map_seed"] = int(a[5])
 	if a.size() > 6:
 		opts["weather"] = {"sky": a[6], "moon": float(a[7]) if a.size() > 7 else 0.5}
+		if a.size() > 8:
+			opts["weather"]["fog"] = float(a[8])
+			opts["weather"]["wind_kt"] = 4
 	var s := Session.new(opts)
 	app = PilotApp.new()
 	root.add_child(app)

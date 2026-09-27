@@ -11,6 +11,7 @@ var rain: GPUParticles3D
 var sky := "clear"
 var wind_kt := 8.0
 var wind_dir := 250.0
+var fog := 0.0  ## sea fog, 0..1 (Session.weather.fog): the view closes in to a few hundred metres
 var overcast := 0.0  ## 0 clear .. 1 storm deck (dims the sun, greys the fog)
 var moon_illum := 0.5
 ## How soaked the world is (0..1): the "rain_wet" shader global - darker ground,
@@ -83,8 +84,20 @@ func apply(w: Dictionary) -> void:
 		scene.water.mat.set_shader_parameter("amp", amp)
 	var env := scene.env
 	var far: float = scene.quality.fog_far
+	fog = float(w.get("fog", 0.0))
 	env.fog_depth_end = far * (1.0 - 0.8 * overcast)
 	env.fog_depth_begin = env.fog_depth_end * (0.2 - 0.15 * overcast)
+	if fog > 0.0:
+		# sea fog is a wall, not haze: exponential, visibility ~3/density
+		# (0.4 -> ~2 km, 0.8 -> ~700 m, 0.95 -> ~550 m), and it swallows the sky
+		env.fog_mode = Environment.FOG_MODE_EXPONENTIAL
+		env.fog_density = 0.006 * pow(fog, 1.5)
+		env.fog_sky_affect = 0.35 + 0.65 * fog
+		env.fog_aerial_perspective = 0.0
+	else:
+		env.fog_mode = Environment.FOG_MODE_DEPTH
+		env.fog_sky_affect = 0.35
+		env.fog_aerial_perspective = 0.5 if scene.quality.sky else 0.0
 	scene.set_hour(scene.hour)
 
 

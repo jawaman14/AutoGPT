@@ -162,6 +162,9 @@ func set_hour(h: float) -> void:
 	if fx != null:
 		sky_col = sky_col.lerp(Color(0.3, 0.33, 0.36) * (0.15 + 0.85 * day), fx.overcast * 0.7)
 	env.fog_light_color = sky_col
+	if fx != null and fx.fog > 0.0:
+		# sea fog: a pale grey wall, lit by the sun or the town at night
+		env.fog_light_color = sky_col.lerp(Color(0.74, 0.76, 0.78) * (0.12 + 0.88 * day), fx.fog)
 	if sky_shader != null:
 		ambient_base = lerpf(0.4, 0.7, day) * (1.0 - 0.3 * (fx.overcast if fx != null else 0.0))
 		env.ambient_light_energy = ambient_base

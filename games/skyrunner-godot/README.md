@@ -39,7 +39,9 @@ Beyond the prototype:
   - *Weather and the moon.* A nightly forecast both HQs see (right 75% of the time). Cloud, rain and a
     dark moon hide you; storms ground helicopters and the aerostat, keep cutters in port, and more than
     double crash risk. In the air: JSBSim wind and Dryden turbulence, rain, lightning, the moon's phase.
-    Parked aircraft are tied down.
+    Parked aircraft are tied down. On calm, dry nights, about three in ten, sea fog rolls in: visibility
+    drops to a few hundred metres, the crews see 35-60% less, thick fog (over 75%) grounds the
+    helicopters, and the radar doesn't care.
   - *Pattern of life.* The task force's analysts learn your routine: repeat a route and they expect you
     (up to +45% detection). Mixing your routes is the inspection game's answer.
   - *Canary trap.* The chief can feed a bribed dispatcher a fake patrol. Swerve around it and your man is
@@ -291,8 +293,8 @@ Beyond the prototype:
 | ![crew](docs/img/crew.png) | ![crew-safe](docs/img/crew-safe.png) | ![vhs](docs/img/vhs.png) |
 | **Controls (F8): keys, buttons, yoke, pedals** | **Downtown: KayKit street furniture, a burning wreck** | **The same street in a storm: wet** |
 | ![controls](docs/img/controls.png) | ![street](docs/img/street-fire.png) | ![rain](docs/img/street-rain.png) |
-| **Your pack (I, on foot)** | | |
-| ![pack](docs/img/pack.png) | | |
+| **Your pack (I, on foot)** | **Sea fog (80%): the helicopters stay home** | |
+| ![pack](docs/img/pack.png) | ![fog](docs/img/fog.png) | |
 
 | Mid-afternoon on the runway (medium) | Dusk, climbing out near Eagle's Nest (high) | Night: edge lights on |
 |---|---|---|

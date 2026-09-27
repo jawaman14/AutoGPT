@@ -604,3 +604,16 @@ AI sells whatever its dealers can't move in two hours to the best buyer.
 **Balance** (BALANCE section 7, entry 27). The trade config ends at $72k cash plus about $20k of product
 (control $70k), with the Colombians calling after about 75 minutes.
 
+
+## 20. Sea fog, and the town's side streets
+
+**Sea fog.** Advection fog forms when warm, moist air drifts over cooler water on calm nights. A breeze or a storm clears it, and it can sit on a coast for hours.
+- **When it happens.** `Session.set_weather` rolls it on its own stream (`seed + 137`), but only when live play asks with `fog: true`. The replays and the balance sims never see it.
+- **The roll.** On a night that isn't stormy, with wind of 10 kt or less, there's a 30% chance of fog, with a density of 0.4-0.95. The HQ season's forecast can also set `fog` outright.
+- **The effect.**
+  - The crews' visual range is multiplied by `1 - 0.65 x density`.
+  - Above 0.75 the helicopters are grounded: no heli launches, since nobody flies a helicopter at night in 500 m visibility.
+  - The radar, the transponder and DF are unaffected. That is the point of the trade-off: in fog the runner can slip past eyes, but not a controller who is watching the scope.
+- **On screen.** Exponential fog (visibility about 3/density), about 2 km at 0.4 and 700 m at 0.8. It swallows the sky and is tinted pale grey by the sun or the town's glow.
+
+**Junctions.** The city shader draws a street grid every 110 m. The street furniture now puts a traffic light at every third crossing of that grid inside the urban land use, not only where the arterial roads meet, so downtown reads as a town of blocks rather than a handful of highways. That gives 26 sets of lights on Costa Brava.

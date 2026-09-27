@@ -149,7 +149,8 @@ var pilot_input := {}  ## police pilots' sticks
 var _scanner_seen := 0.0
 var map_seed := 0  ## the island this session is on (0 = classic)
 var nights = null  ## NightDirector when the Organisation layer is on
-var weather := {}  ## {sky, wind_kt, wind_dir, moon}; empty = calm and clear (the tactical sims fly that)
+var weather := {}  ## {sky, wind_kt, wind_dir, moon, fog}; empty = calm and clear (the tactical sims fly that)
+var fog_rng: PyRandom = null  ## sea fog on calm nights (live play asks: fog: true); its own stream
 var weather_rev := 0
 var _tied := false  ## parked at idle in weather: tied down, the wind can't flip it
 var hand_tremor := Vector2.ZERO  ## set each frame by the pilot's Nerves (the 3D client)  ## bumped on every change, so the renderer knows to follow
@@ -186,6 +187,8 @@ func _init(opts := {}) -> void:
 	radio = RadioNet.new(_rng(seed + 7))
 	radio.world = world
 	urng = _rng(seed + 31)
+	if opts.get("fog", false):
+		fog_rng = _rng(seed + 137)
 	econ = Economy.new(_rng(seed + 51))
 	econ.attach_market(Market.new(_rng(seed + 113)))  # supply and demand on the street (own stream)
 	econ.market.hook(self)  # arrests, raids, seizures, the factions' fortunes move it
@@ -437,6 +440,18 @@ func set_weather(w: Dictionary) -> void:
 	weather = {"sky": sky, "wind_kt": int(w.get("wind_kt", (wr[0] + wr[1]) / 2)), "wind_dir": int(w.get("wind_dir", 250)),
 		"moon": float(w.get("moon", 0.5))}
 	police.visibility = HQ.SKIES[sky][2] * (0.8 + 0.4 * weather["moon"])
+	# sea fog: on calm, dry nights, now and then. Eyes can't see past it; radar can.
+	var fog := float(w.get("fog", -1.0))
+	if fog < 0.0:
+		fog = 0.0
+		if fog_rng != null and sky != "storm" and int(weather["wind_kt"]) <= 10 and fog_rng.random() < 0.3:
+			fog = snappedf(fog_rng.uniform(0.4, 0.95), 0.01)
+	weather["fog"] = fog
+	police.visibility *= 1.0 - 0.65 * fog
+	police.heli_grounded = fog > 0.75
+	if fog > 0.0:
+		say("Sea fog tonight (%d%%): the crews can't see far%s - but the radar still can." % [int(fog * 100), "; the helicopters are grounded" if fog > 0.75 else ""])
+		law_say("Sea fog (%d%%): visual contacts at %d%% of range%s" % [int(fog * 100), int((1.0 - 0.65 * fog) * 100), "; helicopters grounded" if fog > 0.75 else ""])
 	police.sensors.weather = {"sky": sky, "wind_kt": float(weather["wind_kt"])}  # sea and rain clutter
 	econ.storm = sky == "storm"
 	weather_rev += 1

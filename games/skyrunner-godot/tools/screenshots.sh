@@ -13,6 +13,7 @@ run res://tools/shots/pilot_shot.gd -- medium 14 "$PWD/$OUT/runway-medium.png" c
 run res://tools/shots/pilot_shot.gd -- high 17.7 "$PWD/$OUT/dusk-high.png" chase air
 run res://tools/shots/pilot_shot.gd -- high 21 "$PWD/$OUT/night-runway.png" chase
 run res://tools/shots/pilot_shot.gd -- low 11 "$PWD/$OUT/low-preset.png" chase air
+run res://tools/shots/pilot_shot.gd -- high 7 "$PWD/$OUT/fog.png" chase air 100000 clear 0.5 0.8
 run res://tools/shots/pilot_shot.gd -- high 10 "$PWD/$OUT/on-foot-hangar.png" chase foot
 run res://tools/shots/pilot_shot.gd -- high 15 "$PWD/$OUT/villa-desk.png" chase villa
 run res://tools/shots/pilot_shot.gd -- high 16 "$PWD/$OUT/hq-org.png" chase org
