@@ -124,7 +124,7 @@ func _person(o: String, role: String, street := false) -> Dictionary:
 
 
 func _refresh(o: String) -> void:
-	var roles := ROLES.keys().filter(func(r): return r != "dealer" or sess.trade != null)
+	var roles := ROLES.keys().filter(func(r): return (r != "dealer" or sess.trade != null) and sess.unlocked("role_" + r))
 	var c := []
 	for i in CANDIDATES:
 		c.append(_person(o, roles[rng.randint(0, roles.size() - 1)]))

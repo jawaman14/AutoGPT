@@ -12,7 +12,10 @@ extends SceneTree
 ##   - the task force's AI buys the customs tree as the money comes, orders a
 ##     crackdown or inspections after a catch, and files RICO when it can
 ##
-##   godot --headless --script res://tools/live_balance.gd -- [seeds] [hours]
+##   - the story config plays the chapters (Story): systems open as it goes; the
+##     AI buys rifles once guns open and sells the Company four at a time
+##
+##   godot --headless --script res://tools/live_balance.gd -- [seeds] [hours] [config]
 ##
 ## Writes sim-results/live.json; `cli.gd -- report` puts it in docs/BALANCE.md.
 
@@ -43,7 +46,11 @@ func _initialize() -> void:
 		"payroll": {"payroll": true},
 		"trade": {"trade": true, "career": true, "payroll": true, "family": true, "agency": true},
 		"all": {"family": true, "island": true, "agency": true, "chronicle": true, "payroll": true, "trade": true, "career": true},
+		"logistics": {"trade": true, "career": true, "payroll": true, "family": true, "agency": true, "logistics": true},
+		"story": {"story": true, "career": true},
 	}
+	if a.size() > 2:  # one config only
+		configs = {a[2]: configs[a[2]]}
 	var out := {"seeds": seeds, "hours": hours, "stand_ins": {"run_pay": RUN_PAY, "run_every_s": RUN_EVERY_S,
 		"law_pay": LAW_PAY, "law_every_s": LAW_EVERY_S, "mule_max": MULE_MAX, "ship_max": SHIP_MAX}, "configs": {}}
 	for name in configs:
@@ -66,6 +73,8 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 	var o := {"seed": sd, "map_seed": MapCity.SEED, "location": "HAR", "features": Session.SANDBOX_FEATURES}
 	o.merge(extra)
 	var s := Session.new(o)
+	if extra.get("story", false):
+		Story.new().attach(s)
 	s.police.frozen = true
 	s.money = 16000
 	s.law_funds = 9000.0
@@ -84,9 +93,18 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 	var ticks := 0
 	var next_own := 900.0
 	var connected_at := -1.0
+	var chapter_min := [0.0]
 	while t < hours * 3600.0:
 		t += STEP
 		s.time = t
+		if s.story != null:
+			s.story.tick(s)
+			while chapter_min.size() < s.story.index + 1 + (1 if s.story.completed_all else 0):
+				chapter_min.append(t / 60.0)
+			if s.unlocked("guns") and s.arsenals.org.count() < 10 and s.money > 30000 and int(t) % 300 == 0:
+				s.command(Roles.BOSS, "buy_weapons", {"tier": "rifle", "n": 2})
+			if s.agency != null and s.agency.active() and int(s.arsenals.org.stock.get("rifle", 0)) >= 4 and int(t) % 600 == 0:
+				s.trade.sell("agency", "guns", 4, "rifle")
 		if t >= next_run:
 			next_run += RUN_EVERY_S
 			s.money += RUN_PAY
@@ -151,8 +169,13 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 				if j != null and s.money > j.cost + 5000:
 					s.money -= j.cost
 					s.trade.delivered(j)
+					s.bus.emit("job_delivered", t, "", ["runner"], s._delivered(j, 0, World.airfield(j.dest), true))
 			if s.trade.connected and connected_at < 0.0:
 				connected_at = t
+		# the trucks: product to the corners, cash home, lots to the buyers (the AI's orders)
+		if s.logistics != null:
+			s.logistics.update(STEP)
+			s._update_stashes(STEP)
 		# the markets: supply and demand move with everything above
 		s.econ.update(STEP, t, [], [], {}, s.ground)
 		if int(t) % 60 == 0:
@@ -166,6 +189,8 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 	r["market"] = {"coke_lo": coke[0], "coke_hi": coke[1], "guns": guns_sum / maxf(1.0, ticks), "disruption": dis_max,
 		"coke_lots": s.agency.coke_lots if s.agency != null else 0, "gun_lots": s.agency.gun_lots if s.agency != null else 0}
 	r["money"] = s.money
+	if s.logistics != null:
+		r["logistics"] = {"cash_out": s.logistics.cash_out(), "lost_cash": s.logistics.lost.cash, "lost_lb": s.logistics.lost.product}
 	r["law_funds"] = s.law_funds
 	r["suspicion"] = s.police.case("runner").suspicion
 	if s.family != null:
@@ -185,6 +210,8 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 			"dealers": s.payroll.of("org", "dealer").filter(func(w): return w.status in ["free", "assigned"]).size() if s.payroll != null else 0,
 			"bulk": s.trade.bulk_log.size(),
 			"stock_value": s.trade.stock.cocaine * s.trade.street_price("cocaine", "town") + s.trade.stock.marijuana * s.trade.street_price("marijuana", "town")}
+	if s.story != null:
+		r["story"] = {"chapter": s.story.index + 1 + (1 if s.story.completed_all else 0), "minutes": chapter_min}
 	if s.agency != null:
 		r["agency"] = {"flights": s.agency.flights, "hung_out": s.agency.hung_out, "burned": s.agency.burned,
 			"stings": r.get("stings", 0), "withheld": s.agency.withheld, "exposure": s.agency.exposure}
@@ -201,6 +228,7 @@ func _agency_flight(s: Session) -> void:
 		s.money -= mini(maxi(0, s.money), 1500 + int(maxi(0, s.money) * 0.25))  # the sting: a bust's fine
 		return
 	s.money += j.payout
+	s.bus.emit("job_delivered", s.time, "", ["runner"], s._delivered(j, j.payout, World.airfield(j.dest), true))
 
 
 func _pct(xs: Array, q: float) -> float:
@@ -264,6 +292,15 @@ func _summary(rows: Array) -> Dictionary:
 		sm["trade"] = {}
 		for k in rows[0]["trade"]:
 			sm["trade"][k] = _mean(rows, "trade", k)
+	if rows[0].has("logistics"):
+		sm["logistics"] = {"cash_out": _mean(rows, "logistics", "cash_out"), "lost_cash": _mean(rows, "logistics", "lost_cash"),
+			"lost_lb": _mean(rows, "logistics", "lost_lb")}
+	if rows[0].has("story"):
+		var reached := []
+		for n in Story.CHAPTERS.size() + 1:
+			var at := rows.filter(func(r): return r.story.minutes.size() > n).map(func(r): return r.story.minutes[n])
+			reached.append({"chapter": n + 1, "share": float(at.size()) / rows.size(), "min_p50": _pct(at, 0.5)})
+		sm["story"] = {"chapter": _stats(rows.map(func(r): return r.story.chapter)), "reached": reached}
 	if rows[0].has("agency"):
 		sm["agency"] = {"flights": _mean(rows, "agency", "flights"), "hangout_rate": _rate(rows, "agency", "hung_out"),
 			"burned_rate": _rate(rows, "agency", "burned"), "withheld": _mean(rows, "agency", "withheld"),

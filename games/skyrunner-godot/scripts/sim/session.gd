@@ -140,6 +140,12 @@ var auto_kick := true
 var pumping := false
 var copilot = null  ## "human" | "ai" | null
 var campaign = null  ## set by Campaign.attach
+var logistics = null  ## Logistics: product and cash sit somewhere, and trucks (or the aircraft) move them
+var story = null  ## set by Story.attach: Costa Brava 1979-1989, systems unlocking chapter by chapter
+## The chapter on screen (HUD, briefing, desks): the flying campaign's or the story's.
+var narrative:
+	get:
+		return campaign if campaign != null else story
 var runner_score := {"bales_delivered": 0, "escapes": 0}
 var fuel_caches := {}  ## shady strips: fuel you flew in yourself
 var turnaround_t := 0.0
@@ -203,28 +209,9 @@ func _init(opts := {}) -> void:
 	if not world.map.stashes.is_empty():
 		stash_net = StashNet.new(world.map.stashes, _rng(seed + 41))
 	ai_law_upgrades = opts.get("ai_law_upgrades", false)
-	if GroundWar.ENABLED and opts.get("ground_war", false):
-		ground = GroundWar.new(self, _rng(seed + 61), _rng(seed + 67))
-	if ground != null:
-		foot = FootCombat.new(self, _rng(seed + 73))
-	if Agency.ENABLED and opts.get("agency", false):
-		agency = Agency.new(self, _rng(seed + 89), _rng(seed + 101))
-		agency.prng = _rng(seed + 127)  # the pipeline: cocaine north, guns south
-	if Island.ENABLED and opts.get("island", false) and not world.map.foreign.is_empty():
-		island = Island.new(self, _rng(seed + 103))
-	if Trade.ENABLED and opts.get("trade", false):
-		trade = Trade.new(self, _rng(seed + 131), opts.get("career", false))
-	if Payroll.ENABLED and opts.get("payroll", false):
-		payroll = Payroll.new(self, _rng(seed + 109))
-		payroll.ai["org"] = not (humans.has(Roles.BOSS) or humans.has(Roles.LIEUTENANT))
-	if Court.ENABLED and opts.get("court", false):
-		court = Court.new(self, _rng(seed + 107))
-		court.prosecutor_ai = not (humans.has(Roles.CONTROLLER) or humans.has(Roles.CHIEF))
-	if Family.ENABLED and opts.get("family", false):
-		family = Family.new(self, _rng(seed + 97))
-		family.ai = not (humans.has(Roles.BOSS) or humans.has(Roles.LIEUTENANT))
-	if Chronicle.ENABLED and opts.get("chronicle", false):
-		chronicle = Chronicle.new(self, _rng(seed + 83))
+	for key in SYSTEMS:
+		if opts.get(key, false):
+			enable_system(key, opts.get("career", false))
 	for side in ["runner", "law"]:
 		for id in opts.get("upgrades", {}).get(side, []):
 			upgrades[side][id] = true
@@ -293,6 +280,10 @@ func dispose() -> void:
 	if campaign != null:
 		campaign.sess = null
 	campaign = null
+	if story != null:
+		story.sess = null
+	story = null
+	logistics = null
 	bus._subs.clear()
 
 
@@ -471,6 +462,73 @@ func _apply_wind() -> void:
 		fm.fdm.set_property("atmosphere/turbulence/milspec/windspeed_at_20ft_fps", fps)
 
 
+## The optional systems, in the order they're built (it's also the order they
+## hear the event bus). Live play asks for all of them; the story mode switches
+## them on chapter by chapter (Story), each on its own stream, so a system that
+## arrives in 1983 behaves as it would have from the start.
+const SYSTEMS := ["ground_war", "agency", "island", "trade", "logistics", "payroll", "court", "family", "chronicle"]
+
+
+## Build one optional system now. Returns true if it's new (false: already on,
+## switched off by its ENABLED flag, or the map has no place for it).
+func enable_system(key: String, career := false) -> bool:
+	match key:
+		"ground_war":
+			if ground != null or not GroundWar.ENABLED:
+				return false
+			ground = GroundWar.new(self, _rng(seed + 61), _rng(seed + 67))
+			foot = FootCombat.new(self, _rng(seed + 73))
+		"agency":
+			if agency != null or not Agency.ENABLED:
+				return false
+			agency = Agency.new(self, _rng(seed + 89), _rng(seed + 101))
+			agency.prng = _rng(seed + 127)  # the pipeline: cocaine north, guns south
+		"island":
+			if island != null or not Island.ENABLED or world.map.foreign.is_empty():
+				return false
+			island = Island.new(self, _rng(seed + 103))
+			if police != null:
+				police.territory_y = Island.TERRITORY_Y
+		"trade":
+			if trade != null or not Trade.ENABLED:
+				return false
+			trade = Trade.new(self, _rng(seed + 131), career)
+		"logistics":
+			if logistics != null or trade == null or stash_net == null:
+				return false
+			logistics = Logistics.new(self)
+		"payroll":
+			if payroll != null or not Payroll.ENABLED:
+				return false
+			payroll = Payroll.new(self, _rng(seed + 109))
+			payroll.ai["org"] = not (humans.has(Roles.BOSS) or humans.has(Roles.LIEUTENANT))
+		"court":
+			if court != null or not Court.ENABLED:
+				return false
+			court = Court.new(self, _rng(seed + 107))
+			court.prosecutor_ai = not (humans.has(Roles.CONTROLLER) or humans.has(Roles.CHIEF))
+		"family":
+			if family != null or not Family.ENABLED:
+				return false
+			family = Family.new(self, _rng(seed + 97))
+			family.ai = not (humans.has(Roles.BOSS) or humans.has(Roles.LIEUTENANT))
+		"chronicle":
+			if chronicle != null or not Chronicle.ENABLED:
+				return false
+			chronicle = Chronicle.new(self, _rng(seed + 83))
+		_:
+			return false
+	return true
+
+
+## Is this part of the game open yet? Only the story mode locks anything: the
+## systems it hasn't built and Story.LOCKS ("guns": gun runs and gun sales;
+## "role_soldier"/"role_mule": who the hiring hall offers). Cocaine waits on the
+## trade's connection.
+func unlocked(key: String) -> bool:
+	return story == null or not (key in Story.LOCKS or key in SYSTEMS) or story.is_unlocked(key)
+
+
 func refresh_board(code: String) -> void:
 	var af := World.airfield(code)
 	if af.kind == "foreign":
@@ -486,7 +544,7 @@ func refresh_board(code: String) -> void:
 		var aj = agency.job_from(af, world.airfields)
 		if aj != null:
 			boards[code].append(aj)
-	if Arsenal.REALISM and stash_net != null and features.has("contraband") and af.kind in ["shady", "bush"] and arng.random() < 0.5:
+	if Arsenal.REALISM and stash_net != null and features.has("contraband") and af.kind in ["shady", "bush"] and unlocked("guns") and arng.random() < 0.5:
 		var gj = Arsenal.gun_run(af, world.airfields, stash_net, arng)
 		if gj != null:
 			boards[code].append(gj)
@@ -915,7 +973,12 @@ func accept_job(job: Jobs.Job):
 	var pax_new := Py.count(job.items, func(i): return i.kind == "passenger")
 	if pax_now + pax_new > seats:
 		return "Not enough seats (%d free in a %s)." % [seats, spec.name]
-	if job.cost > 0:
+	if job.cost > 0 and logistics != null:
+		var err: String = logistics.pay_seller(job.cost)  # cash on the strip, from the bags aboard
+		if err != "":
+			return err
+		say("Paid $%s in cash for the load." % Py.money(job.cost))
+	elif job.cost > 0:
 		if money < job.cost:
 			return "The load costs $%s up front." % Py.money(job.cost)
 		money -= job.cost
@@ -1467,6 +1530,8 @@ func update(dt: float, inp: ControlMapper.InputFrame = null, bot_controls: Fligh
 	_update_world(dt)
 	if campaign != null:
 		campaign.tick(self)
+	if story != null:
+		story.tick(self)
 	if nights != null:
 		nights.tick(dt)
 
@@ -1613,6 +1678,8 @@ func _update_world(dt: float) -> void:
 		payroll.update(dt)
 	if trade != null:
 		trade.update(dt)
+	if logistics != null:
+		logistics.update(dt)
 
 	# maritime: cutters go where the task force suspects a drop
 	var law_goals := []
@@ -1770,6 +1837,8 @@ func _crash(reason: String) -> void:
 func _bust(how: String) -> void:
 	if agency != null and agency.quash(how):
 		return  # friends in Washington
+	if logistics != null:
+		logistics.seize_aboard()
 	if court != null:
 		# the full process: charges, the bail hearing, a lawyer, a plea or a trial
 		phase = "busted"
@@ -1938,6 +2007,9 @@ func _update_stashes(dt: float) -> void:
 		ground.events.clear()
 	for r in results:
 		var t: StashNet.Truck = r[0]
+		if logistics != null and logistics.owns(t):
+			logistics.arrived(t, r[1], r[2])
+			continue
 		var st: Dictionary = stash_net.get_stash(t.stash)
 		if r[1] == "hijacked":
 			say("Los Cuervos hit the truck to %s. The load is theirs." % st.name)
@@ -2081,6 +2153,8 @@ func _cmd_gun_mode(role: String, a: Dictionary):
 func _cmd_sell_weapons(role: String, a: Dictionary):
 	if not Arsenal.REALISM:
 		return "No arsenal."
+	if not unlocked("guns"):
+		return "No gun dealer will talk to us yet."
 	var tier := str(a.get("tier", ""))
 	var n := int(_num(a, "n", 1))
 	if not Arsenal.TIERS.has(tier) or n <= 0:
@@ -2098,6 +2172,8 @@ func _cmd_sell_weapons(role: String, a: Dictionary):
 func _cmd_buy_weapons(role: String, a: Dictionary):
 	if not Arsenal.REALISM:
 		return "No arsenal."
+	if not unlocked("guns"):
+		return "No gun dealer will talk to us yet."
 	var tier := str(a.get("tier", ""))
 	var n := int(_num(a, "n", 1))
 	if not Arsenal.TIERS.has(tier) or n <= 0:
@@ -2301,7 +2377,40 @@ func _cmd_sell_product(role: String, a: Dictionary):
 	var g := str(a.get("good", ""))
 	if not g in ["cocaine", "marijuana", "guns"]:
 		return "Sell what?"
-	var err := trade.sell(str(a.get("buyer", "")), g, float(_num(a, "qty", 0)), str(a.get("tier", "rifle")))
+	var err := trade.sell(str(a.get("buyer", "")), g, float(_num(a, "qty", 0)), str(a.get("tier", "rifle")), str(a.get("from", "")))
+	return err if err != "" else null
+
+
+## Logistics: a truck of product between stashes, or to a buyer's meet.
+func _cmd_move_goods(role: String, a: Dictionary):
+	if logistics == null:
+		return "No logistics in this game: the product is just there."
+	var g := str(a.get("good", ""))
+	if not g in Trade.GOODS:
+		return "Move what?"
+	var err: String = logistics.send(str(a.get("from", "")), str(a.get("to", "")), g, float(_num(a, "lb", 0)))
+	return err if err != "" else null
+
+
+## Logistics: a truck of cash (to the HQ, usually).
+func _cmd_move_cash(role: String, a: Dictionary):
+	if logistics == null:
+		return "No logistics in this game: money is money."
+	var err: String = logistics.send(str(a.get("from", "")), str(a.get("to", Logistics.HQ)), "cash", float(_num(a, "amount", 1e12)))
+	return err if err != "" else null
+
+
+func _cmd_load_cash(role: String, a: Dictionary):
+	if logistics == null:
+		return "No logistics in this game."
+	var err: String = logistics.load_cash(float(_num(a, "amount", 1e12)))
+	return err if err != "" else null
+
+
+func _cmd_unload_cash(role: String, a: Dictionary):
+	if logistics == null:
+		return "No logistics in this game."
+	var err: String = logistics.unload_cash()
 	return err if err != "" else null
 
 
@@ -2409,13 +2518,13 @@ func _complete_delivery(job: Jobs.Job, af: Airfield) -> void:
 		active_jobs.erase(job)
 		loadout.remove_job(job.id)
 		say("Delivered '%s': %s into the organisation's armoury" % [job.title, Arsenal.describe(job.weapons)])
-		bus.emit("job_delivered", time, "", ["runner"], {"job_id": job.id, "pay": 0, "dest": af.code, "hot": true})
+		bus.emit("job_delivered", time, "", ["runner"], _delivered(job, 0, af, true))
 		return
 	if job.own_good != "" and trade != null:
 		trade.delivered(job)
 		active_jobs.erase(job)
 		loadout.remove_job(job.id)
-		bus.emit("job_delivered", time, "", ["runner"], {"job_id": job.id, "pay": 0, "dest": af.code, "hot": true})
+		bus.emit("job_delivered", time, "", ["runner"], _delivered(job, 0, af, true))
 		return
 	if job.defector and island != null:
 		island.defected(job)
@@ -2426,7 +2535,19 @@ func _complete_delivery(job: Jobs.Job, af: Airfield) -> void:
 	active_jobs.erase(job)
 	loadout.remove_job(job.id)
 	say(("Delivered '%s': +$%s %s" % [job.title, Py.money(g[0]), g[1]]).strip_edges(false, true))
-	bus.emit("job_delivered", time, "", ["runner"], {"job_id": job.id, "pay": g[0], "dest": af.code, "hot": job.hot()})
+	bus.emit("job_delivered", time, "", ["runner"], _delivered(job, g[0], af, job.hot()))
+
+
+## What a delivery event says: the old keys, plus what the story counts (the
+## good, its pounds, whose job it was, where it came from).
+func _delivered(job: Jobs.Job, pay: int, af: Airfield, hot: bool) -> Dictionary:
+	var good: String = job.own_good if job.own_good != "" else (Economy.good_of(job) if hot else "")
+	var lb := 0.0
+	for it in job.items:
+		if it.label != "Fuel drum":
+			lb += it.weight_lb
+	return {"job_id": job.id, "pay": pay, "dest": af.code, "hot": hot, "good": good, "lb": lb,
+		"agency": job.agency, "origin": job.origin, "weapons": not job.weapons.is_empty()}
 
 
 ## A hot load being counted out on a bush/shady strip. Police arriving = raid.
@@ -2503,6 +2624,8 @@ func save() -> void:
 		data["arsenal"] = arsenals["org"].to_dict()
 	if campaign != null:
 		data["campaign"] = campaign.to_dict()
+	if story != null:
+		data["story"] = story.to_dict()
 	var f := FileAccess.open(save_path, FileAccess.WRITE)
 	if f:
 		f.store_string(JSON.stringify(data, "  "))

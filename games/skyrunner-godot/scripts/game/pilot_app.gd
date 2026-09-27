@@ -41,6 +41,7 @@ Family   SHIFT+F sit down with Sal Moretti: hear the offer, your man's read on i
 Trade    SHIFT+B Benny Ruiz and the buyers: sell cocaine, grass or rifles in bulk to the Morettis, the Company
          or (guns only) Los Cuervos. Our own loads (grass at the bush strips; cocaine once the Colombians call)
          go into the stash; dealers (hire them from Manny) sell it on the corners
+Haul     SHIFT+H logistics: product and cash sit in the stashes - truck them (to the club, a buyer, the corners) or fly cash bags (C load, U unload)
 Court    arrested (with a court): SHIFT+L your lawyer - bail or a bond, a better lawyer, motions to
          suppress / discovery / more time, the plea, the witness, the judge, a deal; the appeal inside
 Crew     SHIFT+W Manny Ortega's hiring hall: hire soldiers, drivers, mules, lookouts, an accountant,
@@ -85,7 +86,9 @@ var paused := false
 var _pressed := {}
 var _cam_pos = null
 var pursuer_nodes := {}  ## Pursuer (instance id) -> [node, spinners, lights]
+var logistics_menu: LogisticsMenu = null  ## SHIFT+H
 var squads: SquadRender = null  ## the ground war's men and vehicles (sessions with one)
+var _graphics := "high"
 var boat_nodes := {}
 var bale_nodes := {}
 var beacons: Array = []  ## [key, [nodes]]
@@ -109,10 +112,9 @@ func setup(sess: Session, graphics := "high", bot_ = null, server_ = null) -> Pi
 	name = "PilotApp"
 	scene = WorldScene.new().setup(sess.world, quality)
 	add_child(scene)
+	_graphics = graphics
 	if sess.ground != null:
-		squads = SquadRender.new()
-		squads.setup(sess.world, graphics)
-		add_child(squads)
+		_make_squads()
 	nerves = Nerves.new().setup()
 	nerves.layer = 0  # over the 3D view, under the HUD (layer 1) and menus
 	add_child(nerves)
@@ -310,6 +312,8 @@ func _unhandled_input(ev: InputEvent) -> void:
 			return
 		if ev.shift_pressed and k == KEY_W and s.payroll != null:
 			open_talk("crew")  # Manny Ortega's hiring hall
+		elif ev.shift_pressed and k == KEY_H and s.logistics != null:
+			toggle_logistics()  # where the product and the cash are; trucks; cash bags
 		elif ev.shift_pressed and k == KEY_B and s.trade != null:
 			open_talk("buyers")  # Benny Ruiz: who's buying, and at what
 		elif ev.shift_pressed and k == KEY_L and s.court != null:
@@ -454,6 +458,20 @@ func _flight_press(ev: InputEvent) -> bool:
 			_pressed[n] = true
 			return true
 	return false
+
+
+## SHIFT+H: logistics - the stashes' product and cash, the trucks, cash bags on and off.
+func toggle_logistics() -> void:
+	if logistics_menu != null and is_instance_valid(logistics_menu):
+		logistics_menu.close()
+		return
+	logistics_menu = LogisticsMenu.new()
+	logistics_menu.pilot = true
+	logistics_menu.view_fn = func() -> Dictionary: return s.logistics.view() if s.logistics != null else {}
+	logistics_menu.cmd_fn = func(n: String, a: Dictionary) -> Array: return s.command(Roles.PILOT, n, a)
+	logistics_menu.closed.connect(func(): Input.mouse_mode = Input.MOUSE_MODE_VISIBLE)
+	ui.add_child(logistics_menu)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
 ## I on foot: the pack - what you carry, its weight, and trading with the armoury.
@@ -632,7 +650,7 @@ func _poll_stick(inp: ControlMapper.InputFrame) -> void:
 func _process(delta: float) -> void:
 	var dt := minf(delta, 0.1)
 	_frame += 1
-	var camp = s.campaign
+	var camp = s.narrative
 	if camp != null and camp.show_briefing:
 		var ch: Campaign.Chapter = camp.chapter
 		briefing.text = "CHAPTER %d  -  %d  -  %s\n\n%s\n\n%s\n\nPress ENTER" % [ch.num, ch.year, ch.title, ch.briefing,
@@ -914,7 +932,15 @@ func _sync_pursuers(dt: float) -> void:
 			search.visible = scene.night > 0.3 and u.target_id != null
 
 
+func _make_squads() -> void:
+	squads = SquadRender.new()
+	squads.setup(s.world, _graphics)
+	add_child(squads)
+
+
 func _sync_squads(dt: float) -> void:
+	if squads == null and s.ground != null:
+		_make_squads()  # the story opened the war mid-game
 	if squads == null:
 		return
 	var g := s.ground

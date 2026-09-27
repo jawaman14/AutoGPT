@@ -77,10 +77,11 @@ static func _police_pilot(sess: Session, role: String) -> Dictionary:
 
 static func _runner(sess: Session, role: String) -> Dictionary:
 	var out := {"money": sess.money, "messages": sess.messages.slice(-8).map(func(m): return m[1])}
-	if sess.campaign != null:
-		var ch: Campaign.Chapter = sess.campaign.chapter
+	var story = sess.narrative
+	if story != null:
+		var ch: Campaign.Chapter = story.chapter
 		out["campaign"] = {"chapter": ch.num, "year": ch.year, "title": ch.title,
-			"objectives": sess.campaign.objective_lines()}
+			"objectives": story.objective_lines()}
 	var s: FlightModel.FlightState = sess.state
 	if s != null and sess.runner_active():
 		var he: Array = sess.range_estimate()
@@ -148,6 +149,10 @@ static func _runner(sess: Session, role: String) -> Dictionary:
 		out["payroll"] = sess.payroll.view("runner")
 	if sess.trade != null:
 		out["trade"] = sess.trade.view("runner")
+		if sess.logistics != null:
+			out["trade"]["sites"] = true
+	if sess.logistics != null:
+		out["logistics"] = sess.logistics.view()
 	if sess.stash_net != null:
 		out["stashes"] = sess.stash_net.stashes.map(func(st): return {"id": st.id, "name": st.name, "x": st.x, "y": st.y,
 			"strip": st.strip, "heat": _r(st.heat), "burned": st.burned})

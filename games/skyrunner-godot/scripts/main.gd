@@ -2,7 +2,10 @@ extends Node
 ## Entry point (port of skyrunner/__main__.py).
 ##
 ##   godot                                   # sandbox, solo
-##   godot -- --mode campaign                # story mode (1979 ->)
+##   godot                                   # the story: Costa Brava 1979-1989, factions unlock chapter by chapter
+##   godot -- --unlocks open                 # open world: every faction and mechanic from the start
+##   godot -- --chapter 4                    # the story, skipping ahead to chapter 4 (1982)
+##   godot -- --mode campaign                # flying lessons: Palmetto Cay, the classic island
 ##   godot -- --mode coop                    # host: friends join as co-pilot / spotter
 ##   godot -- --mode versus                  # host: a friend runs the task-force desk
 ##   godot -- --police                       # play the task force against AI runners
@@ -18,7 +21,7 @@ const SAVE_DIR := "user://"
 
 var args := {"mode": "solo", "police": false, "host": false, "port": 47800, "bind": "*", "new": false, "seed": 1,
 	"players": 0, "layer": 0, "graphics": "high", "watch": false, "shot": "", "frames": 90, "hour": -1.0,
-	"map": -1, "weather": "", "connect": "", "role": "copilot", "name": "player", "seat3d": false, "lobby": true}
+	"map": -1, "weather": "", "connect": "", "role": "copilot", "name": "player", "seat3d": false, "lobby": true, "unlocks": "story", "chapter": 0}
 
 
 func _ready() -> void:
@@ -73,10 +76,15 @@ func start() -> void:
 		desk.setup(LocalLink.new(ps, Roles.CONTROLLER), Roles.CONTROLLER, ps.world)
 		return
 	var mode: String = args["mode"]
-	var save := SAVE_DIR + ("campaign.json" if mode == Roles.CAMPAIGN else "save.json")
+	var story: bool = args["unlocks"] == "story" and mode != Roles.CAMPAIGN and features == null
+	var save := SAVE_DIR + ("campaign.json" if mode == Roles.CAMPAIGN else ("story.json" if story else "save.json"))
 	if args["new"] and FileAccess.file_exists(save):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(save))
-	var opts := {"seed": args["seed"], "mode": mode, "ai_law_upgrades": true, "ground_war": true, "chronicle": true, "agency": true, "family": true, "island": true, "court": true, "payroll": true, "trade": true, "career": true, "fog": true}  # the AI chief shops as forfeiture comes in
+	var opts := {"seed": args["seed"], "mode": mode, "ai_law_upgrades": true, "ground_war": true, "chronicle": true, "agency": true, "family": true, "island": true, "court": true, "payroll": true, "trade": true, "logistics": true, "fog": true}  # the AI chief shops as forfeiture comes in
+	if story:  # the chapters build the rest as they open (Story.CHAPTERS)
+		for k in Session.SYSTEMS:
+			opts.erase(k)
+		opts["career"] = true
 	if args["map"] >= 0:  # --map 0 = classic island, --map N = generated island N
 		opts["map_seed"] = args["map"]
 	elif not FileAccess.file_exists(save):
@@ -89,6 +97,11 @@ func start() -> void:
 		sess.set_weather({"sky": wp[0], "moon": float(wp[1]) if wp.size() > 1 else 0.5})
 	if mode == Roles.CAMPAIGN:
 		Campaign.from_dict(Session.read_save(save).get("campaign")).attach(sess)
+	elif story:
+		var st := Story.from_dict(Session.read_save(save).get("story"))
+		st.attach(sess)
+		while st.index + 1 < args["chapter"] and not st.completed_all:  # --chapter N: skip ahead
+			st.advance()
 	var server = null
 	if args["host"] or mode in [Roles.COOP, Roles.VERSUS]:
 		server = HostServer.new()

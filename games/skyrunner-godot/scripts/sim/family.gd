@@ -95,6 +95,7 @@ var _stalled := false  ## the current tribute has had its extra five minutes
 var payroll_until := -1.0
 var knows := {}  ## stash id -> true: what the Family has learned about us
 var loans_taken := 0
+var accepted := 0  ## offers taken
 var cons := 0  ## how many times it has robbed us
 var last := ""  ## the last thing that happened, for the desks
 var _serial := 0
@@ -193,6 +194,7 @@ func accept(id: String) -> String:
 	if sess.money < int(o.cost):
 		return "Need $%s." % Py.money(int(o.cost))
 	offers.erase(o)
+	accepted += 1
 	sess.money -= int(o.cost)
 	var c = sess.police.case("runner")
 	var honest: bool = o.honest

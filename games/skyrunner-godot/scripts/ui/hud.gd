@@ -254,7 +254,7 @@ func refresh() -> void:
 		if s.time - m[0] < 40:
 			il.append("SCAN " + str(m[1]).substr(0, 52))
 	intel.text = "\n".join(il)
-	var camp = s.campaign
+	var camp = s.narrative
 	objectives.text = ("%d - %s\n" % [camp.chapter.year, camp.chapter.title] + "\n".join(camp.objective_lines())) if camp != null else ""
 	toasts.sync(s.messages, s.time)
 	_warnings(st, c)

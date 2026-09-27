@@ -8,6 +8,7 @@ extends Control
 signal start(opts: Dictionary)
 
 var mode_ob: OptionButton
+var unlocks_ob: OptionButton
 var players: SpinBox
 var graphics_ob: OptionButton
 var seed_box: SpinBox
@@ -23,8 +24,9 @@ var plan_lbl: Label
 var go_btn: Button
 var hints: KeyHints
 
-const MODES := [["Sandbox (solo)", "solo"], ["Campaign 1979-", "campaign"], ["Co-op: friends crew for you", "coop"],
+const MODES := [["Solo", "solo"], ["Flying lessons (Palmetto Cay)", "campaign"], ["Co-op: friends crew for you", "coop"],
 	["Versus: friends run the task force", "versus"], ["Task-force desk vs AI runners", "police"]]
+const UNLOCKS := [["Story: Costa Brava 1979-1989", "story"], ["Open: every faction and mechanic", "open"]]
 const JOIN_ROLES := ["", "copilot", "spotter", "boat", "boss", "lieutenant", "controller", "interceptor", "cutter", "chief", "patrol"]
 
 
@@ -57,6 +59,11 @@ func _ready() -> void:
 		mode_ob.add_item(m[0])
 	mode_ob.item_selected.connect(func(_i): _plan())
 	_row(g, "Mode", mode_ob)
+	unlocks_ob = OptionButton.new()
+	for u in UNLOCKS:
+		unlocks_ob.add_item(u[0])
+	unlocks_ob.tooltip_text = "Story: grass in 1979, the connection, Los Cuervos, the Family, the court, the island and the Company open one chapter at a time.\nOpen: all of it from the first minute."
+	_row(g, "Unlocks", unlocks_ob)
 	players = SpinBox.new()
 	players.min_value = 1
 	players.max_value = 9
@@ -170,7 +177,7 @@ func _go() -> void:
 	start.emit({"mode": MODES[mode_ob.selected][1] if MODES[mode_ob.selected][1] != "police" else "solo",
 		"police": MODES[mode_ob.selected][1] == "police", "players": int(players.value) if players.value > 1 else 0,
 		"graphics": graphics_ob.get_item_text(graphics_ob.selected), "seed": int(seed_box.value), "new": new_cb.button_pressed,
-		"watch": watch_cb.button_pressed, "host": host_cb.button_pressed, "map": [MapCity.SEED, 0, int(map_box.value)][map_ob.selected]})
+		"watch": watch_cb.button_pressed, "unlocks": UNLOCKS[unlocks_ob.selected][1], "host": host_cb.button_pressed, "map": [MapCity.SEED, 0, int(map_box.value)][map_ob.selected]})
 
 
 func _join() -> void:

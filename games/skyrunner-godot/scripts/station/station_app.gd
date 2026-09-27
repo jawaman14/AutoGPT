@@ -22,6 +22,7 @@ const FLIGHT_ACTIONS := [["kick", "Kick the bales", "K"], ["auto_kick", "Auto-ki
 	["pump", "Ferry pump", "V"], ["call_boat", "Call the boat", "O"], ["codeword", "Codeword to the boat (1 s burst)", "B"],
 	["spotter", "Hire a spotter", "click map"]]
 
+var logistics_menu: LogisticsMenu = null  ## K: the logistics panel (Logistics)
 var link  ## NetClient or LocalLink
 var role := ""
 var world: World
@@ -226,9 +227,11 @@ func _hints() -> Array:
 				out = [["U", "back to the desk", "u"], ["UP/DOWN", "select", "down"], ["ENTER", "buy", "enter"]]
 		Roles.BOSS, Roles.CHIEF:
 			out = [["UP/DOWN", "order", "down"], ["LEFT/RIGHT", "change it", "right"], ["ENTER", "issue", "enter"]]
+			if role == Roles.BOSS:
+				out.append(["K", "logistics", "k"])
 		Roles.LIEUTENANT, Roles.PATROL:
 			out = [["UP/DOWN", "squad", "down"]]
-			out += [["C", "talk to the Family", "c"], ["G", "the General's aide", "g"], ["U/I", "mules / a container", "u"], ["L", "the pilot's lawyer", "l"], ["W", "the hiring hall", "w"]] if role == Roles.LIEUTENANT else [["O", "RICO case", "o"]]
+			out += [["C", "talk to the Family", "c"], ["G", "the General's aide", "g"], ["U/I", "mules / a container", "u"], ["L", "the pilot's lawyer", "l"], ["W", "the hiring hall", "w"], ["K", "logistics", "k"]] if role == Roles.LIEUTENANT else [["O", "RICO case", "o"]]
 	var snap = link.snapshot() if link != null else null
 	if snap is Dictionary and commands_squads(snap):
 		if squad_mode:
@@ -396,6 +399,20 @@ var talk: TalkBalloon = null
 
 
 ## A conversation (dialogue/<name>.dialogue) over this desk's link.
+## K at the organisation's desks: stock and cash, where they are, the trucks.
+func open_logistics() -> void:
+	if logistics_menu != null and is_instance_valid(logistics_menu):
+		return
+	logistics_menu = LogisticsMenu.new()
+	logistics_menu.view_fn = func() -> Dictionary:
+		var sn = link.snapshot()
+		return sn.get("logistics", {}) if sn is Dictionary else {}
+	logistics_menu.cmd_fn = func(n: String, a: Dictionary) -> Array:
+		_cmd(n, a)
+		return [status == "", status if status != "" else "ok"]
+	add_child(logistics_menu)
+
+
 func open_talk(name: String, title := "start") -> TalkBalloon:
 	if talk != null and is_instance_valid(talk):
 		return talk
@@ -492,6 +509,9 @@ func _trade_key(k: String, snap: Dictionary) -> bool:
 	if role in [Roles.BOSS, Roles.LIEUTENANT, Roles.COPILOT] and k == "m":
 		open_talk("buyers")
 		return true
+	if role in [Roles.BOSS, Roles.LIEUTENANT] and k == "k" and snap.has("logistics"):
+		open_logistics()
+		return true
 	if role in [Roles.CONTROLLER, Roles.CHIEF, Roles.PATROL] and k == "m":
 		var pos = map.mouse_world()
 		var m := GroundWar.market_at(pos.x, pos.y) if pos != null else "town"
@@ -507,7 +527,7 @@ func _trade_key(k: String, snap: Dictionary) -> bool:
 static func trade_lines(t: Dictionary) -> Array:
 	if t.is_empty():
 		return []
-	var out := ["THE STREET  (M: the buyers)"]
+	var out := ["THE STREET  (M: the buyers, K: logistics)" if t.has("sites") else "THE STREET  (M: the buyers)"]
 	out.append("Holding %d lb cocaine, %d lb grass   street $%s / $%s a lb   made $%s" % [int(t.stock.cocaine), int(t.stock.marijuana),
 		Py.money(int(t.street.cocaine)), Py.money(int(t.street.marijuana)), Py.money(int(t.earned))])
 	var cs := []

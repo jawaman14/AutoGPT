@@ -84,6 +84,8 @@ func _init(sess_, rng_: PyRandom, career_ := false) -> void:
 		street_sales[m] = 0.0
 	# a raid finds product in the house: a share of the stash goes to evidence
 	sess.bus.subscribe("stash_raided", func(_e):
+		if sess.logistics != null:
+			return  # it knows which stash, and takes what's there
 		var lost := []
 		for g in GOODS:
 			if stock[g] >= 1.0:
@@ -96,6 +98,14 @@ func _init(sess_, rng_: PyRandom, career_ := false) -> void:
 # ------------------------------------------------------------------ prices
 func street_price(g: String, m: String) -> float:
 	return PER_LB[g] * sess.econ.mult(g, m)
+
+
+## What the stock would fetch on the town's street today.
+func stock_value() -> float:
+	var v := 0.0
+	for g in GOODS:
+		v += stock[g] * street_price(g, "town")
+	return v
 
 
 func available(buyer: String) -> String:
@@ -137,7 +147,11 @@ func quote(buyer: String, good: String, tier := "rifle") -> Dictionary:
 
 # ------------------------------------------------------------------ selling in bulk
 ## Sell `qty` (pounds; guns: weapons of `tier`) to `buyer`. Returns "" or why not.
-func sell(buyer: String, good: String, qty: float, tier := "rifle") -> String:
+## With Logistics the product goes by truck to the buyer's meet (from `from`, or
+## the fullest stash) and is paid for there (settle); guns come from the armoury.
+func sell(buyer: String, good: String, qty: float, tier := "rifle", from := "") -> String:
+	if good == "guns" and not sess.unlocked("guns"):
+		return "Nobody's buying guns from us yet."
 	var q := quote(buyer, good, tier)
 	if q.why != "":
 		return q.why
@@ -150,14 +164,26 @@ func sell(buyer: String, good: String, qty: float, tier := "rifle") -> String:
 	qty = minf(qty, have)
 	if qty <= 0.0:
 		return "We have no %s to sell." % (Arsenal.TIERS[tier].name.to_lower() if good == "guns" else good)
-	var pay := int(q.price * qty)
+	var lg = sess.logistics
+	if lg != null and good != "guns":
+		var src: String = from if from != "" else Py.max_by(lg.stock.keys(), func(k): return lg.stock[k][good])
+		return lg.send(src, buyer, good, qty)
 	if good == "guns":
 		sess.arsenals["org"].take(tier, int(qty))
 	else:
 		stock[good] -= qty
+	sess.money += settle(buyer, good, qty, tier)
+	return ""
+
+
+## The deal done: the buyer takes `qty` and pays (returned: the caller banks it,
+## or Logistics trucks it home). The effects on the markets and the wars follow.
+func settle(buyer: String, good: String, qty: float, tier := "rifle") -> int:
+	var q := quote(buyer, good, tier)
+	var pay := int(q.price * qty)
+	if good != "guns":
 		sold[good] += qty
-	appetite[buyer][good] -= qty
-	sess.money += pay
+	appetite[buyer][good] = maxf(0.0, appetite[buyer][good] - qty)
 	earned += pay
 	bulk_log.append([sess.time, buyer, good, qty])
 	Py.keep_last(bulk_log, 30)
@@ -167,7 +193,7 @@ func sell(buyer: String, good: String, qty: float, tier := "rifle") -> String:
 	sess.say(last)
 	sess.bus.emit("bulk_sale", sess.time, last, ["runner"], {"buyer": buyer, "good": good, "qty": qty})
 	_check_connection()
-	return ""
+	return pay
 
 
 ## What each sale does to the markets and the wars.
@@ -241,6 +267,14 @@ func board_offer(origin: Airfield, jobs_rng: PyRandom):
 ## Our own load landed at a stash strip: into the stash.
 func delivered(job) -> void:
 	var lb := Py.sum_by(job.items, func(i): return i.weight_lb)
+	if sess.logistics != null:
+		var af := World.airfield(job.dest)
+		var site: String = sess.logistics.site_at(job.dest)  # the stash at the strip it was bought for
+		if site == "" or site == Logistics.HQ:
+			site = sess.logistics.nearest_stash(Vector2(af.x, af.y))
+		sess.logistics.add(site, job.own_good, lb)
+		sess.say("Delivered '%s': %d lb of %s into %s" % [job.title, int(lb), job.own_good, sess.logistics.name_of(site)])
+		return
 	stock[job.own_good] += lb
 	sess.say("Delivered '%s': %d lb of %s into the stash (%d lb held)" % [job.title, int(lb), job.own_good, int(stock[job.own_good])])
 
@@ -339,19 +373,31 @@ func _sell_street(o: String, step: float) -> void:
 		var other := "rival" if o == "org" else "org"
 		var share := clampf(1.0 - 0.12 * dealers(other, m).size() - 0.4 * (sess.econ.rival[m] if o == "org" else 0.0), 0.3, 1.0)
 		var g := ""
+		var lg = sess.logistics if o == "org" else null
 		if o == "org":
-			g = "cocaine" if stock.cocaine >= DEALER_LB_MIN.cocaine * mins else ("marijuana" if stock.marijuana > 0.0 else "")
+			# with Logistics, only what's in a stash in his own market
+			var have := func(gg: String) -> float: return lg.in_market(gg, m) if lg != null else float(stock[gg])
+			g = "cocaine" if have.call("cocaine") >= DEALER_LB_MIN.cocaine * mins else ("marijuana" if have.call("marijuana") > 0.0 else "")
 			if g == "":
 				continue
 		else:
 			g = "cocaine"
 		var lb: float = DEALER_LB_MIN[g] * mins * share * (0.6 + 0.8 * float(w.skill))
-		if o == "org":
+		var site := ""
+		if lg != null:
+			var got: Array = lg.take_market(g, m, lb)
+			lb = got[0]
+			site = got[1]
+			sold[g] += lb
+		elif o == "org":
 			lb = minf(lb, stock[g])
 			stock[g] -= lb
 			sold[g] += lb
 		var pay := lb * street_price(g, m)
-		sess.payroll.earn(o, pay)
+		if lg != null:
+			lg.add_cash(site, pay)  # the corner's money goes to the stash, not the club
+		else:
+			sess.payroll.earn(o, pay)
 		if o == "org":
 			earned += int(pay)
 			street_sales[m] += pay / mins

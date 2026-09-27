@@ -1,0 +1,210 @@
+extends TestCase
+## Logistics: product and cash are somewhere. Loads land in a stash; dealers
+## sell only what's in their own market; street money piles up in the stash
+## until a truck (or the aircraft) takes it to the club; bulk buyers take
+## delivery at their meet and the money rides back; the growers want cash on
+## the strip; trucks get stopped and hijacked; raids and busts take what's there.
+
+
+func after_each() -> void:
+	World.use_map(0)
+
+
+func _sess(opts := {}) -> Session:
+	var o := {"seed": 21, "map_seed": MapCity.SEED, "location": "FRM", "features": Session.SANDBOX_FEATURES,
+		"trade": true, "payroll": true, "logistics": true}
+	o.merge(opts, true)
+	var s := Session.new(o)
+	s.police.frozen = true
+	s.payroll.ai["org"] = false
+	s.payroll.ai["rival"] = false
+	s.update(1.0 / 30)
+	return s
+
+
+func _dealer(s: Session, m: String) -> Dictionary:
+	var w: Dictionary = s.payroll._person("org", "dealer")
+	w.skill = 0.8
+	w.loyalty = 0.95
+	s.payroll.candidates["org"].append(w)
+	s.payroll.hire("org", w.id)
+	w.status = "assigned"
+	w.assigned = "corner-" + m
+	return w
+
+
+## Run the trucks (no police about) until nothing's on the road.
+func _drive(s: Session, clear_roadblocks := true) -> void:
+	for i in 1500:
+		if clear_roadblocks:
+			for t in s.stash_net.trucks:
+				t.stop_at = -1.0
+		s.time += 5.0
+		s._update_stashes(5.0)
+		if s.stash_net.trucks.is_empty():
+			return
+
+
+func test_a_load_lands_in_its_stash() -> void:
+	var s := _sess()
+	s.refresh_board("FRM")
+	var j = Py.first(s.boards["FRM"], func(x): return x.own_good == "marijuana")
+	var lb := Py.sum_by(j.items, func(i): return i.weight_lb)
+	var site: String = s.logistics.site_at(j.dest)
+	check(site != "" and site != Logistics.HQ, "bought for the stash at %s" % j.dest)
+	s.trade.delivered(j)
+	check_near(s.logistics.stock[site].marijuana, lb, 0.01, "into %s" % site)
+	check_near(s.trade.stock.marijuana, lb, 0.01, "the trade's total follows")
+	s.dispose()
+
+
+func test_the_growers_want_cash_on_the_strip() -> void:
+	var s := _sess()
+	s.money = 50000
+	s.refresh_board("FRM")
+	var j = Py.first(s.boards["FRM"], func(x): return x.own_good == "marijuana")
+	var err = s.accept_job(j)
+	check(err is String and "cash on the strip" in err, "no bags aboard, no load: %s" % str(err))
+	check_eq(s.money, 50000, "the club's safe isn't on the strip")
+	s.logistics.aboard = j.cost + 100
+	check(s.accept_job(j) == null, "paid from the bags")
+	check_eq(s.logistics.aboard, 100, "the change")
+	s.dispose()
+
+
+func test_dealers_sell_only_what_is_in_their_market() -> void:
+	var s := _sess()
+	s.logistics.add("camp", "cocaine", 40.0)  # the jungle camp: north
+	var money0 := s.money
+	_dealer(s, "west")
+	s.trade._sell_street("org", 600.0)
+	check_near(s.logistics.stock.camp.cocaine, 40.0, 0.01, "a west-side dealer can't sell what's up north")
+	_dealer(s, "north")
+	s.trade._sell_street("org", 600.0)
+	check(s.logistics.stock.camp.cocaine < 40.0, "the north dealer sells from the camp")
+	check(s.logistics.cash.camp > 200.0, "and the money piles up at the camp ($%d)" % int(s.logistics.cash.camp))
+	check(s.money <= money0, "not in the club's safe")
+	s.dispose()
+
+
+func test_cash_trucked_home() -> void:
+	var s := _sess()
+	s.logistics.cash["camp"] = 12000.0
+	var money0 := s.money
+	check_eq(s.command(Roles.BOSS, "move_cash", {"from": "camp", "to": "hq"})[0], true)
+	check_eq(s.logistics.cash.camp, 0.0, "on the truck")
+	check_eq(s.logistics.view().trucks.size(), 1, "one truck on the road")
+	var fee := money0 - s.money  # no driver on the payroll: one off the street, a day's pay
+	check(fee >= 0 and fee < 1000, "a day driver's fee ($%d)" % fee)
+	_drive(s)
+	check_eq(s.money, money0 - fee + 12000, "home in the safe")
+	s.dispose()
+
+
+func test_a_stopped_truck_forfeits_the_lot() -> void:
+	var s := _sess()
+	s.logistics.cash["camp"] = 30000.0
+	var law0 := s.law_funds
+	var susp0: float = s.police.case("runner").suspicion
+	s.logistics.send("camp", Logistics.HQ, "cash", 30000.0)
+	s.stash_net.trucks[0].stop_at = 0.3
+	_drive(s, false)
+	check_eq(s.logistics.lost.cash, 30000, "gone")
+	check(s.law_funds > law0 + 10000.0, "the task force keeps half")
+	check(s.police.case("runner").suspicion > susp0, "and learns something")
+	s.dispose()
+
+
+func test_product_moved_between_stashes() -> void:
+	var s := _sess()
+	s.logistics.add("barn", "marijuana", 500.0)
+	var r: Array = s.command(Roles.PILOT, "move_goods", {"from": "barn", "to": "camp", "good": "marijuana", "lb": 200})
+	check(r[0], str(r[1]))
+	check_near(s.logistics.stock.barn.marijuana, 300.0, 0.01)
+	check_near(s.trade.stock.marijuana, 300.0, 0.01, "on the road doesn't count as held")
+	_drive(s)
+	check_near(s.logistics.stock.camp.marijuana, 200.0, 0.01, "arrived up north")
+	check_near(s.trade.stock.marijuana, 500.0, 0.01)
+	s.dispose()
+
+
+func test_a_buyer_takes_delivery_and_the_money_rides_back() -> void:
+	var s := _sess({"family": true})
+	s.family.respect = 60.0
+	s.logistics.add("lockup", "marijuana", 300.0)
+	var err := s.trade.sell("family", "marijuana", 200.0, "rifle", "lockup")
+	check_eq(err, "", "on the truck to the Morettis")
+	check_near(s.logistics.stock.lockup.marijuana, 100.0, 0.01, "200 lb out")
+	check_eq(s.trade.sold.marijuana, 0.0, "not sold until it's there")
+	for i in 400:
+		for t in s.stash_net.trucks:
+			t.stop_at = -1.0
+		s.time += 5.0
+		s._update_stashes(5.0)
+		if s.trade.sold.marijuana > 0.0:
+			break
+	check_near(s.trade.sold.marijuana, 200.0, 0.01, "the Morettis took it at their club")
+	check_eq(s.logistics.view().trucks.size(), 1, "and the money's on its way back")
+	_drive(s)
+	check(s.logistics.cash.lockup > 500.0, "the cash is in the lock-up ($%d)" % int(s.logistics.cash.lockup))
+	s.dispose()
+
+
+func test_cash_bags_in_the_aircraft() -> void:
+	var s := _sess({"location": "HAR"})
+	var site: String = s.logistics.site_at("HAR")
+	check_eq(site, "docks", "the docks warehouse by the harbour strip")
+	s.logistics.cash["docks"] = 45000.0
+	check(s.command(Roles.PILOT, "load_cash", {})[0], "loaded")
+	check_eq(s.logistics.aboard, 45000)
+	var bags = Py.first(s.loadout.items.values(), func(i): return i.label == "Cash bags")
+	check(bags != null and absf(bags.weight_lb - 10.0) < 0.01, "ten pounds of street money")
+	check(bags.hot, "and the police would call it evidence")
+	var money0 := s.money
+	s.location = s.logistics.hq_strip()
+	check(s.command(Roles.PILOT, "unload_cash", {})[0], "into the safe")
+	check_eq(s.money, money0 + 45000, "at the club's strip (%s) the bags go to the safe" % s.location)
+	check(Py.first(s.loadout.items.values(), func(i): return i.label == "Cash bags") == null, "bags off")
+	s.dispose()
+
+
+func test_a_raid_takes_what_is_there() -> void:
+	var s := _sess()
+	s.logistics.add("barn", "cocaine", 30.0)
+	s.logistics.cash["barn"] = 8000.0
+	s.logistics.add("camp", "cocaine", 10.0)
+	s.stash_net.get_stash("barn").heat = 80.0
+	s._raid("barn")
+	check_eq(s.logistics.stock.barn.cocaine, 0.0, "product gone")
+	check_eq(s.logistics.cash.barn, 0.0, "cash gone")
+	check_near(s.trade.stock.cocaine, 10.0, 0.01, "the other stashes untouched")
+	s.dispose()
+
+
+func test_a_bust_takes_the_bags() -> void:
+	var s := _sess()
+	s.logistics.aboard = 20000
+	s._bust("test")
+	check_eq(s.logistics.aboard, 0, "evidence")
+	check_eq(s.logistics.lost.cash, 20000)
+	s.dispose()
+
+
+func test_the_organisations_ai_runs_the_trucks() -> void:
+	var s := _sess()
+	s.payroll.ai["org"] = true
+	s.logistics.cash["camp"] = 9000.0
+	s.logistics.add("barn", "cocaine", 60.0)
+	_dealer(s, "north")
+	s.logistics.update(61.0)
+	var views: Array = s.logistics.view().trucks
+	check(Py.any(views, func(t): return "cash" in t.what), "cash heading home")
+	check(Py.any(views, func(t): return "cocaine" in t.what and "camp" in t.to.to_lower() or "Jungle" in t.to), "product going where the dealer is")
+	s.dispose()
+
+
+func test_off_means_one_pool() -> void:
+	var s := _sess({"logistics": false})
+	check(s.logistics == null)
+	check_eq(s.command(Roles.BOSS, "move_cash", {"from": "camp"})[1], "No logistics in this game: money is money.")
+	s.dispose()
