@@ -4,12 +4,10 @@ name: Skyrunner beta builds
 # the Linux and Windows ones. The builds are attached to the run as artifacts
 # (Actions -> this run -> Artifacts). Pure GDScript: no compiler needed.
 
+# Push only: a pull_request trigger would run everything twice for this
+# branch (the concurrency group keys on the ref, which differs).
 on:
   push:
-    paths:
-      - "games/skyrunner-godot/**"
-      - ".github/workflows/skyrunner-beta.yml"
-  pull_request:
     paths:
       - "games/skyrunner-godot/**"
       - ".github/workflows/skyrunner-beta.yml"
