@@ -679,7 +679,7 @@ func _p_approach(c: FlightModel.Controls, s: FlightModel.FlightState, dt: float)
 	var cliff := -1e9
 	for p in ahead:
 		cliff = maxf(cliff, sess.world.obstacle_top(p[0], p[1], 20.0))
-	if wheels < -3.0 and along > 60:
+	if wheels < -3.0 and along > 60 and along < 600:  # on short final, under the strip's level
 		_go_around("below the runway")
 		return
 	if wheels < flare_h and along < 400 and cliff < s.alt - gear_h - 1.0:
