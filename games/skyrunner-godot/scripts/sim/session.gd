@@ -2406,6 +2406,29 @@ func _cmd_move_cash(role: String, a: Dictionary):
 	return err if err != "" else null
 
 
+## An escort for one of our trucks: the nearest free squad of ours rides with it
+## (a checkpoint gets a fight instead of a search; an ambush meets guns).
+func _cmd_escort_truck(role: String, a: Dictionary):
+	if ground == null or stash_net == null:
+		return "No street war in this game: nobody to escort it."
+	var id := int(_num(a, "job_id", -1))
+	var t = Py.first(stash_net.trucks, func(x): return x.job_id == id)
+	if t == null:
+		return "No such truck on the road."
+	if ground.squads.any(func(q): return q.faction == "org" and int(q.order.get("job_id", -1)) == id and q.state != "gone"):
+		return "It already has an escort."
+	var p: Array = t.pos(time)
+	var free: Array = ground._free("org")
+	if free.is_empty():
+		return "No squad free to ride with it (the lieutenant raises them)."
+	var q = Py.min_by(free, func(s): return s.pos().distance_to(Vector2(p[0], p[1])))
+	var err: String = ground.order(q, {"type": "escort", "job_id": id})
+	if err != "":
+		return err
+	say("%s rides with the truck%s." % [q.id, (" to " + logistics.truck_info(t).to) if logistics != null else ""])
+	return null
+
+
 ## Logistics: the whole armoury by truck to a stash or the club.
 func _cmd_move_armoury(role: String, a: Dictionary):
 	if logistics == null:

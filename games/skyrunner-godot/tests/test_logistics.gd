@@ -252,3 +252,35 @@ func test_the_armoury_moves_with_its_guns() -> void:
 	check_eq(s.logistics.armoury_site(), "barn", "the armoury is at the barn now")
 	check(s.logistics.view().armoury.at.contains("barn"), "and the panel says so")
 	s.dispose()
+
+
+func test_an_escort_rides_with_a_truck() -> void:
+	var s := _sess({"ground_war": true})
+	s.ground._started = true
+	for f in s.ground.commanders:
+		s.ground.commanders[f].ai = false
+	var sq = s.ground.recruit("org", "car", Vector2(-700, -3350), false)
+	check(sq is GroundWar.Squad, "a squad of ours")
+	s.logistics.cash["barn"] = 9000.0
+	s.logistics.send("barn", Logistics.HQ, "cash", 9000.0)
+	var id: int = s.stash_net.trucks[0].job_id
+	var r: Array = s.command(Roles.PILOT, "escort_truck", {"job_id": id})
+	check(r[0], str(r[1]))
+	check_eq(int(sq.order.get("job_id", -1)), id, "the squad rides with it")
+	check(s.logistics.view().trucks[0].escort, "the panel shows it escorted")
+	check_eq(s.command(Roles.PILOT, "escort_truck", {"job_id": id})[1], "It already has an escort.")
+	s.dispose()
+
+
+func test_the_maps_know_what_a_truck_carries() -> void:
+	var s := _sess({"family": true})
+	s.family.respect = 60.0
+	s.logistics.cash["barn"] = 5000.0
+	s.logistics.add("lockup", "marijuana", 200.0)
+	s.logistics.send("barn", Logistics.HQ, "cash", 5000.0)
+	s.logistics.send("lockup", "family", "marijuana", 100.0)
+	var snap := Snapshot.build(s, Roles.BOSS)
+	var kinds: Array = snap.trucks.map(func(t): return t.kind)
+	check("cash" in kinds and "buyer" in kinds, "cash and a buyer's lot (%s)" % str(kinds))
+	check(snap.trucks.all(func(t): return t.has("tx")), "each with where it's going")
+	s.dispose()

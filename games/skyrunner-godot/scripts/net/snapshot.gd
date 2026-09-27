@@ -156,8 +156,9 @@ static func _runner(sess: Session, role: String) -> Dictionary:
 	if sess.stash_net != null:
 		out["stashes"] = sess.stash_net.stashes.map(func(st): return {"id": st.id, "name": st.name, "x": st.x, "y": st.y,
 			"strip": st.strip, "heat": _r(st.heat), "burned": st.burned})
-		out["trucks"] = sess.stash_net.trucks.map(func(t): return _with({"stash": t.stash, "title": t.title,
-			"eta": _r(maxf(0.0, t.t0 + t.dur - sess.time))}, _xy(t.pos(sess.time))))
+		out["trucks"] = sess.stash_net.trucks.map(func(t): return _with(_with({"id": t.job_id, "stash": t.stash, "title": t.title,
+			"eta": _r(maxf(0.0, t.t0 + t.dur - sess.time))}, _xy(t.pos(sess.time))),
+			sess.logistics.truck_info(t) if sess.logistics != null else {"kind": "load", "tx": t.x1, "ty": t.y1}))
 	out["spotters"] = sess.spotters.map(func(sp): return {"code": sp.code, "moving_to": sp.moving_to})
 	if role == Roles.SPOTTER:
 		for sp in sess.spotters:

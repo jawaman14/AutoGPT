@@ -238,6 +238,9 @@ Beyond the prototype:
   - Guns are physical too: the armoury sits in one place (the club, or a stash). A gun sale is trucked
     to the buyer; the whole armoury can be moved. A seized gun truck arms the police, a hijacked one
     Los Cuervos.
+  - The maps colour our trucks by what they carry (cash green, product white, guns red, a buyer's lot
+    amber) with a line to where each is going; a ring marks one pulled over for police ahead. Each truck
+    in the panel has an **Escort** button: the nearest free squad of ours rides with it.
   - The AI boss runs regular pickups and moves product to where the dealers are.
 - **The trade: dealers, buyers, and grass before cocaine.**
   - You start the way the 1970s smugglers did: cheap, bulky loads of grass from the farm strips into your stash.

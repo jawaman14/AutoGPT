@@ -684,6 +684,10 @@ In the 1980s cocaine trade, the product and the money were both physical, heavy 
 - **Our own vans are quieter.** A van between our own places warms its stash a third as much as a load off an aircraft, and a cash truck to the club leaves nothing to tail.
 - **Losses are recorded by cause** (`lost_by`): seized, hijacked, raided, bust.
 
+**Seeing and guarding them**
+- **The maps.** The runner's maps (minimap and desks) colour our trucks by what they carry (`truck_info`): cash, product, guns, a buyer's lot, a load off an aircraft. Each has a line to its destination, and a ring when it has pulled over. The task force's map still shows plain dots.
+- **Escorts.** `escort_truck {job_id}` (pilot, boss, lieutenant; the panel's **Escort** button) orders the nearest free squad of ours to ride with the truck. A checkpoint then gets a fight instead of a search, and an ambush meets guns.
+
 **Guns** (`Logistics.send_guns`)
 - **One armoury, one place.** It's `Arsenal.cache` (a stash), or the club.
 - **Gun sales** (to the Morettis, the Company, Los Cuervos) are trucked from the armoury to the buyer's meet and settled there, rifle by rifle against the buyer's appetite. The cash, and whatever the buyer didn't want, rides back.

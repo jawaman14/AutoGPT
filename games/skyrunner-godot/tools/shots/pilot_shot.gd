@@ -38,7 +38,7 @@ func _init():
 	if view in ["gun", "pack"]:
 		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "ground_war": true})
 	elif view == "logistics":
-		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "payroll": true, "family": true, "trade": true, "logistics": true})
+		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "payroll": true, "family": true, "trade": true, "logistics": true, "ground_war": true})
 	elif view == "tutorial":
 		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "trade": true, "payroll": true})
 	elif view == "story":
@@ -178,6 +178,8 @@ func _process(_d):
 		lg.send("lockup", Logistics.HQ, "cash", 11850.0)
 		lg.send("barn", "family", "marijuana", 300.0)
 		lg.send("quarry", "camp", "cocaine", 30.0)
+		app.s.arsenals.org.add("rifle", 8)
+		lg.send_guns("family", {"rifle": 4})
 		app.s.time += 240.0
 		lg.aboard = 9000
 		app.toggle_logistics()

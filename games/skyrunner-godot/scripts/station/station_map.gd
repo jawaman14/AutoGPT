@@ -143,12 +143,20 @@ func _draw_runner() -> void:
 		draw_rect(Rect2(w2m(sh.x, sh.y) - Vector2(5, 5), Vector2(10, 10)), sc, false, 2.0)
 		_text(sh.x, sh.y, sh.name, sc)
 	for t in snap.get("trucks", []):
-		draw_circle(w2m(t.x, t.y), 4.0, Color(1, 0.85, 0.3))
+		var col: Color = TRUCK_COL.get(str(t.get("kind", "load")), TRUCK_COL.load)
+		if t.has("tx"):
+			draw_line(w2m(t.x, t.y), w2m(t.tx, t.ty), Color(col, 0.35), 1.0)
+		draw_circle(w2m(t.x, t.y), 4.5, col)
+		if t.get("waiting", false):
+			draw_arc(w2m(t.x, t.y), 7.0, 0, TAU, 12, Color(1, 0.3, 0.3), 1.5)  # pulled over: police ahead
 	var ac = snap.get("aircraft")
 	if ac is Dictionary:
 		_arrow(ac.x, ac.y, ac.heading, Color(1, 1, 0), 16)
 
 
+## Our trucks by what they carry (the task force's map shows them all alike).
+const TRUCK_COL := {"cash": Color(0.35, 0.95, 0.45), "product": Color(0.95, 0.95, 0.95), "guns": Color(1.0, 0.3, 0.25),
+	"buyer": Color(1.0, 0.7, 0.2), "load": Color(1, 0.85, 0.3)}
 const SQUAD_COL := {"org": Color(1.0, 0.45, 0.8), "rival": Color(1.0, 0.6, 0.15), "police": Color(0.35, 0.65, 1.0)}
 
 

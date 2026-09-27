@@ -134,7 +134,20 @@ func refresh() -> void:
 			to_ob.add_item("sell: " + b[1])
 		to_ob.select(_dests.size() - 4)  # the club
 	for t in lv.trucks:
-		trucks.add_child(UIStyle.label("%s: %s -> %s, %d min" % [t.what, t.from, t.to, int(ceil(t.eta / 60.0))], 14))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		var l := UIStyle.label("%s: %s -> %s, %d min%s%s" % [t.what, t.from, t.to, int(ceil(t.eta / 60.0)),
+			"  (pulled over: police ahead)" if t.get("waiting", false) else "", "  [escorted]" if t.get("escort", false) else ""], 14)
+		l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(l)
+		if bool(lv.get("war", false)) and not t.get("escort", false):
+			var b := Button.new()
+			b.text = "Escort"
+			b.focus_mode = Control.FOCUS_NONE
+			var id: int = int(t.id)
+			b.pressed.connect(func(): _act(cmd_fn.call("escort_truck", {"job_id": id})))
+			row.add_child(b)
+		trucks.add_child(row)
 	if lv.trucks.is_empty():
 		trucks.add_child(UIStyle.caption("nothing on the road"))
 	if str(lv.last) != "":

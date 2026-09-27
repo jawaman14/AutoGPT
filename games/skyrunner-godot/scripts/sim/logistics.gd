@@ -430,6 +430,22 @@ func _near_route(r: PackedVector2Array, p: Vector2) -> bool:
 	return false
 
 
+## What a truck of ours carries, for the maps: cash, product, guns, a lot for a
+## buyer, or a load off an aircraft (a stash job's truck) - and where it's going.
+func truck_info(t) -> Dictionary:
+	if not convoys.has(t.job_id):
+		return {"kind": "load", "to": t.stash, "tx": t.x1, "ty": t.y1}
+	var c: Dictionary = convoys[t.job_id]
+	var kind := "product"
+	if c.kind == "buy":
+		kind = "buyer"
+	elif not c.get("weapons", {}).is_empty():
+		kind = "guns"
+	elif c.lb <= 0.0 and c.cash > 0.0:
+		kind = "cash"
+	return {"kind": kind, "to": name_of(c.to), "tx": t.x1, "ty": t.y1, "waiting": c.get("waiting", false)}
+
+
 func owns(t) -> bool:
 	return convoys.has(t.job_id)
 
@@ -697,10 +713,11 @@ func view() -> Dictionary:
 			var c: Dictionary = convoys[t.job_id]
 			var p: Array = t.pos(sess.time)
 			trucks.append({"id": t.job_id, "what": _describe(c), "from": name_of(c.from), "to": name_of(c.to), "x": p[0], "y": p[1],
-				"eta": int(maxf(0.0, t.t0 + t.dur - sess.time))})
+				"eta": int(maxf(0.0, t.t0 + t.dur - sess.time)), "waiting": c.get("waiting", false),
+				"escort": sess.ground != null and sess.ground.squads.any(func(q): return q.faction == "org" and int(q.order.get("job_id", -1)) == t.job_id and q.state != "gone")})
 	var arm := {}
 	if sess.arsenals.has("org"):
 		arm = {"site": armoury_site(), "at": name_of(armoury_site()), "weapons": sess.arsenals["org"].stock.duplicate(),
 			"count": sess.arsenals["org"].count()}
-	return {"sites": sites, "trucks": trucks, "aboard": aboard, "armoury": arm, "hq": name_of(HQ), "hq_strip": hq_strip(),
+	return {"sites": sites, "trucks": trucks, "aboard": aboard, "armoury": arm, "war": sess.ground != null, "hq": name_of(HQ), "hq_strip": hq_strip(),
 		"lost": lost.duplicate(), "last": last}
