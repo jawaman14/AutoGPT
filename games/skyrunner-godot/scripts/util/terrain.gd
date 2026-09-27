@@ -21,12 +21,16 @@ var _buckets := {}  ## int key -> Array of tree indices
 
 static var _f := PackedFloat32Array([0.0])
 
-## Generation takes ~10 s in GDScript, so a generated terrain is kept on disk
-## (user://terrain, keyed by everything that goes into it) and the next launch
-## loads it in milliseconds. Bump CACHE_VERSION whenever the generator changes.
-const CACHE_VERSION := 1
+## Generation takes ~10 s in GDScript, so a generated terrain is kept on disk,
+## keyed by everything that goes into it: the built-in maps ship baked in
+## res://data/terrain (tools/bake_terrain.gd), anything else is cached in
+## user://terrain on first use. Bump CACHE_VERSION whenever the generator
+## changes, then re-bake.
+const CACHE_VERSION := 2
+const BAKED_DIR := "res://data/terrain"
 const CACHE_DIR := "user://terrain"
 static var disk_cache := true
+static var bake_to := ""  ## tools/bake_terrain.gd: write here instead of the user cache
 
 
 static func _f32(x: float) -> float:
@@ -169,7 +173,13 @@ static func _cache_key(what: Array) -> String:
 func _load_cached(key: String, airfields: Array) -> bool:
 	if not disk_cache:
 		return false
-	var f := FileAccess.open("%s/%s.bin" % [CACHE_DIR, key], FileAccess.READ)
+	var f: FileAccess = null
+	for dir in [BAKED_DIR, CACHE_DIR]:
+		var path := "%s/%s.bin" % [dir, key]
+		if FileAccess.file_exists(path):
+			f = FileAccess.open_compressed(path, FileAccess.READ, FileAccess.COMPRESSION_ZSTD)
+			if f != null:
+				break
 	if f == null:
 		return false
 	var d = f.get_var()
@@ -186,8 +196,9 @@ func _load_cached(key: String, airfields: Array) -> bool:
 func _save_cached(key: String) -> void:
 	if not disk_cache:
 		return
-	DirAccess.make_dir_recursive_absolute(CACHE_DIR)
-	var f := FileAccess.open("%s/%s.bin" % [CACHE_DIR, key], FileAccess.WRITE)
+	var dir := bake_to if bake_to != "" else CACHE_DIR
+	DirAccess.make_dir_recursive_absolute(dir)
+	var f := FileAccess.open_compressed("%s/%s.bin" % [dir, key], FileAccess.WRITE, FileAccess.COMPRESSION_ZSTD)
 	if f != null:  # a read-only user dir just means no cache
 		f.store_var({"v": CACHE_VERSION, "h": _h, "trees": _trees, "fe": _field_elev})
 
