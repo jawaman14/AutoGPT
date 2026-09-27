@@ -14,7 +14,7 @@ extends RefCounted
 ##   east         dry scrub hills and the old quarry (QRY)
 ##   south-east   the smugglers' cove (COV) and the cays offshore (ISL)
 ##
-## The native generator grows the relief from lobes and ridges; `post` then
+## Terrain's generator grows the relief from lobes and ridges; `post` then
 ## carves the river and the harbour, levels the city, the swamp and the plain,
 ## classifies every terrain cell (`land_use`), replants the trees by biome and
 ## adds the buildings as obstacles, so what's drawn is what you hit. The HQ
@@ -89,7 +89,7 @@ static func _params() -> Dictionary:
 
 ## The strips: hand-sited, then nudged to the best-rated spot within `jitter` m
 ## whose ground lies in the elevation band. The mesa strip must be the highest
-## thing on the map: the native levelling caps all terrain beyond a plateau
+## thing on the map: Terrain's levelling caps all terrain beyond a plateau
 ## strip at 180 m below it.
 ## [code, name, x, y, heading, length, width, elev, surface, kind, opts, setting for rating, jitter, [zmin, zmax]]
 static func _strip_specs() -> Array:
@@ -316,7 +316,7 @@ static func _river(p: Vector2) -> Array:
 
 
 ## How free the terrain at `p` is to be reshaped: 0 on and around a strip (its
-## levelling is the native generator's), 1 well clear of every strip.
+## levelling is Terrain's generator's), 1 well clear of every strip.
 static func _free(p: Vector2, fields: Array) -> float:
 	var f := 1.0
 	for af in fields:
@@ -474,7 +474,7 @@ static func on_road(mask: PackedByteArray, x: float, y: float) -> bool:
 
 
 # ------------------------------------------------------------------ the post-pass
-## Reshape `t` (the native terrain with the strips levelled), classify it,
+## Reshape `t` (the generated terrain with the strips levelled), classify it,
 ## replant the trees and add the buildings. Called once per process by World.
 static func post(t: Terrain, l: MapLayout) -> void:
 	var dicts := []
@@ -500,7 +500,7 @@ static func post(t: Terrain, l: MapLayout) -> void:
 	t.set_data(h, trees, dicts)
 
 
-## Trees by biome: the native forest thinned where there are fields, streets
+## Trees by biome: the generated forest thinned where there are fields, streets
 ## and beaches; mangroves in the estuary; the jungle made dense.
 static func _plant(t: Terrain, native: PackedFloat32Array, l: MapLayout) -> PackedFloat32Array:
 	var lu := l.land_use

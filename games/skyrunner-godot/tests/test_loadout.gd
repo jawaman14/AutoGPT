@@ -11,8 +11,8 @@ func test_envelope_helpers() -> void:
 	check_near(lim[1], 47.3, 1e-9)
 
 
-## The load planner's numbers must agree with what JSBSim actually flies.
-func test_prediction_matches_jsbsim() -> void:
+## The load planner's numbers must agree with what the flight model actually flies.
+func test_prediction_matches_the_flight_model() -> void:
 	for key in Aircraft.ROSTER:
 		var spec := Aircraft.spec(key)
 		var md := T.masses(key)

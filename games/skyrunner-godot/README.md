@@ -1,11 +1,12 @@
 # Skyrunner (Godot 4)
 
 Bush flying, weight and balance, and the long arm of the law, on a fictional Caribbean coast in
-1979-89. Godot 4 with **[JSBSim](https://github.com/JSBSim-Team/jsbsim)** flight dynamics through a C++
-GDExtension. This is the game: everything runs on Godot. (It started as a Python prototype in
+1979-89. Pure Godot 4: GDScript all the way down, with its own 6-DOF flight model reading
+[JSBSim](https://github.com/JSBSim-Team/jsbsim)-format aircraft data. No plug-ins, no compiler: a stock Godot
+4.7 opens it, plays it and exports it to Linux, Windows and macOS. This is the game. (It started as a Python prototype in
 `../skyrunner/`, kept only as the archival reference that generated the frozen parity fixtures in
 `tests/fixtures/`; you never need it to build, play or test.) It has:
-- five JSBSim aircraft with every item a point mass at its station arm
+- five aircraft with every item a point mass at its station arm
 - tight strips
 - the task force and its sensors, airdrops and boats, and the campaign
 - co-op and versus seats over the network, and the two HQs' seasons
@@ -38,7 +39,7 @@ Beyond the prototype:
   [docs/BALANCE.md](docs/BALANCE.md) 14-19):
   - *Weather and the moon.* A nightly forecast both HQs see (right 75% of the time). Cloud, rain and a
     dark moon hide you; storms ground helicopters and the aerostat, keep cutters in port, and more than
-    double crash risk. In the air: JSBSim wind and Dryden turbulence, rain, lightning, the moon's phase.
+    double crash risk. In the air: wind and gusty turbulence in the flight model, rain, lightning, the moon's phase.
     Parked aircraft are tied down. On calm, dry nights, about three in ten, sea fog rolls in: visibility
     drops to a few hundred metres, the crews see 35-60% less, thick fog (over 75%) grounds the
     helicopters, and the radar doesn't care.
@@ -182,7 +183,7 @@ Beyond the prototype:
 
   See [docs/DESIGN.md](docs/DESIGN.md) section 17.
 - **Sound.** Synthesized, so nothing to license:
-  - the engine and propeller, pitched by JSBSim's RPM;
+  - the engine and propeller, pitched by the engine RPM;
   - the wind, the stall horn and the tyres;
   - the radio's squelch;
   - gunfire at the fights and from your own gun;
@@ -329,7 +330,7 @@ Beyond the prototype:
   black for the task force), the gun from their squad's loadout at the chest, and the kit's walk,
   run, aim, fire and fall. Further out they're cheap MultiMesh figures. The first-person gun is the
   Weapon Pack's; the go-fast is a speedboat, and the cutter a white hull with an orange-red stripe.
-  The aircraft stay procedural, built to the JSBSim models' dimensions. Without the model files
+  The aircraft stay procedural, built to the aircraft data's dimensions. Without the model files
   everything falls back to procedural boxes.
 
 | **Dusk on the boulevard** | **Sunset over San Telmo** | **The city at night** |
@@ -376,14 +377,13 @@ volumetric fog need Forward+ on a real GPU.)*
 ```bash
 cd games/skyrunner-godot
 GODOT=$(./tools/get_godot.sh)        # pinned Godot 4.7.2 into .tools/ (or use your own 4.7 install)
-./tools/build_native.sh              # builds bin/libskyrunner_native.so (godot-cpp + JSBSim 1.3.1, ~10 min the first time)
 $GODOT --path .                      # lobby: pick a mode, or join a friend's game
 $GODOT --path . -- --mode campaign   # or skip the lobby with flags (below)
 ./tools/test.sh                      # the test suite, headless (about 2 minutes)
 ```
 
-Build needs CMake 3.20+, a C++17 compiler and Python 3 (only as godot-cpp's binding generator at build time).
-`tools/build_native.sh` fetches godot-cpp 4.4.1 and JSBSim 1.3.1 sources (the extension targets 4.4 and loads in 4.7 unchanged).
+Nothing to build: open the folder in Godot 4.7 and press play. The first launch of a map grows its
+terrain (about 10 s in GDScript) and caches it in `user://terrain/`; later launches load it at once.
 
 Command-line flags (all optional; any flag skips the lobby):
 
@@ -447,13 +447,12 @@ Results go to `sim-results/*.json` and the report to [docs/BALANCE.md](docs/BALA
 
 ## Licences
 
-JSBSim is LGPL-2.1. Its aircraft and engine data are in `data/jsbsim/`, with the licence in
-`data/jsbsim/COPYING.LGPL`. The GDExtension links JSBSim statically into `bin/libskyrunner_native.so`.
-LGPL allows that as long as users can relink against a modified JSBSim:
-- The complete build (`native/CMakeLists.txt`, `tools/build_native.sh`) is in this repository.
-- `SKYRUNNER_JSBSIM_SRC` points the build at any JSBSim checkout.
+The aircraft, engine and propeller descriptions in `data/jsbsim/` come from the JSBSim project and
+are LGPL-2.1 (licence in `data/jsbsim/COPYING.LGPL`); they are data, read by the game's own flight
+model (`scripts/sim/flight/`), and files we changed say so in an XML comment (the C172's propeller
+carries our calibration factors). No JSBSim code is used or shipped.
 
-Godot and godot-cpp are MIT.
+Godot is MIT.
 
 The UI sounds are Kenney's UI Audio (CC0), in `assets/audio/kenney_ui/`; every other sound is
 synthesized in `scripts/game/sound.gd`. The conversations run on Nathan Hoad's Dialogue Manager (MIT; its runtime in

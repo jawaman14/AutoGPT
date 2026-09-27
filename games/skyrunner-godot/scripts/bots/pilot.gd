@@ -1,6 +1,6 @@
 class_name PilotBot
 extends RefCounted
-## A pilot bot that flies the real JSBSim aircraft through the Session.
+## A pilot bot that flies the real flight model through the Session.
 ##
 ## It is not a cheat: it only reads what the pilot's instruments and eyes give
 ## (own state, the map, detector/scanner/spotter intel the crew has) and moves
@@ -560,6 +560,9 @@ func _p_enroute(c: FlightModel.Controls, s: FlightModel.FlightState, dt: float) 
 		throttle = 0.6
 	hdg_t = _safe_heading(s, hdg_t)
 	var alt_t := _terrain_ahead(s) + agl
+	if lg.kind == "land" and approach != null and d < 12000:
+		# arrive at the intermediate fix on the glide path, not under a hilltop strip
+		alt_t = maxf(alt_t, approach.path_alt(_final_len(approach)))
 	var vs_t := _clamp((alt_t - s.alt) * 12.0, -900.0, 1200.0)
 	if alt_t - s.alt > 30:
 		throttle = 1.0
@@ -650,7 +653,9 @@ func _p_approach(c: FlightModel.Controls, s: FlightModel.FlightState, dt: float)
 	# approach speed scales with sqrt(weight); short strips get the short-field number
 	var heavy := sqrt(maxf(0.6, s.weight_lb / spec.mtow_lb))
 	var vref := vapp_kts * heavy * (1.0 + (0.1 if along > 2500 else 0.0)) * (0.93 if ap.af.length < 500 else 1.0)
-	var pitch_t := _pitch_for_vs(s, dt, vs_t, vapp_kts * heavy * 0.82)
+	# never hang on the edge of the stall to reach the path: a slow aeroplane
+	# climbs worse, so the floor stays a few knots under the approach speed
+	var pitch_t := _pitch_for_vs(s, dt, vs_t, maxf(vapp_kts * heavy * 0.82, vref - 8.0))
 	_attitude(c, s, dt, _bank_for(s, hdg_t, bank_lim), pitch_t)
 	c.throttle = _throttle_for(s, dt, vref, vs_t)
 	# too fast on a steep final with the power already off: forward slip
@@ -674,6 +679,9 @@ func _p_approach(c: FlightModel.Controls, s: FlightModel.FlightState, dt: float)
 	var cliff := -1e9
 	for p in ahead:
 		cliff = maxf(cliff, sess.world.obstacle_top(p[0], p[1], 20.0))
+	if wheels < -3.0 and along > 60:
+		_go_around("below the runway")
+		return
 	if wheels < flare_h and along < 400 and cliff < s.alt - gear_h - 1.0:
 		_set_phase("flare")
 	elif cliff > s.alt - gear_h - 3.0 and along > 60:

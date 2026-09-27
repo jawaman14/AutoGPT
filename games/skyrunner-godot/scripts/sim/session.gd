@@ -2,7 +2,7 @@ class_name Session
 extends RefCounted
 ## Game session: the authoritative simulation for one match.
 ##
-## It holds the runner crew's aircraft (JSBSim), the task force, boats, AI
+## It holds the runner crew's aircraft (FlightModel), the task force, boats, AI
 ## runs, jobs and economy. Every action goes through command(role, name, args)
 ## so local menus, network clients and AI crew obey the same rules. No
 ## rendering in here: the whole game loop runs headless (tests, bots,
@@ -427,7 +427,7 @@ func _after_spawn() -> void:
 
 ## Tonight's weather (the HQ season's, or --weather in the sandbox): cloud, rain
 ## and a dark moon shorten how far a police crew can see you; wind and
-## turbulence go to JSBSim.
+## turbulence go to the flight model.
 func set_weather(w: Dictionary) -> void:
 	var sky: String = w.get("sky", "clear")
 	if not HQ.SKIES.has(sky):

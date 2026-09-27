@@ -2,8 +2,8 @@ class_name WorkerPool
 extends RefCounted
 ## Process-pool map for the balance simulators (Python used ProcessPoolExecutor).
 ##
-## JSBSim keeps process-wide state, so trials run in separate headless Godot
-## processes rather than threads. The job list is cut into ordered chunks; each
+## Trials run in separate headless Godot processes rather than threads (every
+## core busy, and a Session's static switches stay per process). The job list is cut into ordered chunks; each
 ## chunk goes to `cli.gd -- worker <kind> <in.bin> <out.bin>` and the results
 ## come back in job order. Jobs and results travel as Godot binary variants:
 ## exact doubles, and ints stay ints (JSON would round-trip neither).

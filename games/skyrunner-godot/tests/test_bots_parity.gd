@@ -45,8 +45,9 @@ func test_approaches_and_departures_match_python() -> void:
 		_near_all(PilotBot.plan_departure(w, World.airfield(code), 160), ref.departures[code], TOL, "departure " + code)
 
 
-## The whole HAR -> VAL flight, JSBSim and bot logic together, every 10 s.
-func test_seeded_bot_flight_matches_python() -> void:
+## The whole HAR -> VAL flight, flight model and bot logic together, every
+## 10 s, against the golden run (tools/regen_flight_golden.gd).
+func test_seeded_bot_flight_matches_golden() -> void:
 	Jobs._next_id = 1
 	var s := Session.new({"seed": 5, "location": "HAR", "features": []})
 	s.police.frozen = true
@@ -57,7 +58,7 @@ func test_seeded_bot_flight_matches_python() -> void:
 		if Py.imod(Py.round_int(sess.time * 30), 300) == 0:
 			var st := sess.state
 			trace.append([Py.round_n(sess.time, 6), bot.phase, st.x, st.y, st.alt, st.heading, st.ias_kts])
-	var want: Dictionary = ref.flight
+	var want: Dictionary = T.golden().bots_flight
 	check_eq(PilotBot.fly(s, bot, 900, 1.0 / 30, frame), want.outcome, "outcome")
 	check_near(s.time, want.time, 1e-9, "landing time")
 	check_near(s.log.max_touchdown_fpm, want.touchdown_fpm, 1e-6, "touchdown sink")

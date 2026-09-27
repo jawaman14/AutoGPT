@@ -4,6 +4,16 @@ extends RefCounted
 
 const FLAT := 0.0
 
+static var _golden := {}
+
+
+## tests/fixtures/flight_golden.json: what the game's own flight model flies
+## (tools/regen_flight_golden.gd), for the suites that fly.
+static func golden() -> Dictionary:
+	if _golden.is_empty():
+		_golden = JSON.parse_string(FileAccess.get_file_as_string("res://tests/fixtures/flight_golden.json"))
+	return _golden
+
 
 static func inp(held: Array = [], pressed: Array = []) -> ControlMapper.InputFrame:
 	var f := ControlMapper.InputFrame.new()

@@ -17,7 +17,7 @@ Status legend: **[done]** in the code now · **[phase 3+]** planned, see *Roadma
 ## 1. Pillars
 
 1. **The aircraft is the puzzle.** Weight, balance and fuel are one budget: every pound of
-   fuel is a pound of cargo you can't carry. JSBSim flies the result honestly.
+   fuel is a pound of cargo you can't carry. The flight model flies the result honestly.
 2. **Information is the weapon.** Neither side sees the truth. Traffickers work from radar
    warnings, scanner chatter and spotter calls. Police work from radar tracks, tips and
    direction-finding fixes. Most of the game is about controlling what the other side knows.
@@ -44,7 +44,7 @@ Any seat without a human is filled by AI, so the same match can be played by 1 t
 
 | Role | Job | Sees | Status |
 |---|---|---|---|
-| **Pilot** | Flies (JSBSim). Transponder, flaps, autopilot. | Out the window, HUD, radar-detector light | [done] |
+| **Pilot** | Flies. Transponder, flaps, autopilot. | Out the window, HUD, radar-detector light | [done] |
 | **Co-pilot / kicker** | Loads the aircraft (twice the loading speed), pumps ferry fuel, kicks bales out over drop zones, runs the radio scanner and calls the boat | Tactical map: own aircraft, boat, bales, intercepted police traffic, radar-warning status | [done] (station client + AI fallback) |
 | **Spotter** | Watches one airstrip from the ground. Reports police units and roadblocks near it. Can relocate (takes time). | Units within 5 km of the watched strip, reported with a delay | [done] (AI-driven reports; human uses the station client) |
 | **Boat captain** | Go-fast boat. Waits at the rendezvous, fishes bales out of the water, runs for the cove. | Surface picture around the boat | [done] AI; human-driven boat [phase 3+] |
@@ -90,7 +90,7 @@ than the full response, which is how the side with less information stays viable
 ## 5. Systems
 
 ### 5.1 Fuel is weight [done]
-- JSBSim burns fuel from real tank locations, so the CG moves during the flight.
+- The flight model burns fuel from real tank locations, so the CG moves during the flight.
 - The HUD shows endurance and still-air range from the live fuel flow.
 - **Ferry bladder tanks** are cargo items (25 lb empty + fuel) that take up a cabin station.
   Their fuel only reaches the engine if someone pumps it into the wing tanks. The co-pilot
@@ -161,7 +161,7 @@ in 1985. It also removes a crutch, such as a free loadmaster or a daytime-only s
 ## 7. Multiplayer architecture
 
 ```
- Pilot's game (3D, Godot 4) ─────────────┐   authoritative Session (JSBSim + AI + rules), 60 Hz
+ Pilot's game (3D, Godot 4) ─────────────┐   authoritative Session (flight + AI + rules), 60 Hz
    └─ listen server (HostServer, TCP) ───┤   snapshots 15 Hz, filtered per role (fog of war)
                                          │
  Station clients (2D tactical UI) ◄──────┘   TCP, newline-delimited JSON
@@ -175,7 +175,7 @@ in 1985. It also removes a crutch, such as a free loadmaster or a daytime-only s
 - **Why TCP + JSON now:** zero dependencies, trivial to debug, and fine at 15 Hz on a LAN or a
   decent WAN. Station UIs are map views, so a 100 ms delay is invisible there.
 - **Phase 3:** a remote *pilot* (interceptor or second runner) needs UDP with client-side
-  prediction of their own JSBSim instance (ENet through Godot's MultiplayerPeer), with the
+  prediction of their own flight model (ENet through Godot's MultiplayerPeer), with the
   server reconciling. Snapshots already carry sequence numbers for this.
 - **Dedicated server:** `Session` has no rendering dependency, so a headless server is the same
   code minus the window (`godot --headless --script res://scripts/net/dedicated.gd`).
@@ -197,7 +197,7 @@ controller. The AI controller should land at about 70% for new players.
 
 ## 9. Roadmap
 
-1. **Phase 1 [done]:** single-player core. JSBSim W&B, tight strips, jobs, radar/wanted, AI police.
+1. **Phase 1 [done]:** single-player core. Flight-model W&B, tight strips, jobs, radar/wanted, AI police.
 2. **Phase 2 [done] (framework):** roles and permissions, command API, event bus, sensors and
    tracks, radio/scanner/DF, spotters and informants, transponder, radar detector, aerostat, ferry
    tanks, loading time, autopilot, airdrops, boats and cutters, AI smuggler, controller mode,
@@ -206,19 +206,27 @@ controller. The AI controller should land at about 70% for new players.
    pilot flying a heli/interceptor with the AI units' envelope, fog-of-war visuals) over TCP with
    interpolation; boss and chief HQ seats and a season of nights (`scripts/sim/hq.gd`, `nights.gd`); decoy
    flights and contract crews; rule layers scaled by player count (`scripts/sim/layers.gd`); a pilot bot flying
-   JSBSim, HQ bots, and feasibility / tactical / strategic simulators that drove the balance changes
+   the aircraft, HQ bots, and feasibility / tactical / strategic simulators that drove the balance changes
    in [BALANCE.md](BALANCE.md); textured graphics with low/medium/high presets. Design reasoning:
    [MULTIPLAYER.md](MULTIPLAYER.md).
 4. **Phase 4 (depth):** UDP snapshots with prediction, human-driven boats, night and FLIR, wind,
    AEW patrol aircraft, fixer/mechanic roles, the hidden informant, planted beacons, persistent
    career across chapters, chapters 5–8 and the task-force campaign, smarter runner bots.
-5. **Phase 5 (content):** bigger map (mainland coast + island chain), more aircraft (JSBSim
-   `L410`, `C130`), audio, real 3D models, matchmaking and a dedicated server.
+5. **Phase 5 (content):** bigger map (mainland coast + island chain), more aircraft (from the
+   JSBSim-format `L410`, `C130` data), audio, real 3D models, matchmaking and a dedicated server.
 
 ## 10. What the Godot build added
 
-- **Engine.** Godot 4.7 (from 4.4) with JSBSim 1.3.1 in a C++ GDExtension (`native/`), the simulation in GDScript
-  (`scripts/sim/`), bit-exact with the Python reference where the fixtures say so ([PORTING.md](PORTING.md)).
+- **Engine.** Godot 4.7 (from 4.4), GDScript only: no GDExtension, so a stock editor opens, runs and exports it
+  to Linux, Windows and macOS. The simulation is in `scripts/sim/`; the Python-exact RNGs, maths and terrain
+  generator in `scripts/util/` stay bit-exact with the Python reference where the fixtures say so
+  ([PORTING.md](PORTING.md)). The flight model (`scripts/sim/flight/`, `FlightDynamics`) is the game's own: a
+  6-DOF rigid body at 120 Hz with quaternion attitude, reading JSBSim-format aircraft files as data (their
+  aerodynamic functions and tables, flight-control channels, mass and tanks, gear contacts, piston and
+  turboprop engines with propeller C_T/C_P tables and a constant-speed governor), spring-damper gear with
+  rolling, braking and side friction, the ISA atmosphere, wind and Gauss-Markov gusts. It replaced JSBSim
+  1.3.1, which the game used to link through a C++ extension. The C172's propeller carries calibration factors
+  (static rpm, ground roll, climb against the handbook): its stock tables left a 160 hp engine short.
 - **Realism layer.** Weather and moon, pattern of life, canary traps, rival tempers, spare-helicopter
   patrols, nerves ([BALANCE.md](BALANCE.md) entries 14-19).
 - **Radar and radio** that behave like the real thing (`sensors.gd`, `comms.gd`): radar horizon, clutter,

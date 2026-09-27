@@ -1,10 +1,11 @@
 class_name FlightModel
 extends RefCounted
-## Game-facing wrapper around one JSBSim FGFDMExec (JSBSimFDM, native).
+## Game-facing wrapper around one FlightDynamics (the Godot-native flight model,
+## scripts/sim/flight/): controls in, a FlightState out, fixed 120 Hz sub-steps.
 ##
-## World frame: x = east (m), y = north (m), z = up (m ASL). JSBSim works in
-## geodetic lat/lon on WGS84; the play area maps onto a small patch around
-## (LAT0, LON0) where a local tangent plane is accurate to well under a metre.
+## World frame: x = east (m), y = north (m), z = up (m ASL). The flight model
+## works on a flat local tangent plane in feet; lat/lon helpers remain for the
+## callers that speak geodetic.
 
 const FT := 0.3048
 const KT := 0.514444
@@ -25,7 +26,7 @@ static func latlon_to_xy(lat: float, lon: float) -> Array:
 
 class Controls:
 	var aileron := 0.0  ## -1 left .. +1 right
-	var elevator := 0.0  ## -1 nose up .. +1 nose down (JSBSim convention)
+	var elevator := 0.0  ## -1 nose up .. +1 nose down (the aircraft data's convention)
 	var rudder := 0.0
 	var throttle := 0.0
 	var flaps := 0.0  ## 0..1
@@ -50,7 +51,7 @@ class FlightState:
 	var x: float
 	var y: float
 	var alt: float  ## CG altitude ASL, m
-	var agl: float  ## CG height above the terrain JSBSim sees, m
+	var agl: float  ## CG height above the terrain the flight model sees, m
 	var heading: float  ## deg true, 0 = north, clockwise
 	var pitch: float
 	var roll: float  ## deg, right wing down positive
@@ -76,7 +77,7 @@ class FlightState:
 
 var spec: Aircraft.Spec
 var mass: MassData
-var fdm: JSBSimFDM
+var fdm: FlightDynamics
 var dt: float
 var n_engines: int
 var n_gear: int
@@ -89,81 +90,45 @@ var crash_reason = null  ## String or null
 var _prev_ground := true
 var _has_rpm: bool
 var _has_steer: bool
-var _flow_props: Array = []
 # bound property handles for the hot path
-var _h := {}
 
 
 func _init(spec_: Aircraft.Spec, root: String, mass_: MassData) -> void:
 	spec = spec_
 	mass = mass_
-	fdm = JSBSimFDM.new()
-	fdm.setup(root)
-	fdm.set_debug_level(0)
-	if not fdm.load_model(spec.jsbsim_model):
-		push_error("JSBSim failed to load " + spec.jsbsim_model)
-	dt = fdm.get_delta_t()
-	n_engines = maxi(1, _count("propulsion/engine[%d]/set-running"))
-	n_gear = _count("gear/unit[%d]/WOW")
-	_has_rpm = has("propulsion/engine/engine-rpm")
-	_has_steer = has("fcs/steer-cmd-norm")
-	for i in n_engines:
-		var p := "propulsion/engine[%d]/fuel-flow-rate-pps" % i
-		if has(p):
-			_flow_props.append(p)
-	for p in ["position/lat-geod-deg", "position/long-gc-deg", "position/h-sl-ft", "velocities/v-down-fps",
-			"position/terrain-elevation-asl-ft", "propulsion/total-fuel-lbs"]:
-		_h[p] = fdm.bind(p)
-	for i in n_gear:
-		_h["wow%d" % i] = fdm.bind("gear/unit[%d]/WOW" % i)
+	fdm = FlightDynamics.new()
+	if not fdm.load_model(root, spec.jsbsim_model):
+		push_error("FlightDynamics failed to load " + spec.jsbsim_model)
+	for st in spec.stations:
+		fdm.stations.append({"loc": Vector3(st.x_in, st.y_in, st.z_in), "lb": 0.0})
+	dt = fdm.dt
+	n_engines = maxi(1, fdm.engines.size())
+	n_gear = fdm.contacts.filter(func(c): return c.bogey).size()
+	_has_rpm = not fdm.engines.is_empty()
+	_has_steer = fdm.contacts.any(func(c): return c.steer != 0.0)
 
 
 # ------------------------------------------------------------------ setup
-func _count(pattern: String) -> int:
-	var n := 0
-	while fdm.has_property(pattern % n):
-		n += 1
-	return n
-
-
 func has(prop: String) -> bool:
 	return fdm.has_property(prop)
 
 
 func apply_loadout(lo: Loadout) -> void:
 	var sw := lo.station_weights()
-	for i in sw.size():
-		fdm.set_property("inertia/pointmass-weight-lbs[%d]" % i, sw[i])
+	for i in mini(sw.size(), fdm.stations.size()):
+		fdm.stations[i].lb = sw[i]
 	var tf := lo.tank_fuel()
-	for i in tf.size():
-		fdm.set_property("propulsion/tank[%d]/contents-lbs" % i, tf[i])
+	for i in mini(tf.size(), fdm.tanks.size()):
+		fdm.tanks[i].lb = tf[i]
+	fdm._update_mass()
 
 
 func spawn(x: float, y: float, heading_deg: float, terrain_m: float, loadout: Loadout,
 		airborne_alt_m = null, speed_kts := 0.0) -> void:
-	# JSBSim's Dryden turbulence segfaults when the initial conditions are re-run;
-	# Session._after_spawn turns the weather back on
-	fdm.set_property("atmosphere/turb-type", 0)
-	var ll := xy_to_latlon(x, y)
-	fdm.set_property("ic/lat-geod-deg", ll[0])
-	fdm.set_property("ic/long-gc-deg", ll[1])
-	fdm.set_property("ic/terrain-elevation-ft", terrain_m / FT)
-	if airborne_alt_m == null:
-		fdm.set_property("ic/h-agl-ft", mass.gear_height_ft + 0.2)
-	else:
-		fdm.set_property("ic/h-sl-ft", airborne_alt_m / FT)
-	fdm.set_property("ic/psi-true-deg", heading_deg)
-	fdm.set_property("ic/theta-deg", 0.0)
-	fdm.set_property("ic/phi-deg", 0.0)
-	fdm.set_property("ic/u-fps", speed_kts * KT / FT)
-	fdm.set_property("ic/v-fps", 0.0)
-	fdm.set_property("ic/w-fps", 0.0)
-	fdm.set_property("ic/p-rad_sec", 0.0)
-	fdm.set_property("ic/q-rad_sec", 0.0)
-	fdm.set_property("ic/r-rad_sec", 0.0)
 	apply_loadout(loadout)
-	fdm.run_ic()
-	apply_loadout(loadout)  # run_ic may reset tank contents from the XML
+	fdm.terrain_ft = terrain_m / FT
+	var h_ft: float = (terrain_m / FT + mass.gear_height_ft + 0.2) if airborne_alt_m == null else float(airborne_alt_m) / FT
+	fdm.set_state(y / FT, x / FT, h_ft, deg_to_rad(heading_deg), 0.0, 0.0, speed_kts * KT / FT)
 	start_engines()
 	_prev_ground = airborne_alt_m == null
 	last_touchdown_fpm = 0.0
@@ -172,59 +137,51 @@ func spawn(x: float, y: float, heading_deg: float, terrain_m: float, loadout: Lo
 
 
 func start_engines() -> void:
-	fdm.set_property("propulsion/magneto_cmd", 3)
-	fdm.set_property("propulsion/starter_cmd", 1)
-	for i in n_engines:
-		fdm.set_property("fcs/mixture-cmd-norm[%d]" % i, 1.0)
-		fdm.set_property("fcs/advance-cmd-norm[%d]" % i, 1.0)
-	fdm.set_property("propulsion/set-running", -1)
+	for e in fdm.engines:
+		e.running = true
+		e.rpm = maxf(e.rpm, e.idlerpm / e.gear if e.type == "piston_engine" else e.minrpm * 0.9)
 
 
 # ------------------------------------------------------------------ loop
-func _push_controls() -> void:
+func _controls() -> Dictionary:
 	var c := controls
-	fdm.set_property("fcs/aileron-cmd-norm", c.aileron)
-	fdm.set_property("fcs/elevator-cmd-norm", c.elevator)
-	# JSBSim: +rudder-cmd yaws nose left (FlightGear negates it too),
-	# +steer-cmd turns the nosewheel right.
-	fdm.set_property("fcs/rudder-cmd-norm", -c.rudder)
-	fdm.set_property("fcs/flap-cmd-norm", c.flaps)
-	fdm.set_property("fcs/pitch-trim-cmd-norm", c.pitch_trim)
+	var d := {"fcs/aileron-cmd-norm": c.aileron, "fcs/elevator-cmd-norm": c.elevator,
+		# +rudder-cmd yaws the nose left in the aircraft data (FlightGear negates
+		# it too); +steer-cmd turns the nosewheel right
+		"fcs/rudder-cmd-norm": -c.rudder, "fcs/flap-cmd-norm": c.flaps, "fcs/pitch-trim-cmd-norm": c.pitch_trim,
+		"fcs/throttle-cmd-norm": c.throttle, "fcs/steer-cmd-norm": c.rudder if _has_steer else 0.0}
 	for i in n_engines:
-		fdm.set_property("fcs/throttle-cmd-norm[%d]" % i, c.throttle)
+		d["fcs/throttle-cmd-norm[%d]" % i] = c.throttle
+		d["fcs/mixture-cmd-norm[%d]" % i] = 1.0
 	var left := minf(1.0, c.brake + maxf(0.0, -c.diff_brake))
 	var right := minf(1.0, c.brake + maxf(0.0, c.diff_brake))
 	if spec.toe_brake_steering and _prev_ground:
 		# no steerable nosewheel in the model: pedals feed differential braking
 		left = maxf(left, -c.rudder * 0.35)
 		right = maxf(right, c.rudder * 0.35)
-	fdm.set_property("fcs/left-brake-cmd-norm", left)
-	fdm.set_property("fcs/right-brake-cmd-norm", right)
-	fdm.set_property("fcs/center-brake-cmd-norm", c.brake)
-	if _has_steer:
-		fdm.set_property("fcs/steer-cmd-norm", c.rudder)
+	d["fcs/left-brake-cmd-norm"] = left
+	d["fcs/right-brake-cmd-norm"] = right
+	d["fcs/center-brake-cmd-norm"] = c.brake
+	return d
 
 
-## Advance the FDM by frame_dt seconds of real time using fixed JSBSim sub-steps.
+## Advance the flight model by frame_dt seconds of real time in fixed sub-steps.
 ## terrain_at: Callable(x, y) -> ground height m.
 func step(frame_dt: float, terrain_at: Callable) -> FlightState:
-	_push_controls()
+	var ctl := _controls()
 	_accum += minf(frame_dt, 0.1)
-	var h_sl: int = _h["position/h-sl-ft"]
-	var h_vd: int = _h["velocities/v-down-fps"]
-	var h_te: int = _h["position/terrain-elevation-asl-ft"]
 	while _accum >= dt and crash_reason == null:
 		var p := position_xy()
 		var ground_ft: float = terrain_at.call(p[0], p[1]) / FT
-		# Rising terrain arrives as a step in JSBSim's flat-earth ground plane;
-		# if it would bury the gear, that is controlled flight into terrain,
-		# not something the gear springs should resolve.
-		if fdm.get_bound(h_sl) - ground_ft < mass.gear_height_ft * 0.5:
+		# Rising terrain arrives as a step in the flat ground plane under the
+		# aircraft; if it would bury the gear, that is controlled flight into
+		# terrain, not something the gear springs should resolve.
+		if fdm.h - ground_ft < mass.gear_height_ft * 0.5:
 			crash_reason = "Flew into terrain"
 			break
-		fdm.set_bound(h_te, ground_ft)
-		var vs := -fdm.get_bound(h_vd) * 60.0
-		fdm.run()
+		fdm.terrain_ft = ground_ft
+		var vs := -fdm.v_ned().z * 60.0
+		fdm.run(ctl)
 		sim_time += dt
 		_accum -= dt
 		var ground := wow_count() > 0
@@ -237,26 +194,21 @@ func step(frame_dt: float, terrain_at: Callable) -> FlightState:
 
 # ------------------------------------------------------------------ read
 func position_xy() -> Array:
-	return latlon_to_xy(fdm.get_bound(_h["position/lat-geod-deg"]), fdm.get_bound(_h["position/long-gc-deg"]))
+	return [fdm.east * FT, fdm.north * FT]
 
 
 func wow_count() -> int:
-	var n := 0
-	for i in n_gear:
-		if fdm.get_bound(_h["wow%d" % i]) > 0.5:
-			n += 1
-	return n
+	return fdm.wow_count()
 
 
 func fuel_lb() -> float:
-	return fdm.get_bound(_h["propulsion/total-fuel-lbs"])
+	return fdm.fuel_total()
 
 
 func fuel_flow_pph() -> float:
 	var total := 0.0
-	for p in _flow_props:
-		var v := fdm.get_property(p)
-		total += v if is_finite(v) else 0.0
+	for e in fdm.engines:
+		total += e.flow_pps
 	return total * 3600.0
 
 
@@ -264,22 +216,22 @@ func fuel_flow_pph() -> float:
 func add_fuel(lb: float) -> float:
 	var added := 0.0
 	var caps: Array = mass.tanks
-	for i in caps.size():
+	for i in mini(caps.size(), fdm.tanks.size()):
 		if lb - added <= 0:
 			break
-		var prop := "propulsion/tank[%d]/contents-lbs" % i
-		var cur := fdm.get_property(prop)
+		var cur: float = fdm.tanks[i].lb
 		var room := maxf(0.0, caps[i][1] - cur)
 		var share := minf(room, (lb - added) if i == caps.size() - 1 else lb / caps.size())
-		fdm.set_property(prop, cur + share)
+		fdm.tanks[i].lb = cur + share
 		added += share
+	fdm._update_mass()
 	return added
 
 
 func wing_fuel_room() -> float:
 	var s := 0.0
-	for i in mass.tanks.size():
-		s += maxf(0.0, mass.tanks[i][1] - fdm.get_property("propulsion/tank[%d]/contents-lbs" % i))
+	for i in mini(mass.tanks.size(), fdm.tanks.size()):
+		s += maxf(0.0, mass.tanks[i][1] - fdm.tanks[i].lb)
 	return s
 
 
@@ -288,31 +240,33 @@ func state() -> FlightState:
 	var p := position_xy()
 	s.x = p[0]
 	s.y = p[1]
-	s.alt = fdm.get_bound(_h["position/h-sl-ft"]) * FT
-	var theta := fdm.get_property("attitude/theta-deg")
-	var vc := fdm.get_property("velocities/vc-kts")
-	s.valid = is_finite(s.alt) and is_finite(theta) and is_finite(vc)
-	var rpm := fdm.get_property("propulsion/engine/engine-rpm") if _has_rpm else 0.0
+	s.alt = fdm.h * FT
+	var e := fdm.euler()
+	var vn := fdm.v_ned()
+	var vc: float = fdm.vt * sqrt(fdm.rho / FlightDynamics.RHO0) / FlightDynamics.KT_FPS
+	s.valid = is_finite(s.alt) and is_finite(e.y) and is_finite(vc)
 	var wow := wow_count()
-	s.agl = fdm.get_property("position/h-agl-ft") * FT
-	s.heading = fdm.get_property("attitude/psi-deg")
-	s.pitch = theta
-	s.roll = fdm.get_property("attitude/phi-deg")
+	s.agl = (fdm.h - fdm.terrain_ft) * FT
+	s.heading = fposmod(rad_to_deg(e.z), 360.0)
+	s.pitch = rad_to_deg(e.y)
+	s.roll = rad_to_deg(e.x)
 	s.ias_kts = vc
-	s.gs_kts = fdm.get_property("velocities/vg-fps") * FT / KT
-	s.vs_fpm = -fdm.get_bound(_h["velocities/v-down-fps"]) * 60.0
-	s.alpha_deg = fdm.get_property("aero/alpha-deg")
+	s.gs_kts = Vector2(vn.x, vn.y).length() * FT / KT
+	s.vs_fpm = -vn.z * 60.0
+	s.alpha_deg = rad_to_deg(fdm.alpha)
 	s.stall_warning = s.alpha_deg > 15.0 and wow == 0
 	s.on_ground = wow > 0
 	s.wow_count = wow
 	s.fuel_lb = fuel_lb()
-	s.weight_lb = fdm.get_property("inertia/weight-lbs")
-	s.cg_in = fdm.get_property("inertia/cg-x-in")
-	s.rpm = rpm if is_finite(rpm) else 0.0
-	s.engine_running = Py.truthy(fdm.get_property("propulsion/engine/set-running"))
-	s.vx = fdm.get_property("velocities/v-east-fps") * FT
-	s.vy = fdm.get_property("velocities/v-north-fps") * FT
-	s.p_dps = Py.degrees(fdm.get_property("velocities/p-rad_sec"))
-	s.q_dps = Py.degrees(fdm.get_property("velocities/q-rad_sec"))
+	s.weight_lb = fdm.weight
+	s.cg_in = fdm.cg.x
+	if _has_rpm:
+		var e0: Dictionary = fdm.engines[0]
+		s.rpm = e0.rpm * (e0.gear if e0.type == "piston_engine" else 1.0)
+		s.engine_running = e0.running
+	s.vx = vn.y * FT
+	s.vy = vn.x * FT
+	s.p_dps = rad_to_deg(fdm.pqr.x)
+	s.q_dps = rad_to_deg(fdm.pqr.y)
 	s.fuel_flow_pph = fuel_flow_pph()
 	return s

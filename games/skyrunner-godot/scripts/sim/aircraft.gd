@@ -2,11 +2,11 @@ class_name Aircraft
 extends RefCounted
 ## Aircraft roster.
 ##
-## Every flyable aircraft is a stock JSBSim model. The game adds what JSBSim
-## does not know about: load stations (seats / cargo bays) in JSBSim
-## structural-frame inches, a certified weight & CG envelope, price, and visual
+## Every flyable aircraft is described by a JSBSim-format data file (data/jsbsim,
+## flown by the game's own FlightDynamics). The game adds what those files
+## don't hold: load stations (seats / cargo bays) in the structural-frame inches, a certified weight & CG envelope, price, and visual
 ## parameters for the procedural 3D model. Station and envelope numbers are
-## loosely based on POH figures, adjusted to each JSBSim model's datum.
+## loosely based on POH figures, adjusted to each model's datum.
 
 const LB_PER_KG := 2.20462
 
@@ -69,7 +69,7 @@ class Spec:
 	var description := ""
 	var ground_roll_m := 180.0  ## landing roll at MTOW, sea level, full flaps
 	var gear_limit_fpm := 700.0  ## touchdown sink rate beyond which the gear collapses
-	var toe_brake_steering := false  ## JSBSim model has no nosewheel steering
+	var toe_brake_steering := false  ## the model has no nosewheel steering
 
 	func _init(d: Dictionary) -> void:
 		for k in d:

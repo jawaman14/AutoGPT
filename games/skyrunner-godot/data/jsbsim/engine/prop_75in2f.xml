@@ -6,6 +6,11 @@
   <numblades> 2 </numblades>
   <minpitch> 22 </minpitch>
   <maxpitch> 22 </maxpitch>
+  <!-- Skyrunner calibration against the C172P handbook with the game's own
+       engine model (160 hp): static rpm about 2,260, a 550 ft ground roll at
+       1,900 lb, about 1,000 fpm at Vy light -->
+  <ct_factor> 1.1 </ct_factor>
+  <cp_factor> 0.9 </cp_factor>
 
   <!--table name="C_THRUST" type="internal">
     <tableData>

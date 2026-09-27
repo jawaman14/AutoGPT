@@ -296,7 +296,7 @@ func test_course_made_good_beats_the_heading() -> void:
 	s.dispose()
 
 
-func test_weather_reaches_jsbsim_and_the_police() -> void:
+func test_weather_reaches_the_flight_model_and_the_police() -> void:
 	var s := Session.new({"seed": 1, "location": "HAR", "weather": {"sky": "storm", "wind_kt": 28, "wind_dir": 270, "moon": 0.1}})
 	check(s.police.visibility < 0.6, "storm and new moon: crews see %.2f as far" % s.police.visibility)
 	var east: float = s.fm.fdm.get_property("atmosphere/wind-east-fps")

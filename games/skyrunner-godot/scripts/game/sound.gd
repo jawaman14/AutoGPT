@@ -4,7 +4,7 @@ extends Node
 ## clicks (Kenney's UI Audio, CC0, in assets/audio/kenney_ui/):
 ##
 ##   the aircraft  the engine and propeller (blade-pass harmonics, pitched by
-##                 JSBSim's RPM, louder with power), the wind (filtered noise
+##                 the engine RPM, louder with power), the wind (filtered noise
 ##                 rising with airspeed), the stall horn, the tyres' rumble
 ##   the radio     squelch and static when a call comes in
 ##   the world     gunfire at the ground war's fights and from your own gun,

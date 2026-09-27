@@ -1,4 +1,4 @@
-class_name PyRandomG
+class_name PyRandom
 extends RefCounted
 ## CPython's random.Random, bit for bit, in GDScript: MT19937 with CPython's
 ## seeding (init_by_array of abs(n) in 32-bit words), float generation,

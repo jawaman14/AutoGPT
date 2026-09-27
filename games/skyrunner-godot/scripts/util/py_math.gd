@@ -1,4 +1,4 @@
-class_name PyMathG
+class_name PyMath
 extends RefCounted
 ## Python's float maths and formatting, bit for bit, in GDScript:
 ##   hypot/hypot3   CPython 3.11's vector_norm (exact products by Veltkamp

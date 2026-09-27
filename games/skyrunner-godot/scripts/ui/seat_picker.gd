@@ -17,7 +17,7 @@ var _keys: Array = []
 var _sig := ""
 
 const ABOUT := {
-	"pilot": "flies the aircraft (JSBSim)", "copilot": "loads, kicks bales, pumps fuel, runs the scanner and the boat",
+	"pilot": "flies the aircraft", "copilot": "loads, kicks bales, pumps fuel, runs the scanner and the boat",
 	"spotter": "watches a strip for police", "boat": "the go-fast at the rendezvous", "boss": "the organisation's HQ, night by night",
 	"lieutenant": "the organisation's soldiers on the streets", "controller": "the task force's radar and dispatch desk",
 	"interceptor": "flies a police helicopter or jet in 3D", "cutter": "the Coast Guard cutter", "chief": "the task force's HQ and budget",

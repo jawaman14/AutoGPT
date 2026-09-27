@@ -18,7 +18,7 @@ var aerostat_pos := [1500.0, -14800.0]
 ## law (task-force HQ), rival (the cartel's compound). Sited on first use.
 var hqs := {}
 var extra_trees := []  ## unused hook for decorative planting
-var post := false  ## MapCity: a GDScript post-pass reshapes and replants the native terrain
+var post := false  ## MapCity: a GDScript post-pass reshapes and replants the generated terrain
 var land_use := PackedByteArray()  ## MapCity land-use class per terrain cell (empty on other maps)
 var roads: Array = []  ## polylines [[x, y], ...]
 var buildings: Array = []  ## {x, y, z, w, d, h, style}

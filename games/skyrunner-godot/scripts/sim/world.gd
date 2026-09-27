@@ -3,7 +3,7 @@ extends RefCounted
 ## Procedural island, airfields, obstacles and terrain queries.
 ##
 ## Deterministic from a seed so renderer, physics and tests all see the same
-## world. The grid generation and the hot queries run natively (Terrain); the
+## world. The grid generation and the terrain queries live in Terrain; the
 ## airfield list here is the single source of truth. Worlds are immutable, so
 ## every Session in a process shares one terrain per seed.
 

@@ -3,7 +3,7 @@ extends RefCounted
 ## Weight & balance.
 ##
 ## The numbers computed here are a *prediction* shown in the load planner. What
-## the aircraft actually does is decided by JSBSim, which receives the same
+## the aircraft actually does is decided by the flight model, which receives the same
 ## masses as point masses at the same arms, so a bad load really flies badly.
 
 const PILOT_LB := 180.0

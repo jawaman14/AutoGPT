@@ -1,4 +1,4 @@
-class_name NpRandomG
+class_name NpRandom
 extends RefCounted
 ## numpy.random.default_rng(seed), bit for bit, in GDScript: SeedSequence ->
 ## PCG64 (XSL-RR), with numpy's random()/uniform() double conversion. Used for

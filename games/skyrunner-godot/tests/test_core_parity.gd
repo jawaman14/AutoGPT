@@ -62,7 +62,9 @@ func test_job_boards_match_seed_for_seed() -> void:
 				check_eq(it.weight_lb, float(w[5][k][2]), "weight %s" % it.label)
 
 
-func test_patched_aircraft_flies_like_python() -> void:
+## The take-off roll against the golden run (tools/regen_flight_golden.gd):
+## the flight model is the game's own, so this pins it down bit for bit.
+func test_takeoff_roll_matches_golden() -> void:
 	var spec := Aircraft.spec("c172p")
 	var md := MassData.read("c172p")
 	var w := World.new()
@@ -78,7 +80,7 @@ func test_patched_aircraft_flies_like_python() -> void:
 	var st: FlightModel.FlightState
 	for i in 300:
 		st = fm.step(1.0 / 30, w.ground)
-	var want: Array = ref.fm
+	var want: Array = T.golden().core_fm
 	var got := [st.x, st.y, st.alt, st.gs_kts, st.heading, st.fuel_lb, st.weight_lb, st.cg_in]
 	var names := ["x", "y", "alt", "gs", "heading", "fuel", "weight", "cg"]
 	for i in got.size():

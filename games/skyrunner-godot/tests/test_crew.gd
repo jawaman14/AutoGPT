@@ -190,7 +190,7 @@ func test_fuel_caches_at_shady_strips() -> void:
 	s.spawn_at("QRY")
 	var before := s.fm.fuel_lb()
 	s.set_fuel(before + 100)
-	run(s, 0.1)  # JSBSim totals the tanks on its next step
+	run(s, 0.1)  # the flight model totals the tanks on its next step
 	check_near(s.fm.fuel_lb(), before, 1, "nothing for sale at the quarry")
 	s.fuel_caches["QRY"] = 150.0
 	var money := s.money

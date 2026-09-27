@@ -1,4 +1,4 @@
-class_name TerrainG
+class_name Terrain
 extends RefCounted
 ## The procedural island: height grid, trees and the terrain queries the
 ## physics, radar and bots use every frame. A line-for-line port of the Python
@@ -21,6 +21,13 @@ var _buckets := {}  ## int key -> Array of tree indices
 
 static var _f := PackedFloat32Array([0.0])
 
+## Generation takes ~10 s in GDScript, so a generated terrain is kept on disk
+## (user://terrain, keyed by everything that goes into it) and the next launch
+## loads it in milliseconds. Bump CACHE_VERSION whenever the generator changes.
+const CACHE_VERSION := 1
+const CACHE_DIR := "user://terrain"
+static var disk_cache := true
+
 
 static func _f32(x: float) -> float:
 	_f[0] = x
@@ -38,7 +45,7 @@ static func _smoothstep(e0: float, e1: float, x: float) -> float:
 
 
 ## world._value_noise: bilinear, smoothstep-weighted lattice of rng.random()
-static func _value_noise(rng: NpRandomG, n: int, cells: int) -> PackedFloat64Array:
+static func _value_noise(rng: NpRandom, n: int, cells: int) -> PackedFloat64Array:
 	var l := cells + 2
 	var lat := rng.random_array(l * l)
 	var idx := PackedInt32Array()
@@ -70,7 +77,7 @@ static func _value_noise(rng: NpRandomG, n: int, cells: int) -> PackedFloat64Arr
 	return out
 
 
-static func _fbm(rng: NpRandomG, n: int, base_cells: int, octaves: int) -> PackedFloat64Array:
+static func _fbm(rng: NpRandom, n: int, base_cells: int, octaves: int) -> PackedFloat64Array:
 	var out := PackedFloat64Array()
 	out.resize(n * n)
 	out.fill(0.0)
@@ -140,10 +147,56 @@ static func _sample64(h: PackedFloat64Array, x: float, y: float) -> float:
 
 
 func generate(p_seed: int, airfields: Array) -> void:
+	var key := _cache_key(["classic", p_seed, airfields])
+	if _load_cached(key, airfields):
+		return
+	_generate(p_seed, airfields)
+	_save_cached(key)
+
+
+func generate_custom(p_seed: int, params: Dictionary, airfields: Array) -> void:
+	var key := _cache_key(["custom", p_seed, params, airfields])
+	if _load_cached(key, airfields):
+		return
+	_generate_custom(p_seed, params, airfields)
+	_save_cached(key)
+
+
+static func _cache_key(what: Array) -> String:
+	return var_to_str([CACHE_VERSION, what]).sha256_text().substr(0, 24)
+
+
+func _load_cached(key: String, airfields: Array) -> bool:
+	if not disk_cache:
+		return false
+	var f := FileAccess.open("%s/%s.bin" % [CACHE_DIR, key], FileAccess.READ)
+	if f == null:
+		return false
+	var d = f.get_var()
+	if not (d is Dictionary and d.get("v") == CACHE_VERSION):
+		return false
+	_parse_fields(airfields)
+	_h = d.h
+	_trees = d.trees
+	_field_elev = d.fe
+	_bucket_trees()
+	return true
+
+
+func _save_cached(key: String) -> void:
+	if not disk_cache:
+		return
+	DirAccess.make_dir_recursive_absolute(CACHE_DIR)
+	var f := FileAccess.open("%s/%s.bin" % [CACHE_DIR, key], FileAccess.WRITE)
+	if f != null:  # a read-only user dir just means no cache
+		f.store_var({"v": CACHE_VERSION, "h": _h, "trees": _trees, "fe": _field_elev})
+
+
+func _generate(p_seed: int, airfields: Array) -> void:
 	_parse_fields(airfields)
 	_field_elev.clear()
 	var cv := _cv()
-	var rng := NpRandomG.new()
+	var rng := NpRandom.new()
 	rng.seed(p_seed)
 	var noise := _fbm(rng, GRID, 4, 7)
 	_normalise(noise)
@@ -158,7 +211,7 @@ func generate(p_seed: int, airfields: Array) -> void:
 			var k := r * GRID + c
 			var nz: float = noise[k]
 			var dt: float = detail[k]
-			var rr := PyMathG.hypot(xx / 14500, yy / 13500) + (nz - 0.5) * 0.35
+			var rr := PyMath.hypot(xx / 14500, yy / 13500) + (nz - 0.5) * 0.35
 			var land := _smoothstep(1.02, 0.72, rr)
 			var ridge_d := absf(yy - (5200 + 2200 * sin(xx / 6000.0)))
 			var q := ridge_d / 3000
@@ -202,7 +255,7 @@ func _shape_fields(h: PackedFloat64Array) -> void:
 				var lat := dx * uy - dy * ux
 				var along := absf(lon) - half_len
 				var across := absf(lat) - half_w
-				var dist := PyMathG.hypot(maxf(along, 0.0), maxf(across, 0.0))
+				var dist := PyMath.hypot(maxf(along, 0.0), maxf(across, 0.0))
 				var hv: float = h[k]
 				if setting == "plateau":
 					var top := _smoothstep(130, 80, dist)
@@ -231,7 +284,7 @@ func _shape_fields(h: PackedFloat64Array) -> void:
 
 
 func _plant_trees(p_seed: int) -> void:
-	var trng := NpRandomG.new()
+	var trng := NpRandom.new()
 	trng.seed(p_seed + 1)
 	var forest := _fbm(trng, GRID, 8, 3)
 	var cand := trng.uniform_array(120000, -HALF, HALF)
@@ -277,11 +330,11 @@ func _plant_trees(p_seed: int) -> void:
 ##   ridges: [[x0, y0, x1, y1, width, height], ...]
 ##   islets: [[x, y, radius, height], ...]
 ##   base:   float (lowland relief, default 1.0)
-func generate_custom(p_seed: int, params: Dictionary, airfields: Array) -> void:
+func _generate_custom(p_seed: int, params: Dictionary, airfields: Array) -> void:
 	_parse_fields(airfields)
 	_field_elev.clear()
 	var cv := _cv()
-	var rng := NpRandomG.new()
+	var rng := NpRandom.new()
 	rng.seed(p_seed)
 	var noise := _fbm(rng, GRID, 4, 7)
 	_normalise(noise)
@@ -302,7 +355,7 @@ func generate_custom(p_seed: int, params: Dictionary, airfields: Array) -> void:
 			var dt: float = detail[k]
 			var land := 0.0
 			for lb in lobes:
-				var rr := PyMathG.hypot((xx - float(lb[0])) / float(lb[2]), (yy - float(lb[1])) / float(lb[3])) + (nz - 0.5) * 0.35
+				var rr := PyMath.hypot((xx - float(lb[0])) / float(lb[2]), (yy - float(lb[1])) / float(lb[3])) + (nz - 0.5) * 0.35
 				land = maxf(land, _smoothstep(1.02, 0.72, rr))
 			var mount := 0.0
 			for rg in ridges:
@@ -312,7 +365,7 @@ func generate_custom(p_seed: int, params: Dictionary, airfields: Array) -> void:
 				var vy: float = float(rg[3]) - y0
 				var len2 := maxf(1.0, vx * vx + vy * vy)
 				var t := _clip(((xx - x0) * vx + (yy - y0) * vy) / len2, 0.0, 1.0)
-				var d := PyMathG.hypot(xx - (x0 + t * vx), yy - (y0 + t * vy))
+				var d := PyMath.hypot(xx - (x0 + t * vx), yy - (y0 + t * vy))
 				var q := d / float(rg[4])
 				# taper at the ends so ridges don't stop in a wall
 				var taper := _smoothstep(0.0, 0.15, t) * _smoothstep(1.0, 0.85, t)
@@ -427,7 +480,7 @@ func heights_many(xs: PackedFloat64Array, ys: PackedFloat64Array) -> PackedFloat
 
 
 func line_of_sight(ax: float, ay: float, az: float, bx: float, by: float, bz: float, step: float) -> bool:
-	var d := PyMathG.hypot(bx - ax, by - ay)
+	var d := PyMath.hypot(bx - ax, by - ay)
 	var n := maxi(2, int(d / step))
 	for k in range(1, n):
 		var t := float(k) / n

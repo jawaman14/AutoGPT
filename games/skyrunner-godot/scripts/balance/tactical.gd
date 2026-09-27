@@ -3,7 +3,7 @@ extends RefCounted
 ## Tactical balance: the pilot bot flies real runs against the AI task force
 ## (port of skyrunner/sim/tactical.py).
 ##
-## Each trial is one night's main run in a full Session (JSBSim, radar, police
+## Each trial is one night's main run in a full Session (the flight model, radar, police
 ## units, boats, cutters) under one law configuration, flown with one runner
 ## tactic. The rates it measures are used two ways:
 ##
