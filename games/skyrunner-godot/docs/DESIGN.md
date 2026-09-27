@@ -376,7 +376,8 @@ their own government tried them.
 - **Where it lands.** With logistics on (live play, the dedicated server, the story from 1980), a
   cleared container or a mule run pays nothing on arrival: its pounds go into the stash by the docks
   and the airport (`logistics.site_at("HAR")`, Warehouse 7 by the port), or the nearest stash if
-  that one is burned. From there it's sold like any other load (section 22). Without logistics the
+  that one is burned, and warms that stash as any load arriving does. From there it's sold like any
+  other load (section 22). Without logistics the
   old instant payout at the street price stays. BALANCE entry 30 has why: 500 lb sold at once, past
   the dealers and the buyers' caps, paid $150k-$800k over a 12-hour story.
 
@@ -657,8 +658,8 @@ The game had grown a dozen systems, all on from the first minute. The story (`st
 | 1981 | about 3 hours, every run |
 | 1983 | about 5.5 hours, 92% of runs |
 | 1985 | about 7 hours, 85% of runs |
-| 1986 | about 8 hours, 80% of runs |
-| The end | 67% of runs finish within 12 hours, at about 8.5 hours |
+| 1986 | about 8 hours, 78% of runs |
+| The end | 65% of runs finish within 12 hours, at about 8 hours |
 
 The stand-in's flown runs count as the pilot's deliveries (every other one hot), as a player's jobs do. The island's product lands as stock (section 15), so it's sold at the street's pace, not paid on arrival; the Kingpin's goal went from $200k to $80k with it (BALANCE entry 30), then to $65k once the stand-in's flights could be busted or crash (entry 31: about 2 busts and 2 crashes a story, $8k in fines and $5k in repairs).
 

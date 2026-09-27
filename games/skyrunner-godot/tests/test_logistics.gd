@@ -339,9 +339,11 @@ func test_an_island_container_lands_in_the_docks_warehouse() -> void:
 	var cleared := false
 	for i in 20:
 		var before: float = s.logistics.stock.docks.cocaine
+		var heat0: float = s.stash_net.get_stash("docks").heat
 		s.island._resolve(sh)
 		if s.logistics.stock.docks.cocaine > before:
 			cleared = true
+			check_near(s.stash_net.get_stash("docks").heat - heat0, StashNet.HEAT_DELIVERY, 0.01, "and warms the warehouse like any load")
 			break
 	check(cleared, "a container cleared customs")
 	check_near(fmod(s.logistics.stock.docks.cocaine, 500.0), 0.0, 0.01, "500 lb into Warehouse 7")

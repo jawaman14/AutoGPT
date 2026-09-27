@@ -296,13 +296,16 @@ func _resolve(sh: Dictionary) -> void:
 
 ## Logistics: island product lands in the stash at the harbour strip (Warehouse
 ## 7 on the docks, by the port and the airport), or the nearest live one - to be
-## sold on the street and trucked to the buyers like every other load.
+## sold on the street and trucked to the buyers like every other load. It warms
+## the stash as any load arriving does, so a warehouse full of island product is
+## one the task force can find.
 func _land(lb: float, near: Vector2) -> String:
 	var lg = sess.logistics
 	var site: String = lg.site_at("HAR")
 	if site == "" or site == Logistics.HQ or sess.stash_net.get_stash(site).burned:
 		site = lg.nearest_stash(near)
 	lg.add(site, "cocaine", lb)
+	sess.stash_net.get_stash(site).heat += StashNet.HEAT_DELIVERY  # the pickup from the port or the airport is traffic too
 	return "%d lb into %s" % [int(lb), lg.name_of(site)]
 
 
