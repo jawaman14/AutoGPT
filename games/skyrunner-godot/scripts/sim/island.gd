@@ -248,6 +248,12 @@ func _resolve(sh: Dictionary) -> void:
 				if pr != null and i < ids.size():
 					pr.release([ids[i]])
 		var pay := int(sh.value * got / maxf(1.0, float(sh.n)) * sess.econ.mult("cocaine", "town"))  # cut and sold in town, at today's street price
+		var landed := ""
+		if sess.logistics != null:
+			# with logistics it's product in a stash (by the airport), sold like any other
+			pay = 0
+			if got > 0:
+				landed = _land(float(sh.lb) * got / maxf(1.0, float(sh.n)), Vector2(World.airfield("HAR").x, World.airfield("HAR").y))
 		sess.money += pay
 		if lost > 0:
 			caught += lost
@@ -263,7 +269,7 @@ func _resolve(sh: Dictionary) -> void:
 			delivered += got
 			airport_heat = minf(100.0, airport_heat + 2.0 * got)  # the island flight gets watched
 			sess.econ.record_delivery("cocaine", "sea")
-		last = "Mules: %d through, %d caught (+$%s)" % [got, lost, Py.money(pay)]
+		last = "Mules: %d through, %d caught (%s)" % [got, lost, landed if landed != "" else "+$" + Py.money(pay)]
 	else:
 		var p: float = ship_odds()[0]
 		if rng.random() < p:
@@ -278,11 +284,26 @@ func _resolve(sh: Dictionary) -> void:
 			delivered += 1
 			port_heat = minf(100.0, port_heat + 8.0)  # somebody notices the shrimp line's volume
 			var worth := int(sh.value * sess.econ.mult("cocaine", "town"))  # through the port of San Telmo, sold in town at today's street price
-			sess.money += worth
 			sess.econ.record_delivery("cocaine", "sea")
-			last = "The container cleared customs: +$%s" % Py.money(worth)
+			if sess.logistics != null:
+				last = "The container cleared customs: %s" % _land(float(sh.lb), PORT)
+			else:
+				sess.money += worth
+				last = "The container cleared customs: +$%s" % Py.money(worth)
 	sess.say("THE ISLAND - " + last)
 	sess.bus.emit("island_shipment", sess.time, last, ["runner"], {"method": sh.method})
+
+
+## Logistics: island product lands in the stash at the harbour strip (Warehouse
+## 7 on the docks, by the port and the airport), or the nearest live one - to be
+## sold on the street and trucked to the buyers like every other load.
+func _land(lb: float, near: Vector2) -> String:
+	var lg = sess.logistics
+	var site: String = lg.site_at("HAR")
+	if site == "" or site == Logistics.HQ or sess.stash_net.get_stash(site).burned:
+		site = lg.nearest_stash(near)
+	lg.add(site, "cocaine", lb)
+	return "%d lb into %s" % [int(lb), lg.name_of(site)]
 
 
 # ------------------------------------------------------------------ the General

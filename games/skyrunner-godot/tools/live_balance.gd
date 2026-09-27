@@ -105,11 +105,13 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 	var next_own := 900.0
 	var connected_at := -1.0
 	var chapter_min := [0.0]
+	var nw_max := 0.0  # the best net worth in the last chapter (what its goal measures)
 	while t < hours * 3600.0:
 		t += STEP
 		s.time = t
 		if s.story != null:
 			s.story.tick(s)
+			nw_max = maxf(nw_max, float(s.story.progress.get("net_worth", 0.0)))
 			while chapter_min.size() < s.story.index + 1 + (1 if s.story.completed_all else 0):
 				chapter_min.append(t / 60.0)
 			if s.unlocked("guns") and s.arsenals.org.count() < 10 and s.money > 12000 and int(t) % 300 == 0:
@@ -146,12 +148,17 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 			if t >= next_trade:
 				next_trade += 600.0
 				var m0 := s.money
-				if isl.mule_odds()[0] < MULE_MAX and s.money > 20000 and isl.ship("mules", 4) == "":
+				# with logistics the island's product lands in a stash and has to be sold:
+				# the AI buys only when the stash runs low, as it does its own loads (and in
+				# the island chapter, whose goal is a load from the island, it buys anyway)
+				var room: bool = s.logistics == null or s.trade.stock.cocaine < 150.0 \
+					or (s.story != null and s.story.progress.get("island_runs", 0.0) < 1.0 and s.story.chapter.year == 1984)
+				if room and isl.mule_odds()[0] < MULE_MAX and s.money > 20000 and isl.ship("mules", 4) == "":
 					r.shipped += 1
 					r.sent_units += 4
 					r.spent_island += m0 - s.money
 				m0 = s.money
-				if isl.ship_odds()[0] < SHIP_MAX and s.money > 40000 and isl.ship("ship", 500) == "":
+				if room and isl.ship_odds()[0] < SHIP_MAX and s.money > 40000 and isl.ship("ship", 500) == "":
 					r.shipped += 1
 					r.sent_units += 1
 					r.spent_island += m0 - s.money
@@ -241,7 +248,8 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 			"bulk": s.trade.bulk_log.size(),
 			"stock_value": s.trade.stock.cocaine * s.trade.street_price("cocaine", "town") + s.trade.stock.marijuana * s.trade.street_price("marijuana", "town")}
 	if s.story != null:
-		r["story"] = {"chapter": s.story.index + 1 + (1 if s.story.completed_all else 0), "minutes": chapter_min}
+		r["story"] = {"chapter": s.story.index + 1 + (1 if s.story.completed_all else 0), "minutes": chapter_min,
+			"net_worth": float(s.money) + (s.trade.stock_value() if s.trade != null else 0.0) + (s.logistics.cash_out() if s.logistics != null else 0.0), "nw_max": nw_max}
 	if s.agency != null:
 		r["agency"] = {"flights": s.agency.flights, "hung_out": s.agency.hung_out, "burned": s.agency.burned,
 			"stings": r.get("stings", 0), "withheld": s.agency.withheld, "exposure": s.agency.exposure}
@@ -336,7 +344,8 @@ func _summary(rows: Array) -> Dictionary:
 		for n in Story.CHAPTERS.size() + 1:
 			var at := rows.filter(func(r): return r.has("story") and r.story.minutes.size() > n).map(func(r): return r.story.minutes[n])
 			reached.append({"chapter": n + 1, "share": float(at.size()) / rows.size(), "min_p50": _pct(at, 0.5)})
-		sm["story"] = {"chapter": _stats(rows.map(func(r): return r.story.chapter)), "reached": reached}
+		sm["story"] = {"chapter": _stats(rows.map(func(r): return r.story.chapter)), "reached": reached,
+			"net_worth": _stats(rows.filter(func(r): return r.has("story")).map(func(r): return r.story.net_worth))}
 	if rows.any(func(r): return r.has("agency")):
 		sm["agency"] = {"flights": _mean(rows, "agency", "flights"), "hangout_rate": _rate(rows, "agency", "hung_out"),
 			"burned_rate": _rate(rows, "agency", "burned"), "withheld": _mean(rows, "agency", "withheld"),

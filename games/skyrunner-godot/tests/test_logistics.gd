@@ -320,3 +320,51 @@ func test_a_trucked_gun_sale_still_moves_the_contra_pipeline() -> void:
 	check(a.trust > trust0, "the Company trusts us more (%.1f -> %.1f)" % [trust0, a.trust])
 	check(a.war_chest < chest0, "and its war chest paid for the guns")
 	s.dispose()
+
+
+func _island_sess() -> Session:
+	var s := _sess({"island": true})
+	s.trade.connected = true
+	s.money = 200000
+	return s
+
+
+func test_an_island_container_lands_in_the_docks_warehouse() -> void:
+	var s := _island_sess()
+	var money0 := s.money
+	var sh := {"id": "S1", "method": "ship", "n": 1, "lb": 500.0, "cost": 0, "value": 27500, "eta": s.time, "p": 0.0}
+	s.island.inspections_until = -1.0
+	s.island.port_heat = 0.0
+	# force it through customs: odds floor is 2%, so seed-check the outcome
+	var cleared := false
+	for i in 20:
+		var before: float = s.logistics.stock.docks.cocaine
+		s.island._resolve(sh)
+		if s.logistics.stock.docks.cocaine > before:
+			cleared = true
+			break
+	check(cleared, "a container cleared customs")
+	check_near(fmod(s.logistics.stock.docks.cocaine, 500.0), 0.0, 0.01, "500 lb into Warehouse 7")
+	check_eq(s.money, money0, "no instant cash: it has to be sold")
+	s.dispose()
+
+
+func test_island_mules_land_by_the_airport_or_the_nearest_stash() -> void:
+	var s := _island_sess()
+	s.stash_net.get_stash("docks").burned = true
+	var sh := {"id": "M1", "method": "mules", "n": 4, "lb": 4 * 2.2046, "cost": 0, "value": 4 * 2600, "eta": s.time, "p": 0.0, "mules": []}
+	var money0 := s.money
+	s.island._resolve(sh)
+	check_near(s.logistics.stock.docks.cocaine, 0.0, 0.01, "not into a burned warehouse")
+	check(s.trade.stock.cocaine > 0.0 or s.island.caught >= 4, "the swallowers' kilos went into another stash")
+	check_eq(s.money, money0, "and no instant cash")
+	s.dispose()
+
+
+func test_without_logistics_the_island_still_pays_cash() -> void:
+	var s := _sess({"island": true, "logistics": false})
+	var money0 := s.money
+	var sh := {"id": "M1", "method": "mules", "n": 4, "lb": 4 * 2.2046, "cost": 0, "value": 4 * 2600, "eta": s.time, "p": 0.0, "mules": []}
+	s.island._resolve(sh)
+	check(s.money > money0 or s.island.caught >= 4, "cash at the street price, as before")
+	s.dispose()

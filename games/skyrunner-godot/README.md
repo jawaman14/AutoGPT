@@ -151,7 +151,8 @@ Beyond the prototype:
   dogs, profiling, X-ray and crackdowns. The task force can't follow past the line; the General
   sells passage past his MiGs until a purge closes the island (section 15). His aide, Captain
   Ibarra, meets you on the ramp when you land, or on the radio (Shift+G / G): passage, the
-  island's news, mules and containers with customs' odds in the answers.
+  island's news, mules and containers with customs' odds in the answers. What gets through lands in
+  the docks stash as product to sell, not as cash (when logistics is on).
 - **The court.** A bust is a federal case now:
   - **Charges:** possession, trafficking, firearms, conspiracy.
   - **The bail hearing:** post it all, buy a bond, or sit in custody. The prosecutor calls a rich
@@ -220,7 +221,7 @@ Beyond the prototype:
   | 1983 | The Task Force | the federal court: bail, lawyers, pleas, juries |
   | 1984 | Isla Soberana | the island, mules and containers |
   | 1985 | The Company | the Agency and its pipeline |
-  | 1986 | Kingpin | two hundred grand, and walk away |
+  | 1986 | Kingpin | eighty grand, and walk away |
 
   The goals are measured by the systems themselves (pounds landed, dealers on corners, cash home, a deal
   with the Morettis, loads from the island). A faction that's gone before you deal with it doesn't strand

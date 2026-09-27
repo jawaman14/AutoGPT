@@ -373,6 +373,12 @@ their own government tried them.
 
   Both are timed shipments, resolved on arrival against the odds then. So a crackdown ordered
   after they left still counts.
+- **Where it lands.** With logistics on (live play, the dedicated server, the story from 1980), a
+  cleared container or a mule run pays nothing on arrival: its pounds go into the stash by the docks
+  and the airport (`logistics.site_at("HAR")`, Warehouse 7 by the port), or the nearest stash if
+  that one is burned. From there it's sold like any other load (section 22). Without logistics the
+  old instant payout at the street price stays. BALANCE entry 30 has why: 500 lb sold at once, past
+  the dealers and the buyers' caps, paid $150k-$800k over a 12-hour story.
 
   | Factor | Mule caught | Container found |
   |---|---|---|
@@ -633,7 +639,7 @@ The game had grown a dozen systems, all on from the first minute. The story (`st
 | The Task Force | 1983 | the federal court | 3 hot loads delivered, the case under 60% |
 | Isla Soberana | 1984 | the island, mules | a load home from the island |
 | The Company | 1985 | the Agency | a job for the Company, 4 guns sold to it |
-| Kingpin | 1986 | (all open) | $200,000 in cash, stock and street money |
+| Kingpin | 1986 | (all open) | $80,000 in cash, stock and street money |
 
 **How it works**
 - `Session.enable_system(key)` builds a system mid-game. Each system has always had its own random stream, so one that arrives in 1983 behaves as it would have from the start.
@@ -652,9 +658,9 @@ The game had grown a dozen systems, all on from the first minute. The story (`st
 | 1983 | about 5 hours, 95% of runs |
 | 1985 | about 5.5 hours, 93% of runs |
 | 1986 | about 7 hours, 90% of runs |
-| The end | 75% of runs finish within 12 hours, at about 8 hours |
+| The end | 70% of runs finish within 12 hours, at about 8 hours |
 
-The stand-in's flown runs count as the pilot's deliveries (every other one hot), as a player's jobs do. Isla Soberana is the money engine: runs that reach 1984 make most of their fortune there, so the island's balance over long games is the next thing to watch.
+The stand-in's flown runs count as the pilot's deliveries (every other one hot), as a player's jobs do. The island's product lands as stock (section 15), so it's sold at the street's pace, not paid on arrival; the Kingpin's goal went from $200k to $80k with it (BALANCE entry 30: the best net worth in 1986 is now $57k-$133k).
 
 A human who trucks the cash home without waiting for the AI's pickups goes faster.
 
@@ -665,6 +671,7 @@ In the 1980s cocaine trade, the product and the money were both physical, heavy 
 **Where things are**
 - **Product** sits in a stash house: the one at the strip its load was bought for. `Trade.stock` becomes the total of all the stashes.
 - **Dealers** sell only what's in a stash in their own market. Their takings go into that stash's cash, not the safe.
+- **Island product** lands in the stash by the docks and the airport (Warehouse 7), or the nearest one if it's burned: containers and mules alike (section 15).
 - **Street money** stays in the stash until moved. The organisation's `money` is the club's safe (Club Tropicana, the HQ), which pays wages, loads, lawyers and upgrades.
 
 **Moving it**
