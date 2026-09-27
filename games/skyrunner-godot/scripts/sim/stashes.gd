@@ -41,6 +41,8 @@ class Truck:
 	var route := PackedVector2Array()  ## by road (GroundWar), else the straight line
 	var waved := false  ## a checkpoint was told to let it through (Agency), or the driver talked his way past
 	var driver := ""  ## the driver on the payroll (Payroll)
+	var heat := StashNet.HEAT_DELIVERY  ## what arriving adds to the stash's heat (Logistics' runs are quieter)
+	var no_trail := false  ## nothing worth tailing it to (cash for the club): the police stop it or let it go
 
 	func frac(now: float) -> float:
 		return clampf((now - t0) / dur, 0.0, 1.0)
@@ -159,7 +161,7 @@ func update(dt: float, now: float, police_units: Array) -> Array:
 			done.append([t, "seized", why])
 		elif t.frac(now) >= 1.0:
 			trucks.erase(t)
-			get_stash(t.stash).heat += HEAT_DELIVERY
+			get_stash(t.stash).heat += t.heat
 			done.append([t, "delivered", ""])
 	return done
 

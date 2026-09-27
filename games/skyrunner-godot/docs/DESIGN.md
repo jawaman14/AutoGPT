@@ -627,11 +627,11 @@ The game had grown a dozen systems, all on from the first minute. The story (`st
 | Square Grouper | 1979 | trade (grass only), payroll, the papers | 300 lb of grass landed, a dealer on a corner, $4,000 from the trade |
 | The Connection | 1980 | logistics | $3,000 of street money home; the Colombian connection calls |
 | Cocaine Cowboys | 1981 | the street war, gun runs and gun sales, soldiers | 60 lb of cocaine flown home, 8 weapons in the armoury |
-| Family Business | 1982 | the Moretti family | a deal with them (offer, loan or bulk sale); $60,000 in the bank |
+| Family Business | 1982 | the Moretti family | a deal with them (offer, loan or bulk sale); $40,000 in the bank |
 | The Task Force | 1983 | the federal court | 3 hot loads delivered, the case under 60% |
 | Isla Soberana | 1984 | the island, mules | 2 loads home from the island |
 | The Company | 1985 | the Agency | a job for the Company, 4 guns sold to it |
-| Kingpin | 1986 | (all open) | $250,000 in cash, stock and street money |
+| Kingpin | 1986 | (all open) | $200,000 in cash, stock and street money |
 
 **How it works**
 - `Session.enable_system(key)` builds a system mid-game. Each system has always had its own random stream, so one that arrives in 1983 behaves as it would have from the start.
@@ -641,15 +641,15 @@ The game had grown a dozen systems, all on from the first minute. The story (`st
 - **Saves and entry points.** The story is saved in `story.json`, and loading rebuilds every system its chapters opened. `--chapter N` skips ahead.
 - **Open mode.** `--unlocks open`, or the lobby's Unlocks: Open, has everything from the first minute, cocaine included.
 
-**Pacing** (BALANCE §7, 40 AI runs of 12 hours, flown runs as a stand-in income):
+**Pacing** (BALANCE §7, 40 AI runs of 12 hours with the street war on from 1981, flown runs as a stand-in income):
 
-| Chapter | Reached by the AI at |
+| Chapter | Reached by the AI |
 |---|---|
-| 1980 | about 1 hour |
-| 1981 | about 3 hours |
-| 1983 | about 5 hours |
-| 1986 | about 8.5 hours, in every run |
-| The end | 72% of runs finish within 12 hours |
+| 1980 | about 1 hour, every run |
+| 1981 | about 3 hours, every run |
+| 1983 | about 5 hours, 98% of runs |
+| 1986 | about 8.5 hours, 73% of runs |
+| The end | 43% of runs finish within 12 hours |
 
 A human who trucks the cash home without waiting for the AI's pickups goes faster.
 
@@ -677,7 +677,11 @@ In the 1980s cocaine trade, the product and the money were both physical, heavy 
 
 **Balance** (BALANCE §7, entry 28). The trade configuration with logistics ends at $55.8k in the safe plus $10.4k still out, against $71.8k without: about 8% less, lost to money in transit and trucks lost (about $900 and 120 lb a run).
 
-The street war isn't stepped in that simulator: it has no police aircraft or suspicion decay to balance the firefights, so stepped, suspicion pins at 100 with or without logistics. A known limit.
+**On the road** (balance entry 29):
+- **Drivers watch the road.** Police ahead on the route (a checkpoint, or a patrol that isn't busy) and the truck pulls over until they've gone or an escort arrives. Only a patrol that turns up right on top of it still catches it by surprise.
+- **Patrols and checkpoints differ.** A passing patrol pulls a truck over a quarter of the time, half if it's heading for a stash the police know; a checkpoint stops everything.
+- **Our own vans are quieter.** A van between our own places warms its stash a third as much as a load off an aircraft, and a cash truck to the club leaves nothing to tail.
+- **Losses are recorded by cause** (`lost_by`): seized, hijacked, raided, bust.
 
 ## 23. The tutorial (optional)
 
@@ -699,3 +703,24 @@ The street war isn't stepped in that simulator: it has no police aircraft or sus
 - Progress (lessons done, tips shown, on or off) is saved with the game.
 
 **Scope.** It teaches the pilot's seat. The desks (boss, lieutenant, controller) keep their key hints and F1 help.
+
+## 24. What the street war costs
+
+The live-play simulator steps the war now (balance entry 29). It stands in for the police's cooling of the case with a tenth of `PoliceSystem.SUSPICION_DECAY`, since the war keeps them looking.
+
+**The first measurement.** The organisation's AI was a spendthrift:
+- It raised squads whenever it held $12k and bought rifles past $15k.
+- It paid eight soldiers whether or not it fielded a squad.
+- It hired a $2,000 lawyer for every corner dealer the war put in a cell.
+- The result: $26k after three hours against $58k without the war.
+
+**The guerrilla doctrine now applies to the money too:**
+- **Reserve.** $30k is kept before anything is spent on the war (`GroundWar.ORG_RESERVE`).
+- **Recruiting.** A squad at most every 30 minutes (`ORG_RECRUIT_S`), and only with no squad in the field or Los Cuervos outnumbering us.
+- **Soldiers.** Paid for the squads fielded plus one in reserve (`Payroll.needs`).
+- **Lawyers.** Only for the jailed who know a lot: the accountant, the contract pilots. Corner dealers talk a little more often as a result (0.7 flips a run).
+
+**Now:**
+- $50.0k against $62.5k over three hours: the war costs about a fifth.
+- Suspicion cools between the runs.
+- About 0.7 stash houses a run are burned.

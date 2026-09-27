@@ -504,7 +504,9 @@ func _pilot_runs() -> void:
 func needs(o: String) -> Dictionary:
 	var n := {}
 	if sess.ground != null:
-		n["soldier"] = 8 if o == "org" else 10
+		# the organisation keeps the men its squads need and one squad's worth in
+		# reserve (balance entry 29: a flat eight paid for an army it didn't field)
+		n["soldier"] = mini(8, GroundWar.MEN.foot * (sess.ground.of("org").size() + 1)) if o == "org" else 10
 	if o == "org":
 		if sess.stash_net != null:
 			n["driver"] = 2
@@ -540,10 +542,11 @@ func _think(o: String) -> void:
 			if open.is_empty():
 				break
 			post_lookout(l.id, Py.max_by(open, func(s): return StashNet.suspicion(s)).id)
-	# look after the jailed who know things
+	# look after the jailed who know things (the accountant, the pilots) - not
+	# every corner boy the street war puts in a cell (balance entry 29)
 	for j in jail.filter(func(x): return x.outfit == o and not x.lawyer):
 		var w = get_worker(j.id)
-		if w != null and float(ROLES[w.role][1]) >= 0.6 and cash(o) > 8000:
+		if w != null and float(ROLES[w.role][1]) >= 1.0 and cash(o) > 8000:
 			pay_lawyer(o, j.id)
 	# a bonus when the crew is sour and the money's there
 	if loyalty(o) < 0.45 and cash(o) > wage_bill(o) * 8:

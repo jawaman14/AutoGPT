@@ -217,7 +217,7 @@ Beyond the prototype:
   | 1983 | The Task Force | the federal court: bail, lawyers, pleas, juries |
   | 1984 | Isla Soberana | the island, mules and containers |
   | 1985 | The Company | the Agency and its pipeline |
-  | 1986 | Kingpin | a quarter of a million, and walk away |
+  | 1986 | Kingpin | two hundred grand, and walk away |
 
   The goals are measured by the systems themselves (pounds landed, dealers on corners, cash home, a deal
   with the Morettis, loads from the island). A faction that's gone before you deal with it doesn't strand

@@ -27,6 +27,7 @@ const LAW_EVERY_S := 600.0
 const MULE_MAX := 0.3
 const SHIP_MAX := 0.25
 const STEP := 10.0
+const DECAY_SHARE := 0.1  ## of PoliceSystem's decay: its full rate assumes nobody's watching; the war keeps them looking
 
 var seeds := 60
 var hours := 3.0
@@ -38,10 +39,6 @@ func _initialize() -> void:
 		seeds = int(a[0])
 	if a.size() > 1:
 		hours = float(a[1])
-	# the street war isn't stepped here: no police aircraft or suspicion decay to
-	# balance its firefights (the tactical sweeps cover the war); the story's
-	# chapter 3 opens its locks (guns, soldiers) without it
-	GroundWar.ENABLED = false
 	var t0 := Time.get_ticks_msec()
 	# (a script error below would leave the tree running: the caller's timeout is the backstop)
 	var configs := {
@@ -53,6 +50,7 @@ func _initialize() -> void:
 		"trade": {"trade": true, "career": true, "payroll": true, "family": true, "agency": true},
 		"all": {"family": true, "island": true, "agency": true, "chronicle": true, "payroll": true, "trade": true, "career": true},
 		"logistics": {"trade": true, "career": true, "payroll": true, "family": true, "agency": true, "logistics": true},
+		"war": {"family": true, "island": true, "agency": true, "chronicle": true, "payroll": true, "trade": true, "career": true, "ground_war": true},
 		"story": {"story": true, "career": true},
 	}
 	if a.size() > 2:  # one config only
@@ -188,7 +186,14 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 		# the trucks: product to the corners, cash home, lots to the buyers (the AI's orders)
 		if s.logistics != null:
 			s.logistics.update(STEP)
-			s._update_stashes(STEP)
+		if s.logistics != null or s.ground != null:
+			s._update_stashes(STEP)  # trucks, and the street war (GroundWar.update)
+		if s.ground != null:
+			# the police's own decay (PoliceSystem.update, SUSPICION_DECAY a second
+			# while the runner isn't seen): the flown runs are the stand-in, so the
+			# case cools between them as in live play
+			for c in s.police.cases.values():
+				c.suspicion = maxf(0.0, c.suspicion - PoliceSystem.SUSPICION_DECAY * STEP * DECAY_SHARE)
 		# the markets: supply and demand move with everything above
 		s.econ.update(STEP, t, [], [], {}, s.ground)
 		if int(t) % 60 == 0:
@@ -202,8 +207,14 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 	r["market"] = {"coke_lo": coke[0], "coke_hi": coke[1], "guns": guns_sum / maxf(1.0, ticks), "disruption": dis_max,
 		"coke_lots": s.agency.coke_lots if s.agency != null else 0, "gun_lots": s.agency.gun_lots if s.agency != null else 0}
 	r["money"] = s.money
+	if s.ground != null:
+		var g: GroundWar = s.ground
+		r["war"] = {"recruit": g.spent.recruit, "upkeep": g.spent.upkeep, "arms": g.spent.arms,
+			"squads": g.of("org").size(), "rival_squads": g.of("rival").size(), "police_squads": g.of("police").size(),
+			"burned": s.stash_net.stashes.filter(func(st): return st.burned).size() if s.stash_net != null else 0}
 	if s.logistics != null:
-		r["logistics"] = {"cash_out": s.logistics.cash_out(), "lost_cash": s.logistics.lost.cash, "lost_lb": s.logistics.lost.product}
+		r["logistics"] = {"cash_out": s.logistics.cash_out(), "lost_cash": s.logistics.lost.cash, "lost_lb": s.logistics.lost.product,
+			"lost_seized": s.logistics.lost_by.seized, "lost_hijacked": s.logistics.lost_by.hijacked, "lost_raided": s.logistics.lost_by.raided}
 	r["law_funds"] = s.law_funds
 	r["suspicion"] = s.police.case("runner").suspicion
 	if s.family != null:
@@ -306,9 +317,14 @@ func _summary(rows: Array) -> Dictionary:
 		sm["trade"] = {}
 		for k in rows.filter(func(r): return r.has("trade"))[0]["trade"]:
 			sm["trade"][k] = _mean(rows, "trade", k)
+	if rows.any(func(r): return r.has("war")):
+		sm["war"] = {}
+		for k in ["recruit", "upkeep", "arms", "squads", "rival_squads", "police_squads", "burned"]:
+			sm["war"][k] = _mean(rows, "war", k)
 	if rows.any(func(r): return r.has("logistics")):
 		sm["logistics"] = {"cash_out": _mean(rows, "logistics", "cash_out"), "lost_cash": _mean(rows, "logistics", "lost_cash"),
-			"lost_lb": _mean(rows, "logistics", "lost_lb")}
+			"lost_lb": _mean(rows, "logistics", "lost_lb"), "lost_seized": _mean(rows, "logistics", "lost_seized"),
+			"lost_hijacked": _mean(rows, "logistics", "lost_hijacked"), "lost_raided": _mean(rows, "logistics", "lost_raided")}
 	if rows.any(func(r): return r.has("story")):
 		var reached := []
 		for n in Story.CHAPTERS.size() + 1:

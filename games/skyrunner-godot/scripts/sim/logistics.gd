@@ -23,6 +23,7 @@ extends RefCounted
 
 const CASH_PER_LB := 4500.0  ## street money, mostly fives to twenties
 const HQ := "hq"
+const CHECKPOINT_M := 250.0  ## a checkpoint this close to the road stops what comes down it
 const AI_CASH_HOME := 8000.0  ## the organisation's AI batches a stash's cash home past this (fewer, fatter trucks)
 const AI_CASH_SHORT := 3000.0  ## ... or past this when the safe can't meet the payroll
 const AI_MOVE_EVERY_S := 600.0  ## and moves product at most this often
@@ -40,8 +41,10 @@ var cash_since := {}  ## stash id -> when its cash started piling up (the AI's p
 var aboard := 0  ## $ in cash bags in the aircraft
 var convoys := {}  ## truck job_id -> {kind: move|buy|cash_back, from, to, buyer, good, lb, cash}
 var lost := {"product": 0.0, "cash": 0}  ## what trucks, raids and busts cost us
+var lost_by := {"seized": 0, "hijacked": 0, "raided": 0, "bust": 0}  ## ... the cash, by how
 var last := ""
 var _t := 0.0
+var _watch_t := 0.0
 var _move_t := -1e9  ## the last product move (the AI waits AI_MOVE_EVERY_S between them)
 var _item_id := 0
 
@@ -191,7 +194,24 @@ func add_cash(site: String, amount: float) -> void:
 
 # ------------------------------------------------------------------ trucks
 ## Put product or cash on the road: `what` is a good or "cash". Returns "" or why not.
-func send(from: String, to: String, what: String, amount: float) -> String:
+## A police checkpoint on the road from `a` to `b` (the street war's), or "".
+func checkpoint_on(a: Vector2, b: Vector2) -> String:
+	if sess.ground == null:
+		return ""
+	var r: PackedVector2Array = sess.ground.graph.route(a, b)
+	for q in sess.ground.of("police"):
+		if q.tactic != "checkpoint" or q.state == "gone":
+			continue
+		var p: Vector2 = q.pos()
+		for i in range(1, r.size()):
+			if Geometry2D.get_closest_point_to_segment(p, r[i - 1], r[i]).distance_to(p) < CHECKPOINT_M:
+				return q.id
+	return ""
+
+
+## `careful` (the AI): don't send into a checkpoint - wait for the road to clear.
+## A human gets the warning and the choice.
+func send(from: String, to: String, what: String, amount: float, careful := false) -> String:
 	if from == to:
 		return "It's already there."
 	if not stock.has(from) and from != HQ:
@@ -235,10 +255,28 @@ func send(from: String, to: String, what: String, amount: float) -> String:
 		c.good = what
 		c.lb = amount
 		sync()
+	var cp := checkpoint_on(pos(from), pos(to))
+	if cp != "" and careful:
+		_undo(c)
+		return "A police checkpoint (%s) is on the road to %s: waiting." % [cp, name_of(to)]
 	_dispatch(c, pos(from), pos(to))
 	last = "Truck out: %s from %s to %s." % [_describe(c), name_of(from), name_of(to)]
+	if cp != "":
+		last += " Careful: a police checkpoint (%s) sits on that road - an escort, or wait." % cp
 	sess.say(last)
 	return ""
+
+
+## Put back what a truck that didn't leave was carrying.
+func _undo(c: Dictionary) -> void:
+	if c.cash > 0.0:
+		if c.from == HQ:
+			sess.money += int(c.cash)
+		else:
+			cash[c.from] += c.cash
+	if c.lb > 0.0:
+		stock[c.from][c.good] += c.lb
+		sync()
 
 
 func _describe(c: Dictionary) -> String:
@@ -266,6 +304,8 @@ func _dispatch(c: Dictionary, a: Vector2, b: Vector2) -> void:
 	t.t0 = sess.time
 	t.dur = StashNet.TRUCK_LOAD_S + a.distance_to(b) * 1.3 / StashNet.TRUCK_MS
 	t.pay = _value(c)
+	t.heat = 5.0  # a van between our own places: quieter than a load off an aircraft
+	t.no_trail = c.to == HQ  # cash for the club: stop it or let it go, there's nowhere to follow it
 	t.items = maxi(1, int(c.lb / 25.0))
 	var heat: float = float(sn.get_stash(t.stash).heat)
 	var risk := 0.02 + heat / 400.0 + (0.1 if sess.police.case("runner").tipped else 0.0)
@@ -280,6 +320,46 @@ func _dispatch(c: Dictionary, a: Vector2, b: Vector2) -> void:
 		t.stop_at = sn.rng.uniform(0.2, 0.9)
 	sn.trucks.append(t)
 	convoys[t.job_id] = c
+
+
+## The drivers watch the road: a checkpoint set up ahead (a few hundred metres
+## on) and the truck pulls over until it's gone - or an escort comes. Only the
+## surprise of one round the next bend still catches it.
+func _pull_over(dt: float) -> void:
+	if sess.ground == null:
+		return
+	# checkpoints and the patrols that stop what they meet (a tail follows, a fight is busy)
+	var cps: Array = sess.ground.of("police").filter(func(q): return q.tactic in ["checkpoint", ""] and q.state not in ["gone", "fighting", "routed"])
+	if cps.is_empty():
+		return
+	for t in sess.stash_net.trucks:
+		if not convoys.has(t.job_id) or sess.time - t.t0 < StashNet.TRUCK_LOAD_S or t.route.size() < 2:
+			continue
+		var here := Vector2(t.pos(sess.time)[0], t.pos(sess.time)[1])
+		var escorted: bool = sess.ground.squads.any(func(q): return q.faction == "org" and int(q.order.get("job_id", -1)) == t.job_id and q.state != "gone")
+		if escorted:
+			continue
+		var ahead := false
+		for q in cps:
+			var d: float = q.pos().distance_to(here)
+			if d > 350.0 and d < 2500.0 and _near_route(t.route, q.pos()):
+				ahead = true
+				break
+		if ahead:
+			t.t0 += dt  # parked in a side street, engine off
+			var c: Dictionary = convoys[t.job_id]
+			if not c.get("waiting", false):
+				c["waiting"] = true
+				sess.say("The driver to %s spotted police on the road ahead and pulled over." % name_of(c.to))
+		else:
+			convoys[t.job_id]["waiting"] = false
+
+
+func _near_route(r: PackedVector2Array, p: Vector2) -> bool:
+	for i in range(1, r.size()):
+		if Geometry2D.get_closest_point_to_segment(p, r[i - 1], r[i]).distance_to(p) < CHECKPOINT_M:
+			return true
+	return false
 
 
 func owns(t) -> bool:
@@ -314,6 +394,7 @@ func arrived(t, outcome: String, why: String) -> void:
 	var what := _describe(c)
 	lost.product += c.lb
 	lost.cash += int(c.cash)
+	lost_by[outcome if outcome == "hijacked" else "seized"] += int(c.cash + (c.lb * sess.trade.street_price(c.good, "town") if c.lb > 0.0 else 0.0))
 	if outcome == "hijacked":
 		last = "Los Cuervos took the truck (%s) near %s." % [what, name_of(c.to)]
 		if sess.ground != null:
@@ -358,6 +439,9 @@ func _raided(site: String) -> void:
 			took.append("%d lb of %s" % [int(stock[site][g]), g])
 			lost.product += stock[site][g]
 			stock[site][g] = 0.0
+	lost_by.raided += int(cash[site])
+	for g in Trade.GOODS:
+		lost_by.raided += int(stock[site][g] * sess.trade.street_price(g, "town"))
 	if cash[site] >= 1.0:
 		took.append("$%s in cash" % Py.money(int(cash[site])))
 		sess.law_funds += cash[site] * 0.5
@@ -430,6 +514,7 @@ func seize_aboard() -> void:
 	if aboard <= 0:
 		return
 	lost.cash += aboard
+	lost_by.bust += aboard
 	sess.law_funds += aboard * 0.5
 	sess.say("And the $%s in cash bags." % Py.money(aboard))
 	aboard = 0
@@ -453,6 +538,10 @@ func _bags() -> void:
 ## The organisation's AI (no boss in the chair): cash home, product to where
 ## the dealers are, the surplus to the best buyer.
 func update(dt: float) -> void:
+	_watch_t += dt
+	if _watch_t >= 5.0:
+		_pull_over(_watch_t)
+		_watch_t = 0.0
 	_t += dt
 	if _t < 60.0:
 		return
@@ -473,7 +562,7 @@ func update(dt: float) -> void:
 			if fattest == null or cash[s] > cash[fattest]:
 				fattest = s
 	if fattest != null and not cash_moving:
-		send(fattest, HQ, "cash", cash[fattest])
+		send(fattest, HQ, "cash", cash[fattest], true)
 		busy[fattest] = true
 	if sess.time - _move_t < AI_MOVE_EVERY_S:
 		return
@@ -495,7 +584,7 @@ func update(dt: float) -> void:
 					most = stock[st.id][g]
 			var to = Py.first(sess.stash_net.live(), func(st): return st.zone == m)
 			if from != null and to != null:
-				send(from, to.id, g, minf(most, want))
+				send(from, to.id, g, minf(most, want), true)
 				_move_t = sess.time
 				return
 

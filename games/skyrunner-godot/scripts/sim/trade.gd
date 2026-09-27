@@ -149,7 +149,7 @@ func quote(buyer: String, good: String, tier := "rifle") -> Dictionary:
 ## Sell `qty` (pounds; guns: weapons of `tier`) to `buyer`. Returns "" or why not.
 ## With Logistics the product goes by truck to the buyer's meet (from `from`, or
 ## the fullest stash) and is paid for there (settle); guns come from the armoury.
-func sell(buyer: String, good: String, qty: float, tier := "rifle", from := "") -> String:
+func sell(buyer: String, good: String, qty: float, tier := "rifle", from := "", careful := false) -> String:
 	if good == "guns" and not sess.unlocked("guns"):
 		return "Nobody's buying guns from us yet."
 	var q := quote(buyer, good, tier)
@@ -167,7 +167,7 @@ func sell(buyer: String, good: String, qty: float, tier := "rifle", from := "") 
 	var lg = sess.logistics
 	if lg != null and good != "guns":
 		var src: String = from if from != "" else Py.max_by(lg.stock.keys(), func(k): return lg.stock[k][good])
-		return lg.send(src, buyer, good, qty)
+		return lg.send(src, buyer, good, qty, careful)
 	if good == "guns":
 		sess.arsenals["org"].take(tier, int(qty))
 	else:
@@ -350,7 +350,7 @@ func _ai_bulk() -> void:
 				best = b
 				bp = q.price
 		if best != "":
-			sell(best, g, stock[g] - street_rate)
+			sell(best, g, stock[g] - street_rate, "rifle", "", true)
 
 
 ## Free dealers go to the outfit's corners, spread evenly.

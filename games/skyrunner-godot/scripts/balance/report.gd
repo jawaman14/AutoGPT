@@ -90,6 +90,9 @@ const CHANGELOG := [
 	["The story, and stock and cash that have to be moved",
 		"Requested: a storyline where the game opens up chapter by chapter, with a mode that has everything from the start; then logistics - stock and cash physically somewhere, moved to the buyers and the sellers. The story's eight chapters build each system when it opens (on its own stream); logistics puts product in the stash houses and street money where it's made, so the corners sell only what's local, bulk lots are trucked to the buyers' meets and the money trucked back, and the club's safe pays for everything. First runs: the story's AI stalled in 1980 for four hours - it trucked cash home only past $15k a stash, and street money builds at about $100 a minute; and with the street war stepped, the organisation went broke with suspicion pinned at 100, with or without logistics.",
 		"The balance tool doesn't step the street war (no police aircraft or suspicion decay to set against its firefights - the tactical sweeps cover it), and said so. The AI now collects any stash's cash ($1,000+) after 20 minutes and batches past $8k, one cash truck at a time; product moves at most every 10 minutes; a seized cash truck is a money-laundering lead (+4 suspicion), not a drug case. A faction that's gone (the Commission trial, the Company cutting us loose) can't strand a chapter. Now: logistics costs the stand-in AI about 8% of the trade config's net worth over three hours ($55.8k in the safe and $10.4k still out, against $71.8k; about $900 and 120 lb lost a run); the story's AI reaches 1981 at about three hours, 1986 in every run, and finishes in 72% of 12-hour runs (section 7)."],
+	["The street war, measured",
+		"The live-play simulator now steps the street war (entry 28 left it out). It stands in for the police's own cooling of the case between flown runs, a tenth of PoliceSystem's rate, because the war keeps them looking. First run: $26k against $58k for the same systems without the war. The organisation's AI rebuilt squads whenever it held $12k and bought rifles past $15k; it paid eight soldiers whether or not it fielded squads; it hired a $2,000 lawyer for every corner dealer the war put in a cell. In the story, the trucks drove into checkpoints and patrols, the stashes burned (4 of 8), and only 7.5% of runs got past 1982.",
+		"Now the organisation's AI:\n- keeps $30k in reserve before it spends on the war;\n- raises a squad at most every 30 minutes, only when it has none or Los Cuervos outnumber it;\n- pays soldiers for the squads it fields plus one in reserve;\n- hires lawyers only for the jailed who know a lot.\nDrivers pull over when they see police on the road ahead; a passing patrol pulls over a truck a quarter of the time (half if it's heading for a known stash), where a checkpoint stops them all; a van between our own places heats a stash a third as much as a load off an aircraft, and a cash truck to the club leaves nothing to tail. The story's money goals scale to a war economy ($40k in the bank in 1982, $200k to finish). The war now costs about a fifth: $50.0k against $62.5k over three hours. In the story: 1983 in 98% of 12-hour runs, 1986 in 73%, the end in 43% (section 7)."],
 ]
 
 
@@ -342,6 +345,13 @@ static func write_report(results_dir: String, out_path: String) -> String:
 			lines += ["", "Logistics (the trade configuration with stock and cash in the stash houses, trucked by the organisation's AI): money p50 $%s against $%s without; $%s still out in the stashes, on the road and in the bags at the end; $%s of cash and %s lb of product lost to roadblocks, hijacks and raids a run." % [
 				Py.money(int(lg["money"]["p50"])), Py.money(int(tr0.get("money", {}).get("p50", 0))), Py.money(int(ll["cash_out"])),
 				Py.money(int(ll["lost_cash"])), Py.f(ll["lost_lb"], 0)]]
+		var wr: Dictionary = live["configs"].get("war", {})
+		if wr.has("war"):
+			var w: Dictionary = wr["war"]
+			lines += ["", "The street war (all systems plus the war, the organisation's AI commanding): money p50 $%s against $%s without; $%s recruiting, $%s on rifles, $%s upkeep a run; %s squads of ours at the end against %s of Los Cuervos' and %s police; %s stash houses burned." % [
+				Py.money(int(wr["money"]["p50"])), Py.money(int(live["configs"].get("all", {}).get("money", {}).get("p50", 0))),
+				Py.money(int(w["recruit"])), Py.money(int(w["arms"])), Py.money(int(w["upkeep"])), Py.f(w["squads"], 1), Py.f(w["rival_squads"], 1),
+				Py.f(w["police_squads"], 1), Py.f(w["burned"], 1)]]
 		var story = _load(results_dir, "live-story")
 		if story is Dictionary and story.get("configs", {}).has("story"):
 			var st: Dictionary = story["configs"]["story"]
@@ -366,9 +376,9 @@ static func write_report(results_dir: String, out_path: String) -> String:
 			lines.append("| %s | %s | %s | %s | %s |" % [r["case"], _pct(r["mule_p"]), Py.f(r["mule_roi"], 2), _pct(r["ship_p"]), Py.f(r["ship_roi"], 2)])
 		lines.append("")
 	lines += ["## Known limits", "",
-		"- The live-play simulator (section 7) doesn't step the street war: it has no police aircraft "
-		+ "or suspicion decay to set against the firefights, so stepped, suspicion pins at 100 either way. "
-		+ "The war's balance is the tactical sweeps' and playtesting's.",
+		"- The live-play simulator (section 7) steps the street war with a stand-in for the police's "
+		+ "cooling of the case (a tenth of the live rate) and no police aircraft: the war's suspicion "
+		+ "numbers are indicative, its money numbers are the point.",
 		"- The tactical numbers come from one bot that flies well but plays simply: it follows valleys "
 		+ "and ducks when it sees police, but it doesn't read the police radio or bluff. Humans will do "
 		+ "better on the runner side, so the real task force should be a little stronger than these "

@@ -55,6 +55,10 @@ const MEN := {"foot": 4, "car": 4, "truck": 8}
 const COST := {"foot": 1500, "car": 2500, "truck": 4000}
 const CAP := {"org": 5, "rival": 5, "police": 8}
 const MAX_SQUADS := 32
+const PATROL_STOP := 0.25  ## a passing patrol pulls over a truck this often (a checkpoint stops them all)
+const ORG_RESERVE := 30000  ## the organisation's AI keeps this much before it spends on the war (balance entry 29)
+const ORG_MIN_SQUADS := 1  ## ... and recruits past one squad only when Los Cuervos outnumber it
+const ORG_RECRUIT_S := 1800.0  ## ... a squad at most every 30 minutes, not a new army every time one dies
 const UPKEEP_MIN := 2.0  ## $ per man per minute
 const HOSTILE := {"org": ["police", "rival"], "rival": ["police", "org"], "police": ["org", "rival"]}
 const DOCTRINE := {"org": "guerrilla", "rival": "guerrilla", "police": "narcotics"}
@@ -127,6 +131,7 @@ var rng: PyRandom  ## commanders' choices (seed + 61)
 var frng: PyRandom  ## firefights (seed + 67)
 var squads: Array = []
 var fights: Array = []
+var spent := {"recruit": 0, "upkeep": 0, "arms": 0}  ## what the war has cost the organisation (the desk, the balance tool)
 var commanders := {}
 var control := {}  ## market -> faction -> squad-men presence (decaying)
 var events: Array = []  ## [side ("runner" | "law" | "both"), text]
@@ -142,6 +147,8 @@ var _fight_serial := 0
 var _informant_t := 0.0
 var _started := false
 var _upkeep_acc := 0.0
+var _passed := {}  ## "truck/patrol" -> whether that patrol pulled that truck over
+var _org_recruit_t := -1e9  ## when the organisation's AI last raised a squad
 var _follow_t := 0.0
 
 
@@ -290,6 +297,7 @@ func recruit(f: String, kind: String, at = null, pay := true):
 			if sess.money < cost:
 				return "Need $%s." % Py.money(cost)
 			sess.money -= cost
+			spent.recruit += cost
 		elif f == "police":
 			if sess.law_funds < cost:
 				return "Need $%s in funds." % Py.money(cost)
@@ -858,6 +866,8 @@ func truck_contacts() -> Array:
 				continue
 			if q.faction == "police" and q.tactic == "tail":
 				continue  # following, not stopping
+			if q.faction == "police" and q.tactic == "" and q.state != "fighting" and not _patrol_stops(q, t):
+				continue  # a passing patrol: not every van gets pulled over
 			if q.faction == "police" and q.tactic in ["checkpoint", ""] and q.state != "fighting":
 				if escort != null and escort.pos().distance_to(tp) < 600.0:
 					if escort.fight == null:
@@ -875,7 +885,7 @@ func truck_contacts() -> Array:
 						_say("law", "%s was told to let a truck through: orders from Washington" % q.id)
 					t.waved = true
 				else:
-					out.append([t, "seized", "a %s checkpoint" % q.id])
+					out.append([t, "seized", "a %s %s" % [q.id, "checkpoint" if q.tactic == "checkpoint" else "patrol"]])
 				break
 			if q.faction == "rival" and q.tactic == "ambush" and (escort == null or escort.pos().distance_to(tp) > 600.0):
 				out.append([t, "hijacked", "Los Cuervos"])
@@ -888,10 +898,24 @@ func truck_contacts() -> Array:
 	return out
 
 
+## A patrol that passes a truck (not a checkpoint) pulls it over now and then:
+## a quarter of the time, half if it's heading for a house the police know.
+## Rolled once per truck and patrol (balance entry 29).
+func _patrol_stops(q: Squad, t) -> bool:
+	var key := "%d/%s" % [t.job_id, q.id]
+	if not _passed.has(key):
+		var st = sess.stash_net.get_stash(t.stash)
+		var known: bool = st != null and StashNet.suspicion(st) >= StashNet.KNOWN_HEAT
+		_passed[key] = frng.random() < PATROL_STOP + (PATROL_STOP if known else 0.0)
+		if _passed.size() > 400:
+			_passed.clear()
+	return _passed[key]
+
+
 ## Tail a truck when we don't know where it's going: the stash is worth more.
 func _should_tail(q: Squad, t) -> bool:
 	var st = sess.stash_net.get_stash(t.stash)
-	return st != null and StashNet.suspicion(st) < StashNet.KNOWN_HEAT and sess.police.controller != "human" and rng.random() < 0.6
+	return st != null and not t.no_trail and StashNet.suspicion(st) < StashNet.KNOWN_HEAT and sess.police.controller != "human" and rng.random() < 0.6
 
 
 func _trucks(dt: float) -> void:
@@ -1025,6 +1049,7 @@ func _upkeep(dt: float) -> void:
 
 	if _upkeep_acc >= 1.0:
 		sess.money -= int(_upkeep_acc)
+		spent.upkeep += int(_upkeep_acc)
 		_upkeep_acc -= int(_upkeep_acc)
 
 
@@ -1098,7 +1123,14 @@ func _think_org() -> void:
 		if q.order.get("type", "hold") == "hold" or q.route.size() < 2 and q.order.get("type", "") == "patrol_zone":
 			var m := _contested("org")
 			order(q, {"type": "patrol_zone", "market": m})
-	_recruit_ai("org", sess.money > 12000)
+	# guerrilla doctrine: a small war, and only as big as Los Cuervos make it -
+	# rebuild past a reserve, while we have no squad or they outnumber us
+	var need := of("org").size() < ORG_MIN_SQUADS or of("rival").size() > of("org").size()
+	if need and sess.money > ORG_RESERVE and sess.time - _org_recruit_t >= ORG_RECRUIT_S:
+		var n0 := of("org").size()
+		_recruit_ai("org", true)
+		if of("org").size() > n0:
+			_org_recruit_t = sess.time
 
 
 ## Los Cuervos (guerrilla, greedier): ambush the organisation's trucks, raid
@@ -1216,8 +1248,9 @@ func _recruit_ai(f: String, rich: bool, kind := "") -> void:
 	if ars != null and ars.count() * 2 < MEN[k]:
 		# nobody sends men out unarmed: buy guns first (the dealer, or police procurement)
 		var price: int = 4 * int(Arsenal.TIERS.rifle.price * (1.0 if f == "police" else 1.4))
-		if f == "org" and sess.money > price + 15000:
+		if f == "org" and sess.money > price + ORG_RESERVE:
 			sess.money -= price
+			spent.arms += price
 		elif f == "police" and sess.law_funds > price + 5000.0:
 			sess.law_funds -= price
 		elif f == "rival" and commanders.rival.cash > price + 5000.0:

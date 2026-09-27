@@ -46,7 +46,7 @@ const CHAPTERS := [
 		+ "judges who owe them favours - and they want a piece of Costa Brava. Their help\n"
 		+ "is real. Sometimes. Read the offer before you take it [SHIFT+F].",
 		["family"],
-		[["family_deal", "Do business with the Morettis (an offer, a loan or a bulk sale)", 1], ["bank", "Have $60,000 in the bank", 60000]]],
+		[["family_deal", "Do business with the Morettis (an offer, a loan or a bulk sale)", 1], ["bank", "Have $40,000 in the bank", 40000]]],
 	[1983, "The Task Force",
 		"Washington sends a task force: federal prosecutors, a grand jury, and agents who\n"
 		+ "follow the money. A bust is no longer a fine - it's a case, with bail, lawyers,\n"
@@ -68,9 +68,9 @@ const CHAPTERS := [
 	[1986, "Kingpin",
 		"The mandatory minimums pass, the Commission trial starts in New York, and every\n"
 		+ "faction on the coast wants what's ours. Build it big enough that it doesn't\n"
-		+ "matter who talks: a quarter of a million in cash and product, and walk away.",
+		+ "matter who talks: two hundred grand in cash and product, and walk away.",
 		[],
-		[["net_worth", "Be worth $250,000 (cash and product)", 250000]]],
+		[["net_worth", "Be worth $200,000 (cash and product)", 200000]]],
 ]
 
 var index := 0
