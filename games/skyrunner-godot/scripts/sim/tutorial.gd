@@ -43,7 +43,7 @@ const LESSONS := [
 	["family", "family", "The Family",
 		"SHIFT+F: sit down with Sal Moretti. Every offer comes with your man's read on it -\nand some offers are traps. SHIFT+Y takes the newest, SHIFT+N turns it down."],
 	["island", "island", "Isla Soberana",
-		"South over the horizon (SOB): cheap product, and the task force can't follow past the line.\nSHIFT+G raises the General's aide: passage, mules (SHIFT+U), containers (SHIFT+I)."],
+		"South over the horizon (SOB): cheap product, and the task force can't follow past the line.\nSHIFT+G raises the General's aide: passage, mules (SHIFT+U), containers (SHIFT+I).\nWhat gets through lands in Warehouse 7 by the docks, to be sold like any load (SHIFT+H)."],
 	["company", "agency", "The Company",
 		"Company jobs turn up on the shady strips' boards: crates south, product north.\nThey pay well and the protection is real - until it isn't."],
 ]
