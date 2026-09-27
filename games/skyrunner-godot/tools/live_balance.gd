@@ -62,9 +62,18 @@ func _initialize() -> void:
 			"ground_war": true, "logistics": true, "court": true, "air": true},
 		"noair": {"family": true, "island": true, "agency": true, "chronicle": true, "payroll": true, "trade": true, "career": true,
 			"ground_war": true, "logistics": true, "court": true},
+		"open": {"family": true, "island": true, "agency": true, "chronicle": true, "payroll": true, "trade": true, "career": true,
+			"ground_war": true, "logistics": true, "court": true, "air": true, "start": Session.START_MONEY},
 		"story": {"story": true, "career": true, "air": true},
 	}
-	if a.size() > 2 and a[2] == "air":  # the air risk against the same systems without it
+	if a.size() > 2 and a[2] == "open_sweep":  # open mode's start: what a float buys (entry 34)
+		var base: Dictionary = configs.open
+		configs = {}
+		for k in [3, 10, 16, 25, 40]:
+			var c := base.duplicate()
+			c["start"] = k * 1000
+			configs["open_%dk" % k] = c
+	elif a.size() > 2 and a[2] == "air":  # the air risk against the same systems without it
 		configs = {"noair": configs.noair, "air": configs.air}
 	elif a.size() > 2:  # one config only
 		configs = {a[2]: configs[a[2]]}
@@ -72,6 +81,7 @@ func _initialize() -> void:
 		configs.erase("story")  # a campaign, not three hours: its own run (-- 40 12 story)
 		configs.erase("air")  # its own run too (-- 80 3 air, with noair beside it), so the others stay comparable
 		configs.erase("noair")
+		configs.erase("open")
 	var first := int(a[3]) if a.size() > 3 else 1  # the first seed (to rerun one)
 	var out := {"seeds": seeds, "hours": hours, "stand_ins": {"run_pay": RUN_PAY, "run_every_s": RUN_EVERY_S,
 		"law_pay": LAW_PAY, "law_every_s": LAW_EVERY_S, "mule_max": MULE_MAX, "ship_max": SHIP_MAX}, "configs": {}}
@@ -101,7 +111,7 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 	if extra.get("story", false):
 		Story.new().attach(s)
 	s.police.frozen = true
-	s.money = 16000
+	s.money = int(extra.get("start", 16000))  # (open mode as a player starts it: Session.START_MONEY)
 	s.law_funds = 9000.0
 	var r := {"money_min": s.money, "tribute_paid": 0, "shipped": 0, "caught_units": 0, "sent_units": 0,
 		"spent_island": 0, "earned_island": 0}
@@ -127,7 +137,9 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 	var next_own := 900.0
 	var connected_at := -1.0
 	var chapter_min := [0.0]
-	var nw_max := 0.0  # the best net worth in the last chapter (what its goal measures)
+	var nw_max := 0.0
+	var squads_max := 0  # the organisation's squads at once (it needs one free to escort a truck)
+	var first_squad := -1.0  # the best net worth in the last chapter (what its goal measures)
 	while t < hours * 3600.0:
 		t += STEP
 		s.time = t
@@ -232,6 +244,10 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 		if s.logistics != null or s.ground != null:
 			s._update_stashes(STEP)  # trucks, and the street war (GroundWar.update)
 		if s.ground != null:
+			var n_org: int = s.ground.of("org").size()
+			squads_max = maxi(squads_max, n_org)
+			if n_org > 0 and first_squad < 0.0:
+				first_squad = t / 60.0
 			# the police's own decay (PoliceSystem.update, SUSPICION_DECAY a second
 			# while the runner isn't seen): the flown runs are the stand-in, so the
 			# case cools between them as in live play
@@ -253,6 +269,7 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 	# what the organisation is worth: the safe, product at the town's street price, street money still out
 	r["net_worth"] = float(s.money) + (s.trade.stock_value() if s.trade != null else 0.0) + (s.logistics.cash_out() if s.logistics != null else 0.0)
 	if s.ground != null:
+		r["open"] = {"squads_max": squads_max, "squad": squads_max > 0, "first_squad_min": first_squad if first_squad >= 0.0 else hours * 60.0}
 		var g: GroundWar = s.ground
 		r["war"] = {"recruit": g.spent.recruit, "upkeep": g.spent.upkeep, "arms": g.spent.arms,
 			"fights": g.fights_total, "org_lost": g.lost_men.org, "rival_lost": g.lost_men.rival, "police_lost": g.lost_men.police,
@@ -370,6 +387,9 @@ func _mean(rows: Array, sect: String, key: String) -> float:
 func _summary(rows: Array) -> Dictionary:
 	var sm := {"money": _stats(rows.map(func(r): return r.money)), "net_worth": _stats(rows.map(func(r): return r.net_worth)), "money_min": _stats(rows.map(func(r): return r.money_min)),
 		"law_funds": _stats(rows.map(func(r): return r.law_funds)), "suspicion": _stats(rows.map(func(r): return r.suspicion))}
+	if rows.any(func(r): return r.has("open")):
+		sm["open"] = {"squads_max": _mean(rows, "open", "squads_max"), "squad_rate": _rate(rows, "open", "squad"),
+			"first_squad_min": _stats(rows.filter(func(r): return r.has("open")).map(func(r): return r.open.first_squad_min))}
 	if rows.any(func(r): return r.has("air")):
 		sm["air"] = {}
 		for k in ["lay_low", "flights", "busts", "crashes", "fines", "repairs", "held_min", "pay"]:
