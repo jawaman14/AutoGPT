@@ -284,3 +284,18 @@ func test_the_maps_know_what_a_truck_carries() -> void:
 	check("cash" in kinds and "buyer" in kinds, "cash and a buyer's lot (%s)" % str(kinds))
 	check(snap.trucks.all(func(t): return t.has("tx")), "each with where it's going")
 	s.dispose()
+
+
+func test_the_company_collects_at_the_nearest_strip() -> void:
+	var s := _sess({"agency": true})
+	s.arsenals["org"].add("rifle", 6)
+	var mp: Vector2 = s.logistics.meet_pos("agency", s.logistics.armoury_site())
+	var club: Vector2 = s.logistics.hq_pos()
+	var hangar: Vector2 = s.logistics.pos("agency")
+	check(mp.distance_to(club) < hangar.distance_to(club), "its plane lands nearer than the hangar up north (%d m vs %d m)" % [int(mp.distance_to(club)), int(hangar.distance_to(club))])
+	var af = Py.first(s.world.airfields, func(a): return Vector2(a.x, a.y).distance_to(mp) < 1.0)
+	check(af != null and not af.police, "at a strip, and not a police one")
+	check_eq(s.logistics.send_guns("agency", {"rifle": 4}), "", "four rifles out to the plane")
+	var t = s.stash_net.trucks[0]
+	check(Vector2(t.x1, t.y1).distance_to(mp) < 1.0, "the truck drives to the strip")
+	s.dispose()

@@ -649,8 +649,8 @@ The game had grown a dozen systems, all on from the first minute. The story (`st
 | 1981 | about 3 hours, every run |
 | 1983 | about 5 hours, 98% of runs |
 | 1985 | about 8 hours, 80% of runs |
-| 1986 | about 9 hours, 43% of runs: the Company's rifles now go by truck through Los Cuervos country |
-| The end | 25% of runs finish within 12 hours |
+| 1986 | about 9 hours, 65% of runs (the Company's rifles go by truck; its plane collects at the nearest strip) |
+| The end | 30% of runs finish within 12 hours |
 
 A human who trucks the cash home without waiting for the AI's pickups goes faster.
 
@@ -687,6 +687,8 @@ In the 1980s cocaine trade, the product and the money were both physical, heavy 
 **Seeing and guarding them**
 - **The maps.** The runner's maps (minimap and desks) colour our trucks by what they carry (`truck_info`): cash, product, guns, a buyer's lot, a load off an aircraft. Each has a line to its destination, and a ring when it has pulled over. The task force's map still shows plain dots.
 - **Escorts.** `escort_truck {job_id}` (pilot, boss, lieutenant; the panel's **Escort** button) orders the nearest free squad of ours to ride with the truck. A checkpoint then gets a fight instead of a search, and an ambush meets guns.
+
+**The Company collects** (`meet_pos`). It keeps no shop: its plane lands at the strip nearest the goods (never a police strip), the way the Contra supply flights did. Its lots take a short drive, not a run through Los Cuervos country to a hangar up north.
 
 **Guns** (`Logistics.send_guns`)
 - **One armoury, one place.** It's `Arsenal.cache` (a stash), or the club.

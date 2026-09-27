@@ -233,8 +233,8 @@ Beyond the prototype:
   - Street money piles up where it's made. Wages, loads, lawyers and upgrades come out of the club's safe,
     so the cash has to be trucked home, or flown home as cash bags (about $4,500 a pound, and evidence if
     you're busted).
-  - Bulk lots go by truck to the buyer's meet (the Morettis' club in town, the Company's hangar up north,
-    Los Cuervos' hacienda), and the money rides back.
+  - Bulk lots go by truck to the buyer's meet (the Morettis' club in town, Los Cuervos' hacienda), and the
+    money rides back. The Company sends a plane instead: it lands at the strip nearest the goods.
   - The growers and the connection want cash on the strip, so you fly money out and product in.
   - Every truck can be stopped at a roadblock or a checkpoint (all of it forfeited), hijacked by Los
     Cuervos, escorted through, or talked past by a good driver. A raid takes the stash's product and cash.

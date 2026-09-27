@@ -5,7 +5,7 @@ extends RefCounted
 ##   - product sits in a stash house (the one its load was trucked to). A
 ##     dealer sells only what's in a stash in his own market; a bulk buyer
 ##     takes delivery at its meet (the Morettis' social club in town, the
-##     Company's hangar up north, Los Cuervos' hacienda), so the lot goes out
+##     Company's plane at the nearest strip, Los Cuervos' hacienda), so the lot goes out
 ##     by truck and the money comes back by truck
 ##   - street money piles up where it's made. Wages, upgrades, lawyers and
 ##     loads are paid from the organisation's HQ (Session.money), so the cash
@@ -30,7 +30,7 @@ const AI_MOVE_EVERY_S := 600.0  ## and moves product at most this often
 const AI_PICKUP_S := 1200.0  ## the regular pickup: a stash's cash ($1,000+) that has sat this long goes home
 const MEETS := {
 	"family": {"name": "the Morettis' social club", "market": "town"},
-	"agency": {"name": "the Company's hangar", "market": "north"},
+	"agency": {"name": "the Company's plane", "market": "north"},  ## it lands where the goods are (meet_pos)
 	"rival": {"name": "Hacienda Los Cuervos", "market": "west"},
 }
 
@@ -99,6 +99,26 @@ func pos(site: String) -> Vector2:
 		return Vector2(c[0], c[1])
 	var st = sess.stash_net.get_stash(site)
 	return Vector2(st.x, st.y)
+
+
+## Where a lot for `to` is handed over. The Company doesn't keep a shop: its
+## plane lands at the strip nearest the goods (not a police strip), as the
+## Contra supply flights did - a short drive, not a run through Los Cuervos
+## country to the hangar up north. Everyone else: their meet.
+func meet_pos(to: String, from: String) -> Vector2:
+	if to != "agency":
+		return pos(to)
+	var p := pos(from)
+	var best = null
+	var bd := INF
+	for af in sess.world.airfields:
+		if af.kind == "foreign" or af.police:
+			continue
+		var d := Vector2(af.x, af.y).distance_to(p)
+		if d < bd:
+			bd = d
+			best = af
+	return Vector2(best.x, best.y) if best != null else pos(to)
 
 
 func name_of(site: String) -> String:
@@ -255,11 +275,14 @@ func send(from: String, to: String, what: String, amount: float, careful := fals
 		c.good = what
 		c.lb = amount
 		sync()
-	var cp := checkpoint_on(pos(from), pos(to))
+	var dest := meet_pos(to, from)
+	if MEETS.has(to):
+		c["meet"] = [dest.x, dest.y]
+	var cp := checkpoint_on(pos(from), dest)
 	if cp != "" and careful:
 		_undo(c)
 		return "A police checkpoint (%s) is on the road to %s: waiting." % [cp, name_of(to)]
-	_dispatch(c, pos(from), pos(to))
+	_dispatch(c, pos(from), dest)
 	last = "Truck out: %s from %s to %s." % [_describe(c), name_of(from), name_of(to)]
 	if cp != "":
 		last += " Careful: a police checkpoint (%s) sits on that road - an escort, or wait." % cp
@@ -346,11 +369,14 @@ func send_guns(to: String, weapons: Dictionary, careful := false) -> String:
 				c.weapons[tier] = n
 		if c.weapons.is_empty():
 			return "The armoury is empty."
-	var cp := checkpoint_on(pos(from), pos(to))
+	var dest := meet_pos(to, from)
+	if MEETS.has(to):
+		c["meet"] = [dest.x, dest.y]
+	var cp := checkpoint_on(pos(from), dest)
 	if cp != "" and careful:
 		_undo(c)
 		return "A police checkpoint (%s) is on the road to %s: waiting." % [cp, name_of(to)]
-	_dispatch(c, pos(from), pos(to))
+	_dispatch(c, pos(from), dest)
 	last = "Truck out: %s from %s to %s." % [_describe(c), name_of(from), name_of(to)]
 	if cp != "":
 		last += " Careful: a police checkpoint (%s) sits on that road - an escort, or wait." % cp
@@ -539,7 +565,8 @@ func _settle(c: Dictionary) -> void:
 	var st = sess.stash_net.get_stash(c.from)
 	if st != null and st.burned:
 		back.to = nearest_stash(pos(c.buyer))
-	_dispatch(back, pos(c.buyer), pos(back.to))
+	var at: Vector2 = Vector2(c.meet[0], c.meet[1]) if c.has("meet") else pos(c.buyer)
+	_dispatch(back, at, pos(back.to))
 
 
 func _raided(site: String) -> void:
