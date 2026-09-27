@@ -114,7 +114,7 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 			if s.unlocked("guns") and s.arsenals.org.count() < 10 and s.money > 12000 and int(t) % 300 == 0:
 				s.command(Roles.BOSS, "buy_weapons", {"tier": "rifle", "n": 2})
 			if s.agency != null and s.agency.active() and int(s.arsenals.org.stock.get("rifle", 0)) >= 4 and int(t) % 600 == 0:
-				s.trade.sell("agency", "guns", 4, "rifle")
+				s.trade.sell("agency", "guns", 4, "rifle", "", true)  # careful: not into a checkpoint
 		if t >= next_run:
 			next_run += RUN_EVERY_S
 			s.money += RUN_PAY

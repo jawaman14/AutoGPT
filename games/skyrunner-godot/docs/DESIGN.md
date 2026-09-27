@@ -648,8 +648,9 @@ The game had grown a dozen systems, all on from the first minute. The story (`st
 | 1980 | about 1 hour, every run |
 | 1981 | about 3 hours, every run |
 | 1983 | about 5 hours, 98% of runs |
-| 1986 | about 8.5 hours, 73% of runs |
-| The end | 43% of runs finish within 12 hours |
+| 1985 | about 8 hours, 80% of runs |
+| 1986 | about 9 hours, 43% of runs: the Company's rifles now go by truck through Los Cuervos country |
+| The end | 25% of runs finish within 12 hours |
 
 A human who trucks the cash home without waiting for the AI's pickups goes faster.
 
@@ -682,6 +683,12 @@ In the 1980s cocaine trade, the product and the money were both physical, heavy 
 - **Patrols and checkpoints differ.** A passing patrol pulls a truck over a quarter of the time, half if it's heading for a stash the police know; a checkpoint stops everything.
 - **Our own vans are quieter.** A van between our own places warms its stash a third as much as a load off an aircraft, and a cash truck to the club leaves nothing to tail.
 - **Losses are recorded by cause** (`lost_by`): seized, hijacked, raided, bust.
+
+**Guns** (`Logistics.send_guns`)
+- **One armoury, one place.** It's `Arsenal.cache` (a stash), or the club.
+- **Gun sales** (to the Morettis, the Company, Los Cuervos) are trucked from the armoury to the buyer's meet and settled there, rifle by rifle against the buyer's appetite. The cash, and whatever the buyer didn't want, rides back.
+- **`move_armoury`** trucks the whole rack to a stash or the club, and the cache moves when it arrives. While it's on the road, nothing is in the rack for the squads.
+- **Losses.** A seized gun truck goes into the police armoury (`_seize_weapons`); a hijacked one arms Los Cuervos.
 
 ## 23. The tutorial (optional)
 

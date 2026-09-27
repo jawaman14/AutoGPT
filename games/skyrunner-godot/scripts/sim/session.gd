@@ -2406,6 +2406,14 @@ func _cmd_move_cash(role: String, a: Dictionary):
 	return err if err != "" else null
 
 
+## Logistics: the whole armoury by truck to a stash or the club.
+func _cmd_move_armoury(role: String, a: Dictionary):
+	if logistics == null:
+		return "No logistics in this game: the guns are just there."
+	var err: String = logistics.send_guns(str(a.get("to", "")), {})
+	return err if err != "" else null
+
+
 func _cmd_load_cash(role: String, a: Dictionary):
 	if logistics == null:
 		return "No logistics in this game."

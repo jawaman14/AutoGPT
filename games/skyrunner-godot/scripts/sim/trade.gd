@@ -165,6 +165,8 @@ func sell(buyer: String, good: String, qty: float, tier := "rifle", from := "", 
 	if qty <= 0.0:
 		return "We have no %s to sell." % (Arsenal.TIERS[tier].name.to_lower() if good == "guns" else good)
 	var lg = sess.logistics
+	if lg != null and good == "guns":
+		return lg.send_guns(buyer, {tier: int(qty)}, careful)  # from the armoury, by truck
 	if lg != null and good != "guns":
 		var src: String = from if from != "" else Py.max_by(lg.stock.keys(), func(k): return lg.stock[k][good])
 		return lg.send(src, buyer, good, qty, careful)

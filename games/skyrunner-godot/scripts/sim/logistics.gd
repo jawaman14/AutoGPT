@@ -277,17 +277,85 @@ func _undo(c: Dictionary) -> void:
 	if c.lb > 0.0:
 		stock[c.from][c.good] += c.lb
 		sync()
+	if not c.get("weapons", {}).is_empty():
+		sess.arsenals["org"].add_all(c.weapons)
 
 
 func _describe(c: Dictionary) -> String:
-	return ("$%s cash" % Py.money(int(c.cash))) if c.cash > 0.0 and c.lb <= 0.0 else ("%d lb of %s" % [int(c.lb), c.good])
+	var parts := []
+	if c.lb > 0.0:
+		parts.append("%d lb of %s" % [int(c.lb), c.good])
+	var w: Dictionary = c.get("weapons", {})
+	if not w.is_empty():
+		parts.append(Arsenal.describe(w))
+	if c.cash > 0.0:
+		parts.append("$%s cash" % Py.money(int(c.cash)))
+	return " + ".join(parts) if not parts.is_empty() else "an empty van"
 
 
 func _value(c: Dictionary) -> int:
 	var v: float = c.cash
 	if c.lb > 0.0:
 		v += c.lb * sess.trade.street_price(c.good, "town")
+	var w: Dictionary = c.get("weapons", {})
+	if not w.is_empty():
+		v += Arsenal.worth(w, sess.econ.mult("guns", "town"))
 	return int(v)
+
+
+# ------------------------------------------------------------------ guns
+## Where the armoury is: a stash (Arsenal.cache), or the club.
+func armoury_site() -> String:
+	var c: String = sess.arsenals["org"].cache if sess.arsenals.has("org") else ""
+	return c if c != "" and stock.has(c) and not sess.stash_net.get_stash(c).burned else HQ
+
+
+## Guns on the road, from the armoury: `weapons` ({tier: n}) to a buyer's meet,
+## or the whole armoury ({} ) to another stash or the club - it moves with them.
+func send_guns(to: String, weapons: Dictionary, careful := false) -> String:
+	if not Arsenal.REALISM or not sess.arsenals.has("org"):
+		return "No armoury in this game."
+	if not sess.unlocked("guns"):
+		return "No gun dealer will talk to us yet."
+	var ars: Arsenal = sess.arsenals["org"]
+	var from := armoury_site()
+	if from == to:
+		return "The armoury is already there."
+	var c := {"kind": "move", "from": from, "to": to, "good": "", "lb": 0.0, "cash": 0.0, "buyer": "", "weapons": {}}
+	if MEETS.has(to):
+		var why: String = sess.trade.available(to)
+		if why != "":
+			return why
+		c.kind = "buy"
+		c.buyer = to
+		for tier in weapons:
+			var n := ars.take(tier, int(weapons[tier]))
+			if n > 0:
+				c.weapons[tier] = n
+		if c.weapons.is_empty():
+			return "Nothing like that in the armoury."
+	else:
+		if not (stock.has(to) or to == HQ):
+			return "No such place."
+		var st = sess.stash_net.get_stash(to)
+		if st != null and st.burned:
+			return "%s is burned." % name_of(to)
+		for tier in Arsenal.ORDER:
+			var n := ars.take(tier, int(ars.stock.get(tier, 0)))
+			if n > 0:
+				c.weapons[tier] = n
+		if c.weapons.is_empty():
+			return "The armoury is empty."
+	var cp := checkpoint_on(pos(from), pos(to))
+	if cp != "" and careful:
+		_undo(c)
+		return "A police checkpoint (%s) is on the road to %s: waiting." % [cp, name_of(to)]
+	_dispatch(c, pos(from), pos(to))
+	last = "Truck out: %s from %s to %s." % [_describe(c), name_of(from), name_of(to)]
+	if cp != "":
+		last += " Careful: a police checkpoint (%s) sits on that road - an escort, or wait." % cp
+	sess.say(last)
+	return ""
 
 
 func _dispatch(c: Dictionary, a: Vector2, b: Vector2) -> void:
@@ -381,6 +449,9 @@ func arrived(t, outcome: String, why: String) -> void:
 				if c.lb > 0.0:
 					add(c.to, c.good, c.lb)
 				add_cash(c.to, c.cash)
+				if not c.get("weapons", {}).is_empty():
+					sess.arsenals["org"].add_all(c.weapons)
+					sess.arsenals["org"].cache = "" if c.to == HQ else c.to  # the armoury is here now
 				last = "Truck in at %s: %s." % [name_of(c.to), _describe(c)]
 			"buy":
 				_settle(c)
@@ -388,13 +459,22 @@ func arrived(t, outcome: String, why: String) -> void:
 				if c.lb > 0.0:
 					add(c.to, c.good, c.lb)
 				add_cash(c.to, c.cash)
+				if not c.get("weapons", {}).is_empty():
+					sess.arsenals["org"].add_all(c.weapons)  # what the buyer didn't want: back in the rack
 				last = "The money's home at %s: %s." % [name_of(c.to), _describe(c)]
 		sess.say(last)
 		return
 	var what := _describe(c)
 	lost.product += c.lb
 	lost.cash += int(c.cash)
-	lost_by[outcome if outcome == "hijacked" else "seized"] += int(c.cash + (c.lb * sess.trade.street_price(c.good, "town") if c.lb > 0.0 else 0.0))
+	lost_by[outcome if outcome == "hijacked" else "seized"] += _value(c)
+	var guns: Dictionary = c.get("weapons", {})
+	if not guns.is_empty():
+		if outcome == "hijacked":
+			if sess.arsenals.has("rival"):
+				sess.arsenals["rival"].add_all(guns)  # Los Cuervos are better armed tonight
+		else:
+			sess._seize_weapons(guns, "a truck")
 	if outcome == "hijacked":
 		last = "Los Cuervos took the truck (%s) near %s." % [what, name_of(c.to)]
 		if sess.ground != null:
@@ -417,15 +497,31 @@ func arrived(t, outcome: String, why: String) -> void:
 ## anything it didn't want) rides back to the stash it came from.
 func _settle(c: Dictionary) -> void:
 	var tr: Trade = sess.trade
-	var q: Dictionary = tr.quote(c.buyer, c.good)
-	var take := minf(c.lb, float(q.room)) if q.why == "" else 0.0
-	var back := {"kind": "cash_back", "from": c.buyer, "to": c.from, "good": c.good, "lb": c.lb - take, "cash": 0.0, "buyer": c.buyer}
-	if take > 0.0:
-		back.cash = tr.settle(c.buyer, c.good, take)
-		last = "%s took %d lb of %s: $%s coming back to %s." % [Trade.BUYERS[c.buyer].name, int(take), c.good, Py.money(int(back.cash)), name_of(c.from)]
+	var name: String = Trade.BUYERS[c.buyer].name
+	var back := {"kind": "cash_back", "from": c.buyer, "to": c.from, "good": c.good, "lb": 0.0, "cash": 0.0, "buyer": c.buyer, "weapons": {}}
+	var took := []
+	if c.lb > 0.0:
+		var q: Dictionary = tr.quote(c.buyer, c.good)
+		var take := minf(c.lb, float(q.room)) if q.why == "" else 0.0
+		back.lb = c.lb - take
+		if take > 0.0:
+			back.cash += tr.settle(c.buyer, c.good, take)
+			took.append("%d lb of %s" % [int(take), c.good])
+	for tier in c.get("weapons", {}):
+		var n: int = c.weapons[tier]
+		var q: Dictionary = tr.quote(c.buyer, "guns", tier)
+		var take := mini(n, int(q.room)) if q.why == "" else 0
+		if take > 0:
+			back.cash += tr.settle(c.buyer, "guns", float(take), tier)
+			took.append("%d %s" % [take, Arsenal.TIERS[tier].name.to_lower()])
+		if n - take > 0:
+			back.weapons[tier] = n - take
+	if took.is_empty():
+		last = "%s wouldn't take it. It's coming back." % name
 	else:
-		last = "%s wouldn't take it (%s). It's coming back." % [Trade.BUYERS[c.buyer].name, q.why if q.why != "" else "no room"]
-	if sess.stash_net.get_stash(c.from).burned:
+		last = "%s took %s: $%s coming back to %s." % [name, ", ".join(took), Py.money(int(back.cash)), name_of(c.from)]
+	var st = sess.stash_net.get_stash(c.from)
+	if st != null and st.burned:
 		back.to = nearest_stash(pos(c.buyer))
 	_dispatch(back, pos(c.buyer), pos(back.to))
 
@@ -602,5 +698,9 @@ func view() -> Dictionary:
 			var p: Array = t.pos(sess.time)
 			trucks.append({"id": t.job_id, "what": _describe(c), "from": name_of(c.from), "to": name_of(c.to), "x": p[0], "y": p[1],
 				"eta": int(maxf(0.0, t.t0 + t.dur - sess.time))})
-	return {"sites": sites, "trucks": trucks, "aboard": aboard, "hq": name_of(HQ), "hq_strip": hq_strip(),
+	var arm := {}
+	if sess.arsenals.has("org"):
+		arm = {"site": armoury_site(), "at": name_of(armoury_site()), "weapons": sess.arsenals["org"].stock.duplicate(),
+			"count": sess.arsenals["org"].count()}
+	return {"sites": sites, "trucks": trucks, "aboard": aboard, "armoury": arm, "hq": name_of(HQ), "hq_strip": hq_strip(),
 		"lost": lost.duplicate(), "last": last}

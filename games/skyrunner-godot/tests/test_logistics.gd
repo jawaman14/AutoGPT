@@ -208,3 +208,47 @@ func test_off_means_one_pool() -> void:
 	check(s.logistics == null)
 	check_eq(s.command(Roles.BOSS, "move_cash", {"from": "camp"})[1], "No logistics in this game: money is money.")
 	s.dispose()
+
+
+func test_guns_are_trucked_to_the_buyer() -> void:
+	var s := _sess({"family": true})
+	s.family.respect = 60.0
+	var ars: Arsenal = s.arsenals["org"]
+	ars.add("rifle", 10)
+	var have: int = int(ars.stock.rifle)
+	var money0 := s.money
+	check_eq(s.trade.sell("family", "guns", 4, "rifle"), "", "on the truck to the Morettis")
+	check_eq(int(ars.stock.rifle), have - 4, "out of the rack")
+	check(s.logistics.view().trucks[0].what.contains("rifle") or s.logistics.view().trucks[0].what.contains("Rifle"), "a truck of rifles")
+	var fee := money0 - s.money
+	_drive(s)
+	check(s.money > money0 - fee + 1000, "the money came back to the club, where the armoury is ($%d)" % (s.money - money0 + fee))
+	check(s.trade.bulk_log.size() > 0, "a bulk sale on the books (follow-the-money sees it)")
+	s.dispose()
+
+
+func test_a_seized_gun_truck_arms_the_police() -> void:
+	var s := _sess({"family": true})
+	s.family.respect = 60.0
+	s.arsenals["org"].add("mg", 3)
+	var law0: int = s.arsenals["law"].count()
+	s.logistics.send_guns("family", {"mg": 3})
+	s.stash_net.trucks[0].stop_at = 0.3
+	_drive(s, false)
+	check(s.arsenals["law"].count() >= law0 + 3, "three machine guns into the police armoury")
+	s.dispose()
+
+
+func test_the_armoury_moves_with_its_guns() -> void:
+	var s := _sess()
+	var ars: Arsenal = s.arsenals["org"]
+	ars.add("rifle", 6)
+	var n := ars.count()
+	check_eq(s.logistics.armoury_site(), Logistics.HQ, "at the club to start")
+	check(s.command(Roles.BOSS, "move_armoury", {"to": "barn"})[0], "ordered")
+	check_eq(ars.count(), 0, "on the road: nothing in the rack")
+	_drive(s)
+	check_eq(ars.count(), n, "all of it arrived")
+	check_eq(s.logistics.armoury_site(), "barn", "the armoury is at the barn now")
+	check(s.logistics.view().armoury.at.contains("barn"), "and the panel says so")
+	s.dispose()

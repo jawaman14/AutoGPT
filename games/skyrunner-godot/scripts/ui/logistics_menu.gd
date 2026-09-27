@@ -22,7 +22,8 @@ var amount: SpinBox
 var status: Label
 var _sites: Array = []
 var _dests: Array = []
-const WHAT := ["cash", "cocaine", "marijuana"]
+const WHAT := ["cash", "cocaine", "marijuana", "the armoury", "rifles", "pistols", "machine guns", "RPGs"]
+const TIER := {"rifles": "rifle", "pistols": "pistol", "machine guns": "mg", "RPGs": "rpg"}
 const BUYERS := [["family", "the Morettis (town)"], ["agency", "the Company (north)"], ["rival", "Los Cuervos (west)"]]
 
 
@@ -122,6 +123,9 @@ func refresh() -> void:
 			_dests.append(s.id)
 			to_ob.add_item(str(s.name))
 	rows.add_child(UIStyle.label("%-26s  the safe: wages, loads, lawyers   cash aboard: $%s" % [str(lv.hq).left(26), Py.money(int(lv.aboard))], 14, UIStyle.CYAN))
+	var arm: Dictionary = lv.get("armoury", {})
+	if not arm.is_empty():
+		rows.add_child(UIStyle.label("The armoury at %s: %s" % [arm.at, Arsenal.describe(arm.weapons) if int(arm.count) > 0 else "empty"], 14, UIStyle.AMBER))
 	if rebuild:
 		_dests.append(Logistics.HQ)
 		to_ob.add_item(str(lv.hq) + " (cash)")
@@ -147,7 +151,14 @@ func _send() -> void:
 	var from: String = _sites[from_ob.selected]
 	var to: String = _dests[to_ob.selected]
 	var r: Array
-	if what == "cash":
+	if what == "the armoury":
+		r = cmd_fn.call("move_armoury", {"to": to})  # all of it (the 'from' is wherever it is)
+	elif TIER.has(what):
+		if not to in ["family", "agency", "rival"]:
+			r = [false, "Guns move as the whole armoury - pick 'the armoury' to move it."]
+		else:
+			r = cmd_fn.call("sell_product", {"buyer": to, "good": "guns", "tier": TIER[what], "qty": amount.value if amount.value > 0 else 1e9})
+	elif what == "cash":
 		r = cmd_fn.call("move_cash", {"from": from, "to": to, "amount": amount.value if amount.value > 0 else 1e12})
 	elif to in ["family", "agency", "rival"]:
 		r = cmd_fn.call("sell_product", {"buyer": to, "good": what, "qty": amount.value if amount.value > 0 else 1e9, "from": from})

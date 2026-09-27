@@ -235,6 +235,9 @@ Beyond the prototype:
   - The growers and the connection want cash on the strip, so you fly money out and product in.
   - Every truck can be stopped at a roadblock or a checkpoint (all of it forfeited), hijacked by Los
     Cuervos, escorted through, or talked past by a good driver. A raid takes the stash's product and cash.
+  - Guns are physical too: the armoury sits in one place (the club, or a stash). A gun sale is trucked
+    to the buyer; the whole armoury can be moved. A seized gun truck arms the police, a hijacked one
+    Los Cuervos.
   - The AI boss runs regular pickups and moves product to where the dealers are.
 - **The trade: dealers, buyers, and grass before cocaine.**
   - You start the way the 1970s smugglers did: cheap, bulky loads of grass from the farm strips into your stash.
