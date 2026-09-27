@@ -188,6 +188,14 @@ Beyond the prototype:
   - Radio Costa 88, an 80s synth station (F7).
 
   The UI clicks are Kenney's (CC0). Samples are in `docs/audio/`.
+- **Your own controls (F8).**
+  - Every flight key and gamepad button can be rebound. The remapping and button names come from Input Helper.
+  - Each analogue control is bound by moving it: yoke, throttle lever, rudder pedals, left and right toe brakes. They can be on several USB devices, which are matched by name, so replugging or reordering them doesn't matter.
+  - Each has invert, deadzone and expo. Everything is saved to `user://controls.cfg`.
+- **Colour-safe palette and screen filters.**
+  - Under simulated colour blindness, the neon status colours collapse into each other. Examples: "on" green vs the pink accent under protanopia, and warning amber vs danger red under deuteranopia.
+  - The colour-safe palette (F8) switches to Okabe–Ito-style colours that stay apart under all three simulations. `test_accessibility` checks every pair: ΔE ≥ 20.
+  - F9 cycles a VHS-tape filter and the colour-blindness simulations used for that check.
 - **One UI, redesigned.** A single theme across every screen; real tables with titled columns (the job
   board colours the landing roll against the strip length); key caps in every footer that you can
   also click; readouts as tiles; a HUD laid out by what you need when (status chips, wanted stars,
@@ -236,8 +244,10 @@ Beyond the prototype:
 | ![cast](docs/img/models-cast.png) | ![rifle](docs/img/foot-rifle.png) | ![island](docs/img/island-approach.png) |
 | **A sit-down with the Family** | **The General's aide on the ramp** | **The bail hearing** |
 | ![talk](docs/img/talk.png) | ![aide](docs/img/talk_island.png) | ![court](docs/img/court.png) |
-| **Manny Ortega's hiring hall** | | |
-| ![crew](docs/img/crew.png) | | |
+| **Manny Ortega's hiring hall** | **The same, colour-safe palette** | **Through the VHS filter (F9)** |
+| ![crew](docs/img/crew.png) | ![crew-safe](docs/img/crew-safe.png) | ![vhs](docs/img/vhs.png) |
+| **Controls (F8): keys, buttons, yoke, pedals** | | |
+| ![controls](docs/img/controls.png) | | |
 
 | Mid-afternoon on the runway (medium) | Dusk, climbing out near Eagle's Nest (high) | Night: edge lights on |
 |---|---|---|
@@ -294,8 +304,7 @@ Command-line flags (all optional; any flag skips the lobby):
 Dedicated server: `$GODOT --headless --path . --script res://scripts/net/dedicated.gd -- --port 47800`.
 Every seat is run by the AI until a player claims it.
 
-Controls: F1 in game lists them; F2 for time of day, gamepad or joystick
-support, and on foot: TAB get out / climb in, WASD walk (Shift runs, Space jumps), mouse look, E use, F torch.
+Controls: F1 in game lists them; F8 rebinds them (keys, gamepad, yoke, throttle quadrant, pedals); F2 for time of day; and on foot: TAB get out / climb in, WASD walk (Shift runs, Space jumps), mouse look, E use, F torch.
 
 Demo videos: [docs/video/](docs/video/):
 - [`demo-ui.mp4`](docs/video/demo-ui.mp4): the redesigned UI in use - lobby, job board, load planner,
@@ -348,7 +357,10 @@ Godot and godot-cpp are MIT.
 The UI sounds are Kenney's UI Audio (CC0), in `assets/audio/kenney_ui/`; every other sound is
 synthesized in `scripts/game/sound.gd`. The conversations run on Nathan Hoad's Dialogue Manager (MIT; its runtime in
 `addons/dialogue_manager/`, the scripts in `dialogue/`). The performance overlay (F6) is Hugo
-Locurcio's Debug Menu add-on, MIT, in `addons/debug_menu/`;
+Locurcio's Debug Menu add-on, MIT, in `addons/debug_menu/`. Key and button remapping uses Nathan Hoad's
+Input Helper (MIT, `addons/input_helper/`). The VHS filter is Henrique Lacreta Alves' SimpleGodotCRTShader
+(MIT, `addons/crt_shader/`), and the colour-blindness simulation is GATO's shader (MPL-2.0, unmodified, in
+`addons/gato_screen_filters/`).
 [docs/LIBRARIES.md](docs/LIBRARIES.md) surveys the other open-source Godot libraries considered.
 
 The 3D models in `assets/models/kenney/` are Kenney's (www.kenney.nl), CC0 1.0 (public domain);

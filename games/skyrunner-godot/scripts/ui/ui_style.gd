@@ -7,25 +7,49 @@ extends RefCounted
 ## Monoton, both SIL Open Font Licence, in assets/fonts).
 
 const WHITE := Color(1, 1, 1)
-const PINK := Color(1.0, 0.3, 0.68)
 const NEON_CYAN := Color(0.3, 0.95, 1.0)
 const SUNSET := Color(1.0, 0.55, 0.25)
-const AMBER := Color(1, 0.75, 0.2)
-const RED := Color(1, 0.25, 0.2)
-const GREEN := Color(0.4, 1, 0.45)
-const CYAN := Color(0.5, 0.9, 1)
+## The status colours, switchable (set_palette): the neon look, or a colour-safe
+## set after Okabe and Ito that stays apart under protanopia, deuteranopia and
+## tritanopia (test_accessibility checks every pair; the neon set fails three).
+## "Good" becomes sky blue there, "danger" a vermilion, "caution" a yellow.
+const PALETTES := {
+	"neon": {"PINK": Color(1.0, 0.3, 0.68), "AMBER": Color(1, 0.75, 0.2), "RED": Color(1, 0.25, 0.2),
+		"GREEN": Color(0.4, 1, 0.45), "CYAN": Color(0.5, 0.9, 1)},
+	"safe": {"PINK": Color(0.85, 0.5, 0.75), "AMBER": Color(1.0, 0.9, 0.3), "RED": Color(0.95, 0.35, 0.05),
+		"GREEN": Color(0.35, 0.75, 1.0), "CYAN": Color(0.75, 0.95, 1.0)},
+}
+static var palette := "neon"
+static var PINK := Color(1.0, 0.3, 0.68)
+static var AMBER := Color(1, 0.75, 0.2)
+static var RED := Color(1, 0.25, 0.2)
+static var GREEN := Color(0.4, 1, 0.45)
+static var CYAN := Color(0.5, 0.9, 1)
+static var ACCENT := PINK
 const DIM := Color(0.8, 0.8, 0.8)
 const PANEL := Color(0.06, 0.025, 0.09, 0.9)  ## deep violet
 const SURFACE := Color(0.13, 0.07, 0.17)  ## raised surfaces: buttons, table headers
 const SURFACE_HI := Color(0.22, 0.11, 0.28)
 const LINE := Color(1.0, 0.45, 0.8, 0.14)
-const ACCENT := PINK
 const CAPTION := Color(0.62, 0.66, 0.72)
 
 static var _mono: SystemFont
 static var _script: Font
 static var _neon: Font
 static var _theme: Theme
+
+
+## Switch the status colours; screens built from now on use them.
+static func set_palette(name: String) -> void:
+	palette = name if PALETTES.has(name) else "neon"
+	var p: Dictionary = PALETTES[palette]
+	PINK = p.PINK
+	AMBER = p.AMBER
+	RED = p.RED
+	GREEN = p.GREEN
+	CYAN = p.CYAN
+	ACCENT = PINK
+	_theme = null
 
 
 ## The headline face: a brush script (Kaushan Script, OFL).

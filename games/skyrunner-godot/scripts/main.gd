@@ -22,6 +22,7 @@ var args := {"mode": "solo", "police": false, "host": false, "port": 47800, "bin
 
 
 func _ready() -> void:
+	UIStyle.set_palette(ControlsConfig.settings().palette)  # neon, or colour-safe (F8 in the 3D seat)
 	var a := OS.get_cmdline_user_args()
 	var i := 0
 	while i < a.size():

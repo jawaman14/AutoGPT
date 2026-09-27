@@ -8,21 +8,9 @@ extends Node3D
 
 const CAM_MODES := ["chase", "cockpit", "tower"]
 
-const HELD_KEYS := {
-	"pitch_up": [KEY_S, KEY_DOWN],
-	"pitch_down": [KEY_W, KEY_UP],
-	"roll_left": [KEY_A, KEY_LEFT],
-	"roll_right": [KEY_D, KEY_RIGHT],
-	"yaw_left": [KEY_Q],
-	"yaw_right": [KEY_E],
-	"throttle_up": [KEY_R, KEY_PAGEUP],
-	"throttle_down": [KEY_F, KEY_PAGEDOWN],
-	"brake": [KEY_B, KEY_SPACE],
-	"trim_up": [KEY_BRACKETRIGHT],
-	"trim_down": [KEY_BRACKETLEFT],
-}
+## The flight keys are rebindable actions (ControlsConfig: F8), the analogue axes FlightAxes.
 const CREW_KEYS := {KEY_N: "transponder", KEY_U: "autopilot", KEY_K: "kick", KEY_O: "call_boat", KEY_V: "pump", KEY_I: "turn_around"}
-const PRESS_KEYS := {KEY_G: "flaps_down", KEY_T: "flaps_up", KEY_X: "throttle_cut", KEY_Z: "throttle_full", KEY_ENTER: "confirm", KEY_KP_ENTER: "confirm"}
+const PRESS_KEYS := {KEY_ENTER: "confirm", KEY_KP_ENTER: "confirm"}
 const MENU_KEYS := {KEY_UP: "up", KEY_DOWN: "down", KEY_LEFT: "left", KEY_RIGHT: "right", KEY_ENTER: "enter",
 	KEY_KP_ENTER: "enter", KEY_A: "a", KEY_PLUS: "+", KEY_EQUAL: "+", KEY_KP_ADD: "+", KEY_MINUS: "-", KEY_KP_SUBTRACT: "-", KEY_F: "f", KEY_G: "g"}
 
@@ -32,10 +20,13 @@ Flight   W/S or UP/DOWN pitch     A/D or LEFT/RIGHT roll     Q/E rudder / nosewh
          R/F or PGUP/PGDN throttle   X cut throttle   Z full throttle
          G flaps down   T flaps up   [ / ] pitch trim   B or SPACE brakes
          Y toggle mouse yoke (mouse position = stick)   joystick / gamepad work too
+         F8 controls: rebind any flight key or button; bind a yoke, throttle quadrant, pedals and
+            toe brakes (several devices) with invert, deadzone and expo; the colour-safe palette
 View     C cycle camera (chase / cockpit / tower)    M big map    P pause   F2 time of day
 Seats    F3 hand the aircraft to the AI (take another seat from a station) / take it back
 Debug    F6 performance overlay: FPS, frame times, graphs (Debug Menu add-on, MIT)
 Radio    F7 Radio Costa 88: synth music out of 1985
+Screen   F9 filter: off / VHS / colour-blindness simulations (protan, deutan, tritan, mono)
 On foot  TAB get out (parked) / back in    WASD walk  SHIFT run  SPACE jump  mouse look
          Guns (with a ground war): 1-4 pistol / rifle / machine gun / RPG from the armoury  H holster  R reload  LMB fire
          E use (job board, fuel, hangar, the boss's desk)   F torch
@@ -123,6 +114,12 @@ func setup(sess: Session, graphics := "high", bot_ = null, server_ = null) -> Pi
 	add_child(nerves)
 	sound = Soundscape.new().setup(self)  # engine, wind, radio, the world, the music
 	add_child(sound)
+	ControlsConfig.ensure()  # the flight keys as actions, with the player's saved bindings
+	var look := ControlsConfig.settings()
+	UIStyle.set_palette(look.palette)
+	screen_filter = ScreenFilter.new()
+	add_child(screen_filter)
+	screen_filter.set_mode(look.filter)
 	cam = Camera3D.new()
 	cam.near = 0.5
 	cam.far = 60000.0
@@ -248,6 +245,9 @@ func _active_menu() -> GameMenu:
 
 
 func _unhandled_input(ev: InputEvent) -> void:
+	if ev is InputEventJoypadButton and ev.pressed and _active_menu() == null and not on_foot:
+		_flight_press(ev)
+		return
 	if ev is InputEventKey and ev.pressed:
 		var k: int = ev.physical_keycode if ev.physical_keycode else ev.keycode
 		var m := _active_menu()
@@ -315,6 +315,8 @@ func _unhandled_input(ev: InputEvent) -> void:
 				r = s.command(Roles.PILOT, "family_accept" if k == KEY_Y else "family_decline", {"id": s.family.offers.back().id})
 			if not r[0]:
 				s.say(r[1])
+		elif _flight_press(ev):
+			pass
 		elif PRESS_KEYS.has(k):
 			_pressed[PRESS_KEYS[k]] = true
 		elif k == KEY_O and ev.shift_pressed:
@@ -358,11 +360,19 @@ func _unhandled_input(ev: InputEvent) -> void:
 			toggle_ai_pilot()
 		elif k == KEY_F6:
 			cycle_debug_menu()
+		elif k == KEY_F8:
+			toggle_controls()
+		elif k == KEY_F9:
+			var mode := screen_filter.cycle()
+			ControlsConfig.save_setting("filter", mode)
+			s.say("Screen: %s" % ScreenFilter.LABELS[mode])
 		elif k == KEY_F7 and sound != null:
 			s.say("Radio Costa 88: %s" % ("on - hits from 1985" if sound.toggle_music() else "off"))
 
 
 var debug_menu: CanvasLayer = null
+var screen_filter: ScreenFilter = null
+var controls_menu: ControlsMenu = null
 var sound: Soundscape = null
 var talk: TalkBalloon = null  ## a conversation on screen (the Family, the General's aide)
 var _offers_seen := {}
@@ -413,6 +423,28 @@ func cycle_debug_menu() -> void:
 		debug_menu = scn.instantiate()
 		add_child(debug_menu)
 	debug_menu.style = wrapi(int(debug_menu.style) + 1, 0, 3)  # hidden, compact, detailed
+
+
+## The one-shot flight actions (flaps, throttle cut/full) from whatever they're bound to.
+func _flight_press(ev: InputEvent) -> bool:
+	for n in ControlsConfig.PRESSED:
+		if ev.is_action_pressed(ControlsConfig.action(n)):
+			_pressed[n] = true
+			return true
+	return false
+
+
+## F8: the controls panel (keys, buttons, axes, the palette).
+func toggle_controls() -> void:
+	if controls_menu != null and is_instance_valid(controls_menu):
+		controls_menu.close()
+		return
+	controls_menu = ControlsMenu.new()
+	ui.add_child(controls_menu)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	controls_menu.closed.connect(func():
+		controls_menu = null
+		_menu_closed())
 
 
 func _unhandled_key_input(_ev: InputEvent) -> void:
@@ -532,13 +564,11 @@ func _gather_input() -> ControlMapper.InputFrame:
 	var inp := ControlMapper.InputFrame.new()
 	inp.pressed = _pressed
 	_pressed = {}
-	var menu_open := _active_menu() != null
+	var menu_open := _active_menu() != null or controls_menu != null
 	if not menu_open:
-		for action in HELD_KEYS:
-			for key in HELD_KEYS[action]:
-				if Input.is_physical_key_pressed(key):
-					inp.held[action] = true
-					break
+		for action in ControlsConfig.HELD:
+			if Input.is_action_pressed(ControlsConfig.action(action)):
+				inp.held[action] = true
 	else:
 		inp.pressed.erase("confirm")
 	if mouse_yoke and not menu_open:
@@ -551,20 +581,9 @@ func _gather_input() -> ControlMapper.InputFrame:
 	return inp
 
 
-## First joystick/gamepad, if any. Keyboard still works.
+## The joypads' axes: a yoke, a throttle quadrant, pedals, toe brakes (F8 to bind them).
 func _poll_stick(inp: ControlMapper.InputFrame) -> void:
-	var pads := Input.get_connected_joypads()
-	if pads.is_empty():
-		return
-	var dev: int = pads[0]
-	var dz := func(v: float) -> float: return 0.0 if absf(v) < 0.06 else v
-	# stick forward reads negative on Godot's Y axis; our stick +1 = pull back
-	inp.stick = [dz.call(Input.get_joy_axis(dev, JOY_AXIS_LEFT_X)), dz.call(Input.get_joy_axis(dev, JOY_AXIS_LEFT_Y))]
-	inp.rudder_axis = dz.call(Input.get_joy_axis(dev, JOY_AXIS_RIGHT_X))
-	if Input.get_joy_axis(dev, JOY_AXIS_TRIGGER_RIGHT) > 0.3:
-		inp.held["throttle_up"] = true
-	if Input.get_joy_axis(dev, JOY_AXIS_TRIGGER_LEFT) > 0.3:
-		inp.held["throttle_down"] = true
+	ControlsConfig.axes.read(inp)
 
 
 # ------------------------------------------------------------ loop

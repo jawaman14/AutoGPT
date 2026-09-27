@@ -1,0 +1,4 @@
+Input Helper 4.7.0 by Nathan Hoad (MIT)
+https://github.com/nathanhoad/godot_input_helper @ ccfad58
+Runtime only: input_helper.gd, settings.gd, LICENSE. Not the editor plugin, update dialog or C# wrapper.
+Instanced on demand by scripts/game/controls_config.gd (no autoload).

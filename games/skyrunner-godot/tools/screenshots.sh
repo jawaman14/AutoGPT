@@ -24,3 +24,7 @@ run res://tools/shots/pilot_shot.gd -- high 22 "$PWD/$OUT/full-moon.png" chase a
 for w in load jobs market hangar upgrades boss chief desk lawtree copilot hud lobby; do
   run res://tools/shots/ui_shot.gd -- $w "$PWD/$OUT/ui-$w.png"
 done
+# the controls panel (F8), the VHS filter (F9), the colour-safe palette
+run res://tools/shots/pilot_shot.gd -- high 15 "$PWD/$OUT/controls.png" chase controls
+run res://tools/shots/pilot_shot.gd -- high 17.7 "$PWD/$OUT/vhs.png" chase vhs
+run res://tools/shots/pilot_shot.gd -- high 15 "$PWD/$OUT/crew-safe.png" chase crew_safe

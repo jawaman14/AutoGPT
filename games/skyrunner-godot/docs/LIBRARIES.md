@@ -15,6 +15,9 @@ this game's constraints:
 |---|---|---|
 | [Debug Menu](https://github.com/godot-extended-libraries/godot-debug-menu) (Calinou) | MIT | F6 in the 3D view: FPS, frame-time graphs, CPU/GPU times, hardware. Vendored in `addons/debug_menu/` without its editor plugin; loaded on demand (its own F3 binding would clash with the AI pilot) and skipped headless (its hardware-query thread never returns without a GPU). Useful for checking the cost of the animated characters and the island. |
 | [Dialogue Manager](https://github.com/nathanhoad/godot_dialogue_manager) (Nathan Hoad), v3.10.5 | MIT | The conversations with the Family (Sal Moretti) and the General's aide (Captain Ibarra), written as scripts in `dialogue/*.dialogue`. Only the runtime is vendored (`addons/dialogue_manager/`, pinned in `UPSTREAM.txt`); v3.x is the line for Godot 4.4 (v4 needs 4.6). No plugin, autoload or import step: `scripts/game/talk.gd` instances the manager and compiles the scripts from text. The scripts act through the seat's permission-checked commands, so they work from a remote seat too. Our own balloon (`scripts/ui/talk_balloon.gd`) draws them in the game's style. |
+| [Input Helper](https://github.com/nathanhoad/godot_input_helper) (Nathan Hoad), v4.7.0 | MIT | Rebinding the flight keys and gamepad buttons (F8), and naming a button for the pad in use (Xbox, PlayStation, Switch, Steam Deck). The runtime only, instanced on demand (`scripts/game/controls_config.gd`). We save the events ourselves: its text format turns physical keys into layout keycodes and pins joypad buttons to pad 0. |
+| [SimpleGodotCRTShader](https://github.com/henriquelalves/SimpleGodotCRTShader) (Henrique Lacreta Alves) | MIT | The F9 VHS filter, with gentler uniforms than the demo's (`scripts/render/screen_filter.gd`). |
+| [GATO screen filters](https://github.com/Nokorpo/gato-godot-accessibility-toolkit) (Iseltec) | MPL-2.0 | Its colour-blindness matrices: the F9 simulations and `test_accessibility`, which found the neon palette failing and checks the colour-safe one. The shader is vendored unmodified, with its licence (MPL is per file). |
 | [Kenney UI Audio](https://github.com/Calinou/kenney-ui-audio) (via Calinou) | CC0 | The UI's clicks (a conversation's answer, toggles) in `assets/audio/kenney_ui/`. |
 | [Kenney's 3D kits](https://github.com/shorepine/kenney) | CC0 | The people, cars, guns, boats and palms (`assets/models/kenney/`, see the README). |
 | [JSBSim](https://github.com/JSBSim-Team/jsbsim) | LGPL-2.1 | The flight model, through our own GDExtension (already in use). |
@@ -51,7 +54,7 @@ Went through [awesome-godot](https://github.com/godotengine/awesome-godot) secti
 |---|---|---|
 | [Event Audio](https://github.com/bbbscarter/event-audio-godot) | MIT | Fire-and-forget audio events. Our soundscape is small enough to own; worth it if the sound grows to hundreds of cues. |
 | [Wwise](https://github.com/alessandrofama/wwise-godot-integration), [FMOD GD4](https://github.com/summertimejordi/fmod_gd4) | proprietary middleware | Not a fit: licensing and a sound-design toolchain for a synthesized soundscape. |
-| [Input Helper](https://github.com/nathanhoad/godot_input_helper) | MIT | **Next.** Joystick and gamepad detection and remapping - a flight sim wants a yoke and rudder pedals rebindable in-game. |
+| [Input Helper](https://github.com/nathanhoad/godot_input_helper) | MIT | Adopted in the third pass (above). |
 | [Virtual Joystick](https://github.com/MarcoFazioRandom/Virtual-Joystick-Godot) | MIT | Only if a touch build happens. |
 | [NobodyWho](https://github.com/nobodywho-ooo/nobodywho) | EUPL | Local LLMs for NPC dialogue: tempting for Sal, Ibarra and the lawyers, but it needs model files of gigabytes and a GPU. An opt-in experiment at most, next to the written dialogue. |
 | [Dialogic](https://github.com/dialogic-godot/dialogic) | MIT | Covered: Dialogue Manager does the conversations. |
@@ -59,6 +62,46 @@ Went through [awesome-godot](https://github.com/godotengine/awesome-godot) secti
 | [Godot Doctor](https://github.com/codevogel/godot_doctor), [Signal Lens](https://github.com/yannlemos/signal-lens) | MIT | Editor-side debugging; the headless test suite covers what they'd catch for us. |
 | [TerraBrush](https://github.com/spimort/TerraBrush), [ProtonGraph](https://github.com/protongraph/protongraph) | MIT | Editor terrain and procedural graphs: the terrain is native and read by the sim (as with Terrain3D). |
 | [VitaVehicle](https://jreo.itch.io/rcp4) | - | Raycast cars: our cars are sim-driven squads on a road graph, not player-driven. |
+
+## The lists, third pass (September 2026)
+
+I went back over [awesome-godot](https://github.com/godotengine/awesome-godot) and, beyond it, the official
+[demo projects](https://github.com/godotengine/godot-demo-projects), the
+[GATO accessibility toolkit](https://github.com/Nokorpo/gato-godot-accessibility-toolkit) and the KayKit CC0 kits.
+Only GitHub is reachable from the build box, so the Asset Library, Godot Shaders, Poly Haven, OpenGameArt and
+Freesound were out of reach. This pass exposed two gaps:
+
+- **Controls.** The joystick code assumed one gamepad: left stick for the yoke, right stick X for the rudder, triggers for the throttle.
+  - Real sim hardware is a yoke with its own throttle axis, rudder pedals on a second USB device, and toe brakes.
+  - Input Helper is built for gamepads and has no axis binding per device, so `scripts/game/flight_axes.gd` does that part:
+    - you bind a control by moving it;
+    - devices are matched by name;
+    - invert, deadzone and expo per control.
+
+  Input Helper does the keys and buttons.
+- **Colour.** GATO's colour-blindness matrices, applied to the game's colours and measured as CIE76 ΔE:
+
+| Colours | Worst pair | ΔE | Verdict |
+|---|---|---|---|
+| Factions on the map (org / rival / police) | org vs rival, tritanopia | 39 | fine |
+| Faction suits | org vs police, tritanopia | 61 | fine |
+| Neon status colours | GREEN vs PINK, protanopia | **4** | fails. So do RED vs AMBER under deuteranopia (15) and AMBER vs PINK under tritanopia (11). |
+| Colour-safe status colours | GREEN vs CYAN, tritanopia | 22 | passes (≥ 20) |
+
+The simulation shader only shows the problem; the colour-safe palette is the fix for players.
+
+| Also looked at | Licence | Verdict |
+|---|---|---|
+| [GATO text-to-speech](https://github.com/Nokorpo/gato-godot-accessibility-toolkit) | MPL-2.0 | Next for accessibility: reading the conversations and menus aloud through the OS voice. |
+| [GodotShaderWarmup](https://github.com/Koisuji02/GodotShaderWarmup) | MIT | A GDExtension plus manifests to pre-compile shaders. Only if the animated Kenney characters or the island stutter on first sight. Measure with F6 first. |
+| [Phantom Camera](https://github.com/ramokz/phantom-camera), [Shaker](https://github.com/Eneskp3441/Shaker) | MIT | Tour cameras; screen shake for gunfire and turbulence. Small, later. |
+| [Maaack's Game/Menus Template](https://github.com/Maaack/Godot-Game-Template) | MIT | We have our own lobby and menus. |
+| [GdUnit4](https://github.com/MikeSchulze/gdUnit4), [Vest](https://github.com/foxssake/vest) | MIT | We have our own runner. |
+| [gdtoolkit](https://github.com/Scony/godot-gdscript-toolkit) | MIT | gdlint/gdformat in CI: worth a try, but noisy on a codebase this size until it's configured. |
+| [Godot SQLite](https://github.com/2shady4u/godot-sqlite), [Talo](https://github.com/TaloDev/godot) | MIT | Saves are JSON and the game is self-hosted; nothing to gain. |
+| [License Manager](https://kenyoni-software.github.io/godot-addons/addons/licenses) | MIT | Could generate an in-game credits screen from the licences we already vendor. |
+| [KayKit City Builder Bits](https://github.com/KayKit-Game-Assets) | CC0 | Streetlights and traffic lights for the city. Optional art. |
+| [Simplified Flight Simulation](https://github.com/fbcosentino/godot-simplified-flightsim) | MIT | We fly JSBSim. |
 
 ## Looked at, not a fit
 

@@ -10,7 +10,8 @@ extends SceneTree
 ##       island (Isla Soberana from its approach, over the horizon) | island_strip (its runway) |
 ##       debug (the F6 performance overlay, detailed) | talk (a sit-down with the Family) |
 ##       talk_island (the General's aide on the radio) | court (the bail hearing, the lawyer) |
-##       crew (Manny Ortega's hiring hall)
+##       crew (Manny Ortega's hiring hall) | crew_safe (the same in the colour-safe palette) |
+##       controls (the F8 controls panel) | vhs (climbing out, through the F9 VHS filter)
 var app: PilotApp
 var n := 0
 var q := "medium"
@@ -31,7 +32,7 @@ func _init():
 	var opts := {"seed": 1, "location": "HAR"}
 	if view == "gun":
 		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "ground_war": true})
-	elif view == "crew":
+	elif view in ["crew", "crew_safe"]:
 		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "payroll": true, "island": true})
 	elif view == "court":
 		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "court": true})
@@ -46,7 +47,9 @@ func _init():
 	app.setup(s, q)
 	app.scene.set_hour(hour)
 	app.cam_mode = cam
-	if view == "air":
+	if view == "crew_safe":
+		UIStyle.set_palette("safe")
+	if view in ["air", "vhs"]:
 		var af := World.airfield("EGL")
 		s.spawn_airborne(af.x - 2500, af.y - 1800, 40.0, 180.0, 95.0)
 	elif view in ["org", "law", "rival"]:
@@ -106,11 +109,15 @@ func _process(_d):
 		app.talk.advance()  # on to the read and the answers
 	if n == 6 and view == "talk_island" and app.talk != null:
 		app.talk.advance()
-	if n == 3 and view == "crew":
+	if n == 3 and view == "controls":
+		app.toggle_controls()
+	if n == 3 and view == "vhs":
+		app.screen_filter.set_mode("vhs")
+	if n == 3 and view in ["crew", "crew_safe"]:
 		app.s.money = 36000
 		app.s.payroll.ai["org"] = false
 		app.open_talk("crew")
-	if n in [6, 7] and view == "crew" and app.talk != null:
+	if n in [6, 7] and view in ["crew", "crew_safe"] and app.talk != null:
 		app.talk.advance()
 	if n == 3 and view == "court":
 		app.s.money = 42000

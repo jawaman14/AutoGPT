@@ -1,0 +1,3 @@
+SimpleGodotCRTShader by Henrique Lacreta Alves (MIT)
+https://github.com/henriquelalves/SimpleGodotCRTShader @ 239cdf7
+The shader only, unmodified; scripts/render/screen_filter.gd sets gentler uniforms for a VHS look.

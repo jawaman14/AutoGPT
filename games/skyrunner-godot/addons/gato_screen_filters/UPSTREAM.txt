@@ -1,0 +1,4 @@
+GATO: Screen Filters, colour_blindness.gdshader (MPL-2.0), unmodified
+https://github.com/Nokorpo/gato-godot-accessibility-toolkit @ 5180a1e
+Used by scripts/render/screen_filter.gd to *simulate* colour vision deficiencies (a checking tool);
+the colour-safe palette for players is UIStyle.set_palette("safe").
