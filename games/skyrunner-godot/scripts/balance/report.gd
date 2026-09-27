@@ -316,11 +316,17 @@ static func write_report(results_dir: String, out_path: String) -> String:
 			("`tools/live_balance.gd`: %d seeds x %s simulated hours per configuration, stepping those systems directly. " % [int(live["seeds"]), Py.f(live["hours"], 0)])
 			+ "Flown runs stand in as $%s every %d min; the organisation's AI takes the Family's offers by their read and trades with the island " % [Py.money(int(live["stand_ins"]["run_pay"])), int(live["stand_ins"]["run_every_s"] / 60)]
 			+ "when the odds are good; the task force's AI buys the customs tree, cracks down after a catch and files RICO when it can.", "",
-			"| configuration | money p10 / p50 / p90 | task-force funds p50 | suspicion p50 |", "|---|---|---|---|"]
-		for k in live["configs"]:
-			var c: Dictionary = live["configs"][k]
-			lines.append("| %s | $%s / $%s / $%s | $%s | %s |" % [k, Py.money(int(c["money"]["p10"])), Py.money(int(c["money"]["p50"])),
-				Py.money(int(c["money"]["p90"])), Py.money(int(c["law_funds"]["p50"])), Py.f(c["suspicion"]["p50"], 0)])
+			"| configuration | money p10 / p50 / p90 | net worth p50 | task-force funds p50 | suspicion p50 |", "|---|---|---|---|---|"]
+		var rows_cfg: Dictionary = live["configs"].duplicate()
+		var air_cfg = _load(results_dir, "live-air")
+		if air_cfg is Dictionary and air_cfg.get("configs", {}).has("air"):
+			rows_cfg.merge(air_cfg["configs"])  # noair and air: the full game, with and without air risk
+		for k in rows_cfg:
+			var c: Dictionary = rows_cfg[k]
+			lines.append("| %s | $%s / $%s / $%s | %s | $%s | %s |" % [k, Py.money(int(c["money"]["p10"])), Py.money(int(c["money"]["p50"])),
+				Py.money(int(c["money"]["p90"])), ("$" + Py.money(int(c["net_worth"]["p50"]))) if c.has("net_worth") else "-",
+				Py.money(int(c["law_funds"]["p50"])), Py.f(c["suspicion"]["p50"], 0)])
+		lines += ["", "Net worth is the safe plus product at the town's street price plus street money still in the stashes and on the road. Without logistics the island pays its loads in cash on landing, so the configurations with the island and no logistics (island, all, war) carry its payouts; noair and air are the full game, where it lands as stock (entry 30)."]
 		var al: Dictionary = live["configs"].get("all", {})
 		if al.has("family"):
 			var fm: Dictionary = al["family"]

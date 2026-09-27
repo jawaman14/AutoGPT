@@ -250,6 +250,8 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 	r["market"] = {"coke_lo": coke[0], "coke_hi": coke[1], "guns": guns_sum / maxf(1.0, ticks), "disruption": dis_max,
 		"coke_lots": s.agency.coke_lots if s.agency != null else 0, "gun_lots": s.agency.gun_lots if s.agency != null else 0}
 	r["money"] = s.money
+	# what the organisation is worth: the safe, product at the town's street price, street money still out
+	r["net_worth"] = float(s.money) + (s.trade.stock_value() if s.trade != null else 0.0) + (s.logistics.cash_out() if s.logistics != null else 0.0)
 	if s.ground != null:
 		var g: GroundWar = s.ground
 		r["war"] = {"recruit": g.spent.recruit, "upkeep": g.spent.upkeep, "arms": g.spent.arms,
@@ -366,7 +368,7 @@ func _mean(rows: Array, sect: String, key: String) -> float:
 
 
 func _summary(rows: Array) -> Dictionary:
-	var sm := {"money": _stats(rows.map(func(r): return r.money)), "money_min": _stats(rows.map(func(r): return r.money_min)),
+	var sm := {"money": _stats(rows.map(func(r): return r.money)), "net_worth": _stats(rows.map(func(r): return r.net_worth)), "money_min": _stats(rows.map(func(r): return r.money_min)),
 		"law_funds": _stats(rows.map(func(r): return r.law_funds)), "suspicion": _stats(rows.map(func(r): return r.suspicion))}
 	if rows.any(func(r): return r.has("air")):
 		sm["air"] = {}
