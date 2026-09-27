@@ -140,6 +140,7 @@ var auto_kick := true
 var pumping := false
 var copilot = null  ## "human" | "ai" | null
 var campaign = null  ## set by Campaign.attach
+var tutorial = null  ## Tutorial: the optional lessons and tips (the seat shows them)
 var logistics = null  ## Logistics: product and cash sit somewhere, and trucks (or the aircraft) move them
 var story = null  ## set by Story.attach: Costa Brava 1979-1989, systems unlocking chapter by chapter
 ## The chapter on screen (HUD, briefing, desks): the flying campaign's or the story's.
@@ -284,6 +285,9 @@ func dispose() -> void:
 		story.sess = null
 	story = null
 	logistics = null
+	if tutorial != null:
+		tutorial.sess = null
+	tutorial = null
 	bus._subs.clear()
 
 
@@ -1532,6 +1536,8 @@ func update(dt: float, inp: ControlMapper.InputFrame = null, bot_controls: Fligh
 		campaign.tick(self)
 	if story != null:
 		story.tick(self)
+	if tutorial != null:
+		tutorial.tick(self)
 	if nights != null:
 		nights.tick(dt)
 
@@ -2626,6 +2632,8 @@ func save() -> void:
 		data["campaign"] = campaign.to_dict()
 	if story != null:
 		data["story"] = story.to_dict()
+	if tutorial != null:
+		data["tutorial"] = tutorial.to_dict()
 	var f := FileAccess.open(save_path, FileAccess.WRITE)
 	if f:
 		f.store_string(JSON.stringify(data, "  "))

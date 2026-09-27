@@ -194,6 +194,16 @@ Beyond the prototype:
   - Every flight key and gamepad button can be rebound. The remapping and button names come from Input Helper.
   - Each analogue control is bound by moving it: yoke, throttle lever, rudder pedals, left and right toe brakes. They can be on several USB devices, which are matched by name, so replugging or reordering them doesn't matter.
   - Each has invert, deadzone and expo. Everything is saved to `user://controls.cfg`.
+- **Tutorial (optional).** The lobby's *Tutorial* box (ticked for your first game) or `--tutorial`.
+  - **Lessons in any mode.** It works in the story, the open world and the sandbox. Each lesson finishes
+    when you do the thing: take a job, open the load planner, climb past 300 ft, deliver, try the
+    transponder.
+  - **Lessons follow the game.** A system's lesson waits until the system is in the game: the hiring
+    hall, trucking cash home, cash for the growers, going on foot, bulk buyers, the Family, the island,
+    the Company. In the story, each chapter's new faction gets its lesson when it opens.
+  - **Tips.** One-off tips cover the first time you're wanted, low on fuel, busted, in fog or a storm,
+    short of wages, raided, a truck stopped, or the Colombians calling.
+  - **Controls.** F10 skips a step, SHIFT+F10 turns it off or on. Progress rides in the save.
 - **The story: Costa Brava, 1979-1989** (the lobby's *Unlocks: Story*, the default). Eight chapters take you
   from a bush pilot flying square grouper to the organisation the coast answers to. Each chapter opens part
   of the game, so you meet each system on its own first:
@@ -327,8 +337,8 @@ Beyond the prototype:
 | ![controls](docs/img/controls.png) | ![street](docs/img/street-fire.png) | ![rain](docs/img/street-rain.png) |
 | **Your pack (I, on foot)** | **Sea fog (80%): the helicopters stay home** | **Logistics (SHIFT+H): stashes, cash, trucks** |
 | ![pack](docs/img/pack.png) | ![fog](docs/img/fog.png) | ![logistics](docs/img/logistics.png) |
-| **The story: 1981, Cocaine Cowboys** | | |
-| ![story](docs/img/story.png) | | |
+| **The story: 1981, Cocaine Cowboys** | **The tutorial: a lesson and a tip** | |
+| ![story](docs/img/story.png) | ![tutorial](docs/img/tutorial.png) | |
 
 | Mid-afternoon on the runway (medium) | Dusk, climbing out near Eagle's Nest (high) | Night: edge lights on |
 |---|---|---|

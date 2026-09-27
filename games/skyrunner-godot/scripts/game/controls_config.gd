@@ -171,7 +171,7 @@ static func settings() -> Dictionary:
 	var cf := ConfigFile.new()
 	cf.load(SETTINGS_PATH)
 	return {"palette": cf.get_value("look", "palette", "neon"), "filter": cf.get_value("look", "filter", "off"),
-		"speak": cf.get_value("look", "speak", false)}
+		"speak": cf.get_value("look", "speak", false), "tutorial_seen": cf.get_value("look", "tutorial_seen", false)}
 
 
 static func save_setting(key: String, value) -> void:

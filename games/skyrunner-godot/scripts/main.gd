@@ -4,6 +4,7 @@ extends Node
 ##   godot                                   # sandbox, solo
 ##   godot                                   # the story: Costa Brava 1979-1989, factions unlock chapter by chapter
 ##   godot -- --unlocks open                 # open world: every faction and mechanic from the start
+##   godot -- --tutorial                     # the tutorial: lessons as you play, tips when things happen
 ##   godot -- --chapter 4                    # the story, skipping ahead to chapter 4 (1982)
 ##   godot -- --mode campaign                # flying lessons: Palmetto Cay, the classic island
 ##   godot -- --mode coop                    # host: friends join as co-pilot / spotter
@@ -21,7 +22,7 @@ const SAVE_DIR := "user://"
 
 var args := {"mode": "solo", "police": false, "host": false, "port": 47800, "bind": "*", "new": false, "seed": 1,
 	"players": 0, "layer": 0, "graphics": "high", "watch": false, "shot": "", "frames": 90, "hour": -1.0,
-	"map": -1, "weather": "", "connect": "", "role": "copilot", "name": "player", "seat3d": false, "lobby": true, "unlocks": "story", "chapter": 0}
+	"map": -1, "weather": "", "connect": "", "role": "copilot", "name": "player", "seat3d": false, "lobby": true, "unlocks": "story", "chapter": 0, "tutorial": false}
 
 
 func _ready() -> void:
@@ -102,6 +103,12 @@ func start() -> void:
 		st.attach(sess)
 		while st.index + 1 < args["chapter"] and not st.completed_all:  # --chapter N: skip ahead
 			st.advance()
+	# the tutorial: asked for, or still on in this save
+	var tut = Session.read_save(save).get("tutorial")
+	if args["tutorial"] or (tut is Dictionary and bool(tut.get("on", false)) and not args["new"]):
+		Tutorial.new(tut if not args["new"] else null).attach(sess)
+		if args["tutorial"]:
+			sess.tutorial.enabled = true
 	var server = null
 	if args["host"] or mode in [Roles.COOP, Roles.VERSUS]:
 		server = HostServer.new()

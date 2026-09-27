@@ -39,6 +39,8 @@ func _init():
 		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "ground_war": true})
 	elif view == "logistics":
 		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "payroll": true, "family": true, "trade": true, "logistics": true})
+	elif view == "tutorial":
+		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "trade": true, "payroll": true})
 	elif view == "story":
 		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "career": true})
 	elif view == "buyers":
@@ -60,6 +62,10 @@ func _init():
 	var s := Session.new(opts)
 	if view == "story":
 		Story.new(2).attach(s)  # 1981: the briefing card
+	if view == "tutorial":
+		Tutorial.new().attach(s)
+		s.tutorial.done["welcome"] = true
+		s.tutorial._show("connection")
 	app = PilotApp.new()
 	root.add_child(app)
 	app.setup(s, q)

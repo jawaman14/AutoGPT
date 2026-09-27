@@ -678,3 +678,24 @@ In the 1980s cocaine trade, the product and the money were both physical, heavy 
 **Balance** (BALANCE §7, entry 28). The trade configuration with logistics ends at $55.8k in the safe plus $10.4k still out, against $71.8k without: about 8% less, lost to money in transit and trucks lost (about $900 and 120 lb a run).
 
 The street war isn't stepped in that simulator: it has no police aircraft or suspicion decay to balance the firefights, so stepped, suspicion pins at 100 with or without logistics. A known limit.
+
+## 23. The tutorial (optional)
+
+`tutorial.gd` is a layer over any mode, not a mode of its own. A new player learns the game they chose, and the story's pacing does the rest.
+
+**Lessons**
+- Each lesson finishes on evidence that you did it:
+  - an event: `job_accepted`, `job_delivered` (with its good or the Company's flag), `cash_home`, `bulk_sale`, `island_shipment`;
+  - the state: airborne above 300 ft, a dealer on a corner, cash bags aboard, the transponder toggled;
+  - or a note from the seat's UI: the load planner opened, stepping out on foot, a talk opened.
+- The first lesson not yet done whose system is in the game is the one shown. So the list grows as the game does, and the panel counts only what can be taught now ("2/9").
+- In the story, a newly opened faction's lesson comes up when its chapter begins.
+
+**Tips.** Tips are one-off. They fire on the moment (wanted, fuel under a quarter, busted with a court, fog, storm, a payday the safe can't cover, a raid, a stopped truck, the connection) and stay on screen for 20 seconds.
+
+**Control and persistence**
+- F10 skips a lesson; SHIFT+F10 turns the tutorial off or on.
+- The lobby ticks the box for the first game only (`tutorial_seen` in `user://settings.cfg`).
+- Progress (lessons done, tips shown, on or off) is saved with the game.
+
+**Scope.** It teaches the pilot's seat. The desks (boss, lieutenant, controller) keep their key hints and F1 help.

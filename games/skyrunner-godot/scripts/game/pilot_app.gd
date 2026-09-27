@@ -26,6 +26,7 @@ View     C cycle camera (chase / cockpit / tower)    M big map    P pause   F2 t
 Seats    F3 hand the aircraft to the AI (take another seat from a station) / take it back
 Debug    F6 performance overlay: FPS, frame times, graphs (Debug Menu add-on, MIT)
 Radio    F7 Radio Costa 88: synth music out of 1985
+Learn    F10 skip a tutorial step   SHIFT+F10 tutorial on / off (the lobby's Tutorial box, or --tutorial)
 Screen   F9 filter: off / VHS / colour-blindness simulations (protan, deutan, tritan, mono)
 On foot  TAB get out (parked) / back in    WASD walk  SHIFT run  SPACE jump  mouse look
          Guns (with a ground war): 1-4 pistol / rifle / machine gun / RPG from the armoury  H holster  R reload  LMB fire
@@ -86,6 +87,7 @@ var paused := false
 var _pressed := {}
 var _cam_pos = null
 var pursuer_nodes := {}  ## Pursuer (instance id) -> [node, spinners, lights]
+var tutorial_panel: TutorialPanel = null  ## the tutorial's lesson and tips (Tutorial)
 var logistics_menu: LogisticsMenu = null  ## SHIFT+H
 var squads: SquadRender = null  ## the ground war's men and vehicles (sessions with one)
 var _graphics := "high"
@@ -312,6 +314,12 @@ func _unhandled_input(ev: InputEvent) -> void:
 			return
 		if ev.shift_pressed and k == KEY_W and s.payroll != null:
 			open_talk("crew")  # Manny Ortega's hiring hall
+		elif ev.shift_pressed and k == KEY_F10:
+			if s.tutorial == null:
+				Tutorial.new().attach(s)
+				s.say("Tutorial on.")
+			else:
+				s.tutorial.set_enabled(not s.tutorial.enabled)
 		elif ev.shift_pressed and k == KEY_H and s.logistics != null:
 			toggle_logistics()  # where the product and the cash are; trucks; cash bags
 		elif ev.shift_pressed and k == KEY_B and s.trade != null:
@@ -374,6 +382,8 @@ func _unhandled_input(ev: InputEvent) -> void:
 			s.say("Mouse yoke %s" % ("ON - mouse position is the stick" if mouse_yoke else "OFF"))
 		elif k == KEY_P:
 			paused = not paused
+		elif k == KEY_F10 and s.tutorial != null and s.tutorial.enabled:
+			s.tutorial.skip()
 		elif k == KEY_F1:
 			help.visible = not help.visible
 		elif k == KEY_F2:
@@ -411,6 +421,8 @@ func open_talk(name: String, title := "start") -> TalkBalloon:
 	if talk != null and is_instance_valid(talk):
 		return talk
 	talk = Talk.open(self, name, title, LocalLink.new(s, Roles.PILOT, false))
+	if s.tutorial != null:
+		s.tutorial.note("talk_" + name)
 	if talk != null:
 		talk.finished.connect(func(): talk = null)
 	return talk
@@ -572,6 +584,8 @@ func _toggle_on_foot() -> void:
 	walker.place(st.x + lx * (v.span_m * 0.5 + 1.2), st.y + ly * (v.span_m * 0.5 + 1.2), st.heading)
 	walker.cam.current = true
 	on_foot = true
+	if s.tutorial != null:
+		s.tutorial.note("on_foot")
 	if s.foot != null:
 		gun = Gunplay.new().setup(s, walker, squads, ui)
 		gun.fx = effects
@@ -618,6 +632,8 @@ func _toggle_menu(k: String) -> void:
 	for other in menus.values():
 		other.visible = false
 	m.open()
+	if s.tutorial != null:
+		s.tutorial.note("menu_" + k)
 
 
 func _gather_input() -> ControlMapper.InputFrame:
@@ -650,6 +666,12 @@ func _poll_stick(inp: ControlMapper.InputFrame) -> void:
 func _process(delta: float) -> void:
 	var dt := minf(delta, 0.1)
 	_frame += 1
+	if _frame % 10 == 0:
+		if s.tutorial != null and tutorial_panel == null:
+			tutorial_panel = TutorialPanel.new()
+			ui.add_child(tutorial_panel)
+		if tutorial_panel != null:
+			tutorial_panel.show_view(s.tutorial.view() if s.tutorial != null else {})
 	var camp = s.narrative
 	if camp != null and camp.show_briefing:
 		var ch: Campaign.Chapter = camp.chapter
