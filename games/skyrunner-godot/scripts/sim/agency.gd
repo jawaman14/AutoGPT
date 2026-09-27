@@ -100,6 +100,8 @@ var gun_lots := 0  ## lots of guns bought
 var pipe_last := ""
 var _pipe_t := 0.0
 var _pipe_pause := -1.0
+var next_market := "town"  ## where the next load lands (what following the money finds)
+var extra_lots := 0  ## cocaine we sold the Company, flown north with its next load
 
 
 func _init(sess_, rng_: PyRandom, drng_: PyRandom = null) -> void:
@@ -120,7 +122,7 @@ func job_from(origin: Airfield, airfields: Array):
 	if dests.is_empty():
 		return null
 	var dest: Airfield = dests[rng.randint(0, dests.size() - 1)]
-	if prng != null and war_chest >= 20000.0 and prng.random() < 0.35:
+	if prng != null and war_chest >= 20000.0 and prng.random() < 0.35 and (sess.trade == null or sess.trade.connected):
 		return _return_leg(origin, airfields)
 	var jid := Jobs.new_id()
 	var n := rng.randint(3, 6)
@@ -334,11 +336,13 @@ func _pipeline(step: float) -> void:
 	if hung_out and _pipe_pause < 0.0:
 		_pipe_pause = sess.time + 3600.0  # covering itself for an hour, then back to business
 		return
-	var lots := prng.randint(1, 3)
+	var lots := prng.randint(1, 3) + mini(extra_lots, 4)
+	extra_lots = 0
 	# 1. buy upstream: the island's connections sell to the Company first
 	mk.source_shock("cocaine", -0.02 * lots)
 	# 2. fly it north: a protected flood on one market's street
-	var m: String = ["town", "north", "sea"][prng.randint(0, 2)]
+	var m: String = next_market
+	next_market = ["town", "north", "sea"][prng.randint(0, 2)]
 	mk.flow("cocaine", m, 0.12 * lots, "the Company's planes landed cocaine")
 	coke_lots += lots
 	var street: float = sess.econ.mult("cocaine", m)

@@ -116,6 +116,7 @@ var _ai_defaults := {}  ## what each seat's AI was set to before a human took it
 var remote_stick := {}  ## a remote pilot's controls {roll, pitch, throttle, rudder, brake} (the pilot seat over the wire)
 var agency: Agency = null  ## the Company: arms flights south, protection, exposure (live play asks for it)
 var family: Family = null  ## the Morettis: help that might be a trap (live play asks for it)
+var trade: Trade = null  ## the product business: stock, street dealers, bulk buyers, own loads, the career (live play asks for it)
 var payroll: Payroll = null  ## the outfits' hired workers: soldiers, drivers, mules, lookouts, accountants, pilots (live play asks for it)
 var court: Court = null  ## the pilot's case after an arrest: bail, lawyers, plea, trial, sentence (live play asks for it)
 var island: Island = null  ## Isla Soberana, over the horizon: cheap product, sovereign airspace (live play asks for it)
@@ -208,6 +209,8 @@ func _init(opts := {}) -> void:
 		agency.prng = _rng(seed + 127)  # the pipeline: cocaine north, guns south
 	if Island.ENABLED and opts.get("island", false) and not world.map.foreign.is_empty():
 		island = Island.new(self, _rng(seed + 103))
+	if Trade.ENABLED and opts.get("trade", false):
+		trade = Trade.new(self, _rng(seed + 131), opts.get("career", false))
 	if Payroll.ENABLED and opts.get("payroll", false):
 		payroll = Payroll.new(self, _rng(seed + 109))
 		payroll.ai["org"] = not (humans.has(Roles.BOSS) or humans.has(Roles.LIEUTENANT))
@@ -472,6 +475,13 @@ func refresh_board(code: String) -> void:
 		var gj = Arsenal.gun_run(af, world.airfields, stash_net, arng)
 		if gj != null:
 			boards[code].append(gj)
+	if trade != null and features.has("contraband") and af.kind in ["shady", "bush"]:
+		var oj = trade.board_offer(af, rng)
+		if oj != null:
+			boards[code].append(oj)
+		if not trade.connected:
+			# the career: grass until the Colombians call - no cocaine work yet
+			boards[code] = boards[code].filter(func(j): return j.own_good == "marijuana" or Economy.good_of(j) != "cocaine")
 	if Economy.REALISM:
 		for j in boards[code]:  # today's prices
 			j.price_mult = econ.job_mult(j)
@@ -1586,6 +1596,8 @@ func _update_world(dt: float) -> void:
 		court.update(dt)
 	if payroll != null:
 		payroll.update(dt)
+	if trade != null:
+		trade.update(dt)
 
 	# maritime: cutters go where the task force suspects a drop
 	var law_goals := []
@@ -2268,6 +2280,30 @@ func _pay(fn: Callable):
 	return err if err != "" else null
 
 
+func _cmd_sell_product(role: String, a: Dictionary):
+	if trade == null:
+		return "No trade in this game."
+	var g := str(a.get("good", ""))
+	if not g in ["cocaine", "marijuana", "guns"]:
+		return "Sell what?"
+	var err := trade.sell(str(a.get("buyer", "")), g, float(_num(a, "qty", 0)), str(a.get("tier", "rifle")))
+	return err if err != "" else null
+
+
+func _cmd_street_sweep(role: String, a: Dictionary):
+	if trade == null:
+		return "No street trade in this game."
+	var err := trade.sweep(str(a.get("market", "")))
+	return err if err != "" else null
+
+
+func _cmd_trace_money(role: String, a: Dictionary):
+	if trade == null:
+		return "No money to follow in this game."
+	var err := trade.trace()
+	return err if err != "" else null
+
+
 func _cmd_hire_worker(role: String, a: Dictionary):
 	return _pay(func(): return payroll.hire("org", str(a.get("id", ""))))
 
@@ -2358,6 +2394,12 @@ func _complete_delivery(job: Jobs.Job, af: Airfield) -> void:
 		active_jobs.erase(job)
 		loadout.remove_job(job.id)
 		say("Delivered '%s': %s into the organisation's armoury" % [job.title, Arsenal.describe(job.weapons)])
+		bus.emit("job_delivered", time, "", ["runner"], {"job_id": job.id, "pay": 0, "dest": af.code, "hot": true})
+		return
+	if job.own_good != "" and trade != null:
+		trade.delivered(job)
+		active_jobs.erase(job)
+		loadout.remove_job(job.id)
 		bus.emit("job_delivered", time, "", ["runner"], {"job_id": job.id, "pay": 0, "dest": af.code, "hot": true})
 		return
 	if job.defector and island != null:

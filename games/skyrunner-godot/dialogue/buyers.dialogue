@@ -1,0 +1,49 @@
+# The buyers: Benny Ruiz, who knows who's buying - a booth at the back of a
+# steakhouse on the Tamiami Trail. (Fiction.) Reads and acts through
+# Talk.State: can_sell(buyer, good), quote_line(buyer, good), sell(buyer, good), corners_line().
+
+~ start
+if not trade
+	Benny Ruiz: Nothing to sell in this game.
+	=> END
+Benny Ruiz: [[Sit down, sit down. Who are we selling to?|The phone's been ringing. Everybody's buying.|You look like a man holding product.]]
+Benny Ruiz: We're holding {{coke}} lb of cocaine, {{weed}} lb of grass and {{rifles}} rifles. The street pays {{money_s(street_coke)}} a pound for cocaine, {{money_s(street_weed)}} for grass.
+if not connected
+	Benny Ruiz: The Colombians don't know us yet. Move another {{connect_left}} pounds of grass and they'll hear the name.
+=> buyers
+
+~ buyers
+- Sell the Morettis {{quote_line("family", "cocaine")}} [if can_sell("family", "cocaine")]
+	do sell("family", "cocaine")
+	=> sold
+- Sell the Morettis {{quote_line("family", "marijuana")}} [if can_sell("family", "marijuana")]
+	do sell("family", "marijuana")
+	=> sold
+- Arm the Morettis' crews with {{quote_line("family", "guns")}} [if can_sell("family", "guns")]
+	do sell("family", "guns")
+	Benny Ruiz: They'll use them on Los Cuervos. That's not our problem. Is it?
+	=> sold
+- Sell the Company {{quote_line("agency", "cocaine")}} [if can_sell("agency", "cocaine")]
+	do sell("agency", "cocaine")
+	Benny Ruiz: It flies north on their planes. Somebody's corner gets flooded. Hope it's not ours.
+	=> sold
+- Send the Company {{quote_line("agency", "guns")}} for the war down south [if can_sell("agency", "guns")]
+	do sell("agency", "guns")
+	=> sold
+- Sell Los Cuervos {{quote_line("rival", "guns")}} [if can_sell("rival", "guns")]
+	do sell("rival", "guns")
+	Benny Ruiz: Money's money. Just remember which way those rifles point.
+	=> sold
+- How are the corners?
+	Benny Ruiz: {{corners_line()}}.
+	=> buyers
+- That's all for now.
+	Benny Ruiz: [[You know where I eat.|Don't sell it all at once - you'll flood your own street.]]
+	=> END
+
+~ sold
+if result != ""
+	Benny Ruiz: {{result}}
+else
+	Benny Ruiz: {{trade_last}}.
+=> buyers

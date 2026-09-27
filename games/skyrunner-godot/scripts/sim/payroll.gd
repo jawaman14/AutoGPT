@@ -47,6 +47,7 @@ const ROLES := {
 	"lookout": [50, 0.6, "lookout"],
 	"accountant": [250, 1.5, "accountant"],
 	"pilot": [300, 1.2, "contract pilot"],
+	"dealer": [70, 0.7, "street dealer"],  ## (Trade) sells the product corner by corner
 }
 const FIRST := ["Manny", "Tito", "Rafa", "Chucho", "Nestor", "Lalo", "Pepe", "Beto", "Ray", "Eddie", "Danny", "Luis", "Rosa",
 	"Marisol", "Yolanda", "Carmen", "Joey", "Frankie", "Hector", "Oscar", "Ernesto", "Willie", "Tony", "Gil"]
@@ -123,7 +124,7 @@ func _person(o: String, role: String, street := false) -> Dictionary:
 
 
 func _refresh(o: String) -> void:
-	var roles := ROLES.keys()
+	var roles := ROLES.keys().filter(func(r): return r != "dealer" or sess.trade != null)
 	var c := []
 	for i in CANDIDATES:
 		c.append(_person(o, roles[rng.randint(0, roles.size() - 1)]))
@@ -514,6 +515,8 @@ func needs(o: String) -> Dictionary:
 			n["accountant"] = 1
 	if cash(o) > 30000:
 		n["pilot"] = 1
+	if sess.trade != null:
+		n["dealer"] = sess.trade.dealers_wanted(o)
 	return n
 
 

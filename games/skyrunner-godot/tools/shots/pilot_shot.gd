@@ -12,6 +12,7 @@ extends SceneTree
 ##       talk_island (the General's aide on the radio) | court (the bail hearing, the lawyer) |
 ##       crew (Manny Ortega's hiring hall) | crew_safe (the same in the colour-safe palette) |
 ##       controls (the F8 controls panel) | vhs (climbing out, through the F9 VHS filter) |
+##       buyers (Benny Ruiz and who's buying) |
 ##       pack (on foot with a rifle, the I pack panel open) |
 ##       street (at eye level in town: KayKit lamps and props, a burning wreck, a blast; wet
 ##       if the weather argument is "storm")
@@ -36,6 +37,8 @@ func _init():
 	var opts := {"seed": 1, "location": "HAR"}
 	if view in ["gun", "pack"]:
 		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "ground_war": true})
+	elif view == "buyers":
+		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "payroll": true, "family": true, "agency": true, "trade": true, "ground_war": true})
 	elif view in ["crew", "crew_safe"]:
 		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "payroll": true, "island": true})
 	elif view == "court":
@@ -148,6 +151,15 @@ func _process(_d):
 		app.s.foot.pack_add("ammo", 90)
 		app.s.foot.pack_add("medkit")
 		app.toggle_pack()
+	if n == 3 and view == "buyers":
+		app.s.trade.connected = true
+		app.s.trade.stock.cocaine = 140.0
+		app.s.trade.stock.marijuana = 900.0
+		app.s.arsenals.org.add("rifle", 12)
+		app.s.payroll.ai["org"] = false
+		app.open_talk("buyers")
+	if n in [6, 7] and view == "buyers" and app.talk != null:
+		app.talk.advance()
 	if n == 3 and view == "controls":
 		app.toggle_controls()
 	if n == 3 and view == "vhs":

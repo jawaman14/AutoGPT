@@ -38,6 +38,9 @@ Crew     N transponder on/off   7 squawk code (1200 VFR / 7700 / 7600 / 7500)   
 Family   SHIFT+F sit down with Sal Moretti: hear the offer, your man's read on it, press him for
          another, take it or leave it; pay or stall the tribute (1-4 answer, ENTER go on, ESC leave)
          SHIFT+Y / SHIFT+N take or turn down the newest offer without the talk, SHIFT+P pay the tribute
+Trade    SHIFT+B Benny Ruiz and the buyers: sell cocaine, grass or rifles in bulk to the Morettis, the Company
+         or (guns only) Los Cuervos. Our own loads (grass at the bush strips; cocaine once the Colombians call)
+         go into the stash; dealers (hire them from Manny) sell it on the corners
 Court    arrested (with a court): SHIFT+L your lawyer - bail or a bond, a better lawyer, motions to
          suppress / discovery / more time, the plea, the witness, the judge, a deal; the appeal inside
 Crew     SHIFT+W Manny Ortega's hiring hall: hire soldiers, drivers, mules, lookouts, an accountant,
@@ -307,6 +310,8 @@ func _unhandled_input(ev: InputEvent) -> void:
 			return
 		if ev.shift_pressed and k == KEY_W and s.payroll != null:
 			open_talk("crew")  # Manny Ortega's hiring hall
+		elif ev.shift_pressed and k == KEY_B and s.trade != null:
+			open_talk("buyers")  # Benny Ruiz: who's buying, and at what
 		elif ev.shift_pressed and k == KEY_L and s.court != null:
 			open_talk("lawyer")  # your lawyer: bail, motions, the plea, a deal, the appeal
 		elif ev.shift_pressed and k == KEY_F and s.family != null:

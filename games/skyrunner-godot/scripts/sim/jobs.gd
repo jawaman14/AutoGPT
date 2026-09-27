@@ -52,6 +52,7 @@ class Job:
 	var gun_mode := "sell"
 	var cost := 0  ## paid up front when taken (the island's loads: bought, not consigned)
 	var defector := false  ## a defector flown off the island (Island)
+	var own_good := ""  ## our own load (Trade): "cocaine" / "marijuana" - into the stash on delivery, not paid
 	var agency := false  ## an Agency arms flight (Agency): protected while you carry it  ## gun runs: "sell" at the street price, or "stock" the organisation's arsenal
 
 	func _init(id_: int, title_: String, kind_: String, origin_: String, dest_: String, items_: Array, payout_: int, opts := {}) -> void:

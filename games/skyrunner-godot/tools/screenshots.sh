@@ -32,3 +32,4 @@ run res://tools/shots/pilot_shot.gd -- high 15 "$PWD/$OUT/crew-safe.png" chase c
 run res://tools/shots/pilot_shot.gd -- high 11 "$PWD/$OUT/street-fire.png" chase street 100000 clear 0.5
 run res://tools/shots/pilot_shot.gd -- high 13 "$PWD/$OUT/street-rain.png" chase street 100000 storm 0.3
 run res://tools/shots/pilot_shot.gd -- high 10 "$PWD/$OUT/pack.png" chase pack
+run res://tools/shots/pilot_shot.gd -- high 15 "$PWD/$OUT/buyers.png" chase buyers

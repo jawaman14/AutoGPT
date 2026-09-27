@@ -192,6 +192,16 @@ Beyond the prototype:
   - Every flight key and gamepad button can be rebound. The remapping and button names come from Input Helper.
   - Each analogue control is bound by moving it: yoke, throttle lever, rudder pedals, left and right toe brakes. They can be on several USB devices, which are matched by name, so replugging or reordering them doesn't matter.
   - Each has invert, deadzone and expo. Everything is saved to `user://controls.cfg`.
+- **The trade: dealers, buyers, and grass before cocaine.**
+  - You start the way the 1970s smugglers did: cheap, bulky loads of grass from the farm strips into your stash.
+  - Dealers (hire them from Manny) sell it corner by corner, competing with Los Cuervos' dealers. They get picked
+    up by the police and caught in the street wars.
+  - Bulk buyers (SHIFT+B, Benny Ruiz):
+    - the Morettis, whose sales flood the town;
+    - the Company, which feeds its pipeline;
+    - rifles to the Family, the Company or Los Cuervos, each arming a different side of the wars.
+  - Cocaine opens once the Colombians call.
+  - The law sweeps corners and follows the money.
 - **A street that moves.**
   - Under the prices, each drug has supply and demand in each market, a distribution network that can break,
     and an upstream source.

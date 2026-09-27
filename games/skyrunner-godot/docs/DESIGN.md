@@ -552,3 +552,55 @@ without). It flies about 24 lots north and buys about 25 lots of guns per run.
 Its own RNG streams (the street: seed + 113; the pipeline: seed + 127). Off with `Economy.REALISM`, like the
 rest of the market, for the Python replays.
 
+
+## 19. The trade: stock, dealers, buyers, and grass before cocaine
+
+`scripts/sim/trade.gd`. The organisation now holds product: pounds of cocaine and marijuana in its stash houses.
+
+**Own loads.** The job boards offer our own loads alongside the courier work:
+- **Grass** at the bush strips (the farm): about $2 a pound, 200-500 lb a load. It's bulky, so weight and balance
+  bite.
+- **Cocaine** from the Colombian connection at the shady strips: about $22 a pound, 40-170 lb a load.
+
+Both are paid up front, flown to a stash strip, and go into the stash. A raid takes 30% of what's there.
+
+**The career** (live play, `career: true`). It starts with grass, the way the 1970s smugglers did: cheap, bulky,
+less heat. The Colombians only call once we've moved 1,200 lb of grass (or made $25,000 in the trade). Until then
+there's no cocaine work on the boards, no island trade, and no return legs for the Company.
+
+**Street sellers.** Dealers are a payroll role for both outfits (hire them from Manny).
+- They're posted to the outfit's corners: ours where our stash houses are, Los Cuervos' where they hold turf.
+- Each dealer moves 0.6 lb of cocaine or 5 lb of grass a minute, at the street price, scaled by skill.
+- Competition matters: each of the other outfit's dealers on the same corner takes 12%, and Los Cuervos' hold on
+  the market takes up to 40%.
+- Their sales put product on the market's street, so the price softens.
+- The police pick dealers up, more often where police are thick and for cocaine (the market's arrest hooks
+  follow).
+- A gunfight in their market can take them.
+- Los Cuervos' AI sends a squad at markets where two or more of ours sell and it holds a quarter of the turf.
+
+**Bulk buyers.** Talk to Benny Ruiz: SHIFT+B in the pilot seat, M at the boss's, lieutenant's or co-pilot's
+desk.
+
+| Buyer | Takes | Pays | And then |
+|---|---|---|---|
+| The Moretti family (respect 25+) | cocaine, grass, rifles | 72% / 80% of the town's street; the fence's price for rifles | sells the drugs on in town (more on its street); arms its crews against Los Cuervos (their cash suffers); respect +2 |
+| The Company (in business, not hung out) | cocaine, rifles | 85% of the north's street; 130% of the fence for rifles | cocaine into the pipeline's war chest and its next load north; rifles south (guns scarcer here); trust +, exposure + |
+| Los Cuervos | rifles | 120% of the fence | their armoury grows (they fight better, us included); guns in the west; our suspicion rises |
+
+Each buyer has only so much appetite (it refills over 30 minutes). With no boss in the chair, the organisation's
+AI sells whatever its dealers can't move in two hours to the best buyer.
+
+**The law.**
+- A street sweep (M on the law's desks, $2,500) picks up 45% of the dealers in the market under the mouse, ours and
+  theirs, and breaks the corner.
+- Following the money (T, $4,000) traces the Company's pipeline:
+  - it adds exposure;
+  - a quarter of the war chest is forfeited to the task force;
+  - it names the market where the next load lands.
+
+  Our bulk sales from the last hour are in the trail too (suspicion +4 each).
+
+**Balance** (BALANCE section 7, entry 27). The trade config ends at $72k cash plus about $20k of product
+(control $70k), with the Colombians calling after about 75 minutes.
+

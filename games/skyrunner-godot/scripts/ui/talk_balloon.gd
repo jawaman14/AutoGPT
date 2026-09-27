@@ -1,7 +1,7 @@
 class_name TalkBalloon
 extends CanvasLayer
 ## A conversation on screen: the speaker's name in neon script, the line, and
-## the answers you can give (numbered; 1-6 or a click). ENTER or SPACE moves
+## the answers you can give (numbered; 1-9 or a click). ENTER or SPACE moves
 ## on when there's nothing to choose; ESC walks away. Drives Talk's Dialogue
 ## Manager scripts one line at a time, re-reading the game (State.refresh)
 ## before each so the numbers are current.
@@ -114,7 +114,7 @@ func _input(ev: InputEvent) -> void:
 	var k: int = ev.keycode
 	if k in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE]:
 		advance()
-	elif k >= KEY_1 and k <= KEY_6:
+	elif k >= KEY_1 and k <= KEY_9:
 		choose(k - KEY_1)
 	elif k == KEY_ESCAPE:
 		_close()

@@ -182,6 +182,8 @@ func ship_odds() -> Array:
 ## Buy product on the island and send it home by `method` ("mules" | "ship").
 ## `n` mules or `lb` pounds in a container. Returns "" or why not.
 func ship(method: String, amount: int) -> String:
+	if sess.trade != null and not sess.trade.connected:
+		return "The General's people only deal with the Colombians' friends. We're not there yet."
 	if not open():
 		return "The island is closed: a purge. Nobody will touch our product."
 	if method == "mules":

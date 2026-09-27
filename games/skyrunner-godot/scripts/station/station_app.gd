@@ -329,7 +329,7 @@ func _key(k: String) -> void:
 		squad_mode = not squad_mode
 		status = "Squads: click one, right-click to send it" if squad_mode else ""
 		return
-	if _family_key(k, snap) or _island_key(k, snap):
+	if _family_key(k, snap) or _island_key(k, snap) or _trade_key(k, snap):
 		return
 	if squad_mode and _squad_key(k, snap):
 		return
@@ -482,6 +482,57 @@ static func _court_law_line(c: Dictionary) -> String:
 		return ""
 	return "PROSECUTION (%s): evidence %d%%, %d witnesses, conviction %d%%, trial in %d min, before %s. N no bail  W immunity  K bank records  D conspiracy  Y plea\n" % [
 		c.stage, int(c.get("evidence", 0)), int(c.get("witnesses", 0)), int(100 * float(c.get("odds", 0))), int(ceil(float(c.get("trial_s", 0)) / 60.0)), c.judge]
+
+
+## The street trade: M the buyers (Benny Ruiz) at the organisation's desks; the
+## law's M sweeps the market under the mouse, T follows the money.
+func _trade_key(k: String, snap: Dictionary) -> bool:
+	if snap.get("trade", {}).is_empty() or squad_mode:
+		return false
+	if role in [Roles.BOSS, Roles.LIEUTENANT, Roles.COPILOT] and k == "m":
+		open_talk("buyers")
+		return true
+	if role in [Roles.CONTROLLER, Roles.CHIEF, Roles.PATROL] and k == "m":
+		var pos = map.mouse_world()
+		var m := GroundWar.market_at(pos.x, pos.y) if pos != null else "town"
+		_cmd("street_sweep", {"market": m})
+		return true
+	if role in [Roles.CONTROLLER, Roles.CHIEF] and k == "t":
+		_cmd("trace_money")
+		return true
+	return false
+
+
+## The street, as the organisation sees it.
+static func trade_lines(t: Dictionary) -> Array:
+	if t.is_empty():
+		return []
+	var out := ["THE STREET  (M: the buyers)"]
+	out.append("Holding %d lb cocaine, %d lb grass   street $%s / $%s a lb   made $%s" % [int(t.stock.cocaine), int(t.stock.marijuana),
+		Py.money(int(t.street.cocaine)), Py.money(int(t.street.marijuana)), Py.money(int(t.earned))])
+	var cs := []
+	for m in t.corners:
+		var c: Dictionary = t.corners[m]
+		if int(c.ours) + int(c.theirs) > 0:
+			cs.append("%s %d vs %d ($%d/min)" % [m, int(c.ours), int(c.theirs), int(t.sales.get(m, 0))])
+	out.append("Corners (ours vs Los Cuervos'): " + (", ".join(cs) if not cs.is_empty() else "none - hire dealers"))
+	if not bool(t.connected):
+		out.append("No cocaine connection yet: move %d lb of grass (sold %d)" % [int(Trade.CONNECT_LB), int(t.sold.marijuana)])
+	if str(t.last) != "":
+		out.append(str(t.last))
+	return out
+
+
+static func _trade_law_line(t: Dictionary) -> String:
+	if t.is_empty():
+		return ""
+	var cs := []
+	for m in t.corners:
+		var c: Dictionary = t.corners[m]
+		if int(c.ours) + int(c.theirs) > 0:
+			cs.append("%s %d" % [m, int(c.ours) + int(c.theirs)])
+	return "CORNERS: dealers %s  (M sweep the market under the mouse $%d, T follow the money $%d)\n" % [
+		", ".join(cs) if not cs.is_empty() else "none seen", Trade.SWEEP_COST, Trade.TRACE_COST]
 
 
 static func _island_law_line(isl: Dictionary) -> String:
@@ -1041,6 +1092,9 @@ func _draw_squads(snap: Dictionary) -> void:
 		var isl := island_lines(snap.get("island", {}))
 		if not isl.is_empty():
 			lines += [""] + isl
+		var tl := trade_lines(snap.get("trade", {}))
+		if not tl.is_empty():
+			lines += [""] + tl
 	lines.append("")
 	lines.append("STREETS (who's out there)")
 	var ctl: Dictionary = g.get("control", {})
@@ -1084,7 +1138,7 @@ func _draw_law(snap: Dictionary) -> void:
 		"Busts %d   boats %d   bales seized %d      Runners: bales in %d, escaped %d" % [int(sc.busts), int(sc.boats_seized), int(sc.bales_seized),
 			int(rs.bales_delivered), int(rs.escapes)],
 		"Selected unit: %s" % (sel_unit if sel_unit != null else "-  (click one on the map or pick it below)"),
-		_agency_line(snap.get("agency", {})) + _family_law_line(snap.get("family", {})) + _island_law_line(snap.get("island", {})) + _court_law_line(snap.get("court", {})) + _jail_law_line(snap.get("payroll", {})), "CASES",
+		_agency_line(snap.get("agency", {})) + _family_law_line(snap.get("family", {})) + _island_law_line(snap.get("island", {})) + _trade_law_line(snap.get("trade", {})) + _court_law_line(snap.get("court", {})) + _jail_law_line(snap.get("payroll", {})), "CASES",
 	]
 	for c in cases.slice(0, 6):
 		lines.append("  %-10s suspicion %3.0f%%   %s%s" % [c.id, c.suspicion, "\u2605".repeat(int(c.wanted)) if c.wanted else "", "   TIPPED" if c.tipped else ""])

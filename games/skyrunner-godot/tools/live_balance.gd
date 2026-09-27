@@ -41,7 +41,8 @@ func _initialize() -> void:
 		"island": {"island": true},
 		"agency": {"agency": true},
 		"payroll": {"payroll": true},
-		"all": {"family": true, "island": true, "agency": true, "chronicle": true, "payroll": true},
+		"trade": {"trade": true, "career": true, "payroll": true, "family": true, "agency": true},
+		"all": {"family": true, "island": true, "agency": true, "chronicle": true, "payroll": true, "trade": true, "career": true},
 	}
 	var out := {"seeds": seeds, "hours": hours, "stand_ins": {"run_pay": RUN_PAY, "run_every_s": RUN_EVERY_S,
 		"law_pay": LAW_PAY, "law_every_s": LAW_EVERY_S, "mule_max": MULE_MAX, "ship_max": SHIP_MAX}, "configs": {}}
@@ -81,6 +82,8 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 	var guns_sum := 0.0
 	var dis_max := 0.0
 	var ticks := 0
+	var next_own := 900.0
+	var connected_at := -1.0
 	while t < hours * 3600.0:
 		t += STEP
 		s.time = t
@@ -136,6 +139,20 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 				if not s.upgrades.runner.has(id) and s.money > int(n.cost) * 4 and Upgrades.blocker("runner", id, s.upgrades.runner, s.money) == "":
 					s.money -= int(n.cost)
 					s.upgrades.runner[id] = true
+		# the trade: an own load every 15 minutes (grass until the Colombians call, then cocaine)
+		if s.trade != null:
+			s.trade.update(STEP)
+			if t >= next_own:
+				next_own += 900.0
+				var af := World.airfield("QRY" if s.trade.connected else "FRM")
+				var g := "cocaine" if s.trade.connected else "marijuana"
+				var low: bool = s.trade.stock[g] < (150.0 if g == "cocaine" else 800.0)  # buy when the stash runs low
+				var j = s.trade.board_offer(af, s.rng) if low else null
+				if j != null and s.money > j.cost + 5000:
+					s.money -= j.cost
+					s.trade.delivered(j)
+			if s.trade.connected and connected_at < 0.0:
+				connected_at = t
 		# the markets: supply and demand move with everything above
 		s.econ.update(STEP, t, [], [], {}, s.ground)
 		if int(t) % 60 == 0:
@@ -162,6 +179,12 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 		var pr := s.payroll
 		r["payroll"] = {"crew": pr.of("org").filter(func(w): return w.status in ["free", "assigned"]).size(), "paid": pr.paid_total.org,
 			"lost": pr.lost.org, "flips": pr.flips.org, "loyalty": pr.loyalty("org"), "short": pr.unpaid.org > 0}
+	if s.trade != null:
+		r["trade"] = {"earned": s.trade.earned, "sold_coke": s.trade.sold.cocaine, "sold_weed": s.trade.sold.marijuana,
+			"stock_coke": s.trade.stock.cocaine, "stock_weed": s.trade.stock.marijuana, "connected_min": (connected_at / 60.0) if connected_at >= 0.0 else hours * 60.0,
+			"dealers": s.payroll.of("org", "dealer").filter(func(w): return w.status in ["free", "assigned"]).size() if s.payroll != null else 0,
+			"bulk": s.trade.bulk_log.size(),
+			"stock_value": s.trade.stock.cocaine * s.trade.street_price("cocaine", "town") + s.trade.stock.marijuana * s.trade.street_price("marijuana", "town")}
 	if s.agency != null:
 		r["agency"] = {"flights": s.agency.flights, "hung_out": s.agency.hung_out, "burned": s.agency.burned,
 			"stings": r.get("stings", 0), "withheld": s.agency.withheld, "exposure": s.agency.exposure}
@@ -237,6 +260,10 @@ func _summary(rows: Array) -> Dictionary:
 	sm["market"] = {"coke_lo": _mean(rows, "market", "coke_lo"), "coke_hi": _mean(rows, "market", "coke_hi"),
 		"guns": _mean(rows, "market", "guns"), "disruption": _mean(rows, "market", "disruption"),
 		"coke_lots": _mean(rows, "market", "coke_lots"), "gun_lots": _mean(rows, "market", "gun_lots")}
+	if rows[0].has("trade"):
+		sm["trade"] = {}
+		for k in rows[0]["trade"]:
+			sm["trade"][k] = _mean(rows, "trade", k)
 	if rows[0].has("agency"):
 		sm["agency"] = {"flights": _mean(rows, "agency", "flights"), "hangout_rate": _rate(rows, "agency", "hung_out"),
 			"burned_rate": _rate(rows, "agency", "burned"), "withheld": _mean(rows, "agency", "withheld"),
