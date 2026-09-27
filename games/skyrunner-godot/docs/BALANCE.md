@@ -73,6 +73,8 @@ Drivers pull over when they see police on the road ahead; a passing patrol pulls
 
 31. **Flights that can go wrong.** *Found:* The live-play simulator didn't fly: runs were a fixed income, so a bust's fine (at least $1,500 plus a quarter of the bank, or the court's bail and lawyers once it opens), the cash bags seized aboard and a crash's repairs never happened, and the story's goals rested on that. First try: roll each flight against the pooled calibration (every tactic the bot flew, evenly). That busts a quarter of all flights; over 12 hours the story's pilot was busted 12 times, paid $52k in fines, and finished 7.5% of runs, most of them stuck in 1982 with the bank goal eaten a quarter at a time. No player keeps flying low into a standing task force. *Changed:* Now each flight rolls what the tactical sweep measured for the police's posture as the session has it (tipped off at suspicion 60+, the balloon up, or heavy / standard / light by units in stock), flying the tactic that did best against it - high, against standard police: 0 of 30 busted - and stays on the ground when even that one is busted more than a quarter of the time (AirRisk). A flight every 15 minutes (the bot's took 13-19), paying so the mean income is the stand-in's; busts and crashes go through the session. Three hours, all systems with logistics, the war and the court: money p50 $16.6k against $22.1k at a fixed income, from 0.6 busts and 0.7 crashes a run - a bust in the court costs bail, lawyers and the bags aboard. The story: about 2 busts and 2 crashes, $8k in fines and $5k in repairs a run; 1986 in 80% of runs, and at $80k the end in 42.5%. The best net worth in 1986 of the runs that fell short was $46k-$80k, most of them $68k-$80k, so the Kingpin asks $65k: the end in 67.5%. Last, island product had landed unseen: it now warms its stash as any load arriving does (a pickup from the port is traffic too), and raids took $10.3k a story instead of $9.7k; the end in 65% (section 7). The other configurations don't fly and reproduce entry 30.
 
+32. **What the whole game is worth.** *Found:* Cash hid half the picture: with logistics, product waits in the stashes and street money on the corners, so the table now shows net worth (the safe, product at the town's street price, street money still out). Trade with logistics: $58.7k in the safe, $91.6k all told. The full game, every system at once as live play runs it (logistics, the street war, the court, the island landing as stock): $52.0k at a fixed income, $44.2k with air risk - about $40k behind the trade with logistics after three hours. *Changed:* Not tuned yet, only measured. Against the trade with logistics, the full game sells 40 lb of cocaine in three hours instead of 151, because the Colombians call at 146 minutes instead of 101 (the call waits on 1,200 lb of grass sold, and the war's checkpoints and hijacks slow product to the corners); it loses about $7k more to seized and hijacked trucks and pays about $5k more in wages. The war and all configurations look richer only because, without logistics, the island still pays its loads in cash. The story, which opens these systems one at a time, finishes in 65% of 12-hour runs (entry 31).
+
 ## 1. Can you get in and out? (feasibility)
 
 The pilot bot flew 240 takeoffs and landings: every aircraft × airfield × load (light = 30% fuel; half = 60% fuel + half payload; max = full fuel + payload to MTOW). 134 succeeded. L = landing, T = takeoff.
@@ -277,17 +279,21 @@ Ablations: equilibrium win rate with one mechanic switched off (baseline 50.2%).
 
 `tools/live_balance.gd`: 80 seeds x 3 simulated hours per configuration, stepping those systems directly. Flown runs stand in as $1,500 every 5 min; the organisation's AI takes the Family's offers by their read and trades with the island when the odds are good; the task force's AI buys the customs tree, cracks down after a catch and files RICO when it can.
 
-| configuration | money p10 / p50 / p90 | task-force funds p50 | suspicion p50 |
-|---|---|---|---|
-| agency | $64,453 / $93,389 / $112,028 | $25,200 | 0 |
-| all | $31,462 / $62,483 / $108,452 | $10,200 | 10 |
-| control | $70,000 / $70,000 / $70,000 | $25,200 | 0 |
-| family | $54,150 / $55,320 / $59,320 | $9,200 | 0 |
-| island | $36,932 / $67,757 / $108,567 | $11,800 | 0 |
-| logistics | $33,504 / $58,705 / $73,387 | $10,200 | 0 |
-| payroll | $62,531 / $70,620 / $77,462 | $27,700 | 0 |
-| trade | $55,624 / $74,338 / $89,308 | $10,200 | 0 |
-| war | $24,164 / $50,029 / $105,945 | $6,910 | 0 |
+| configuration | money p10 / p50 / p90 | net worth p50 | task-force funds p50 | suspicion p50 |
+|---|---|---|---|---|
+| agency | $64,453 / $93,389 / $112,028 | $93,389 | $25,200 | 0 |
+| all | $31,462 / $62,483 / $108,452 | $84,420 | $10,200 | 10 |
+| control | $70,000 / $70,000 / $70,000 | $70,000 | $25,200 | 0 |
+| family | $54,150 / $55,320 / $59,320 | $55,320 | $9,200 | 0 |
+| island | $36,932 / $67,757 / $108,567 | $67,757 | $11,800 | 0 |
+| logistics | $33,504 / $58,705 / $73,387 | $91,567 | $10,200 | 0 |
+| payroll | $62,531 / $70,620 / $77,462 | $70,620 | $27,700 | 0 |
+| trade | $55,624 / $74,338 / $89,308 | $95,584 | $10,200 | 0 |
+| war | $24,164 / $50,029 / $105,945 | $76,701 | $6,910 | 0 |
+| air | $8,287 / $16,575 / $32,404 | $44,213 | $9,548 | 0 |
+| noair | $12,092 / $22,118 / $38,208 | $52,027 | $9,607 | 0 |
+
+Net worth is the safe plus product at the town's street price plus street money still in the stashes and on the road. Without logistics the island pays its loads in cash on landing, so the configurations with the island and no logistics (island, all, war) carry its payouts; noair and air are the full game, where it lands as stock (entry 30).
 
 The Family (all systems on): tribute paid p50 $6,000; asked in 80% of runs; a rat in 26%; the Commission trial in 9%; 0.14 cons a run; respect ends at 62.
 
