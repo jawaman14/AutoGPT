@@ -18,6 +18,18 @@ Be part of the revolution! **AutoGPT** is here to stay, at the forefront of AI i
 &ensp;|&ensp;
 **🛠️ [Build your own Agent - Quickstart](QUICKSTART.md)**
 
+## 🎮 Skyrunner: a flying game in this repository
+
+[`games/skyrunner-godot/`](games/skyrunner-godot/) holds **Skyrunner**, a bush-flying and
+smuggling game set on a fictional Caribbean coast in 1979–89, built in pure Godot 4.7 (GDScript,
+with its own flight model). Fly weight-and-balance-limited aircraft into tight strips, run the
+organisation or the task force, alone or with friends in co-op and versus seats.
+
+- **Install and play:** [INSTALL.md](games/skyrunner-godot/INSTALL.md) (Windows, Linux, macOS, or
+  from source in Godot)
+- **Beta testers:** [BETA.md](games/skyrunner-godot/BETA.md)
+- **The game's README and design docs:** [games/skyrunner-godot/README.md](games/skyrunner-godot/README.md)
+
 ## 🥇 Current Best Agent: evo.ninja
 [Current Best Agent]: #-current-best-agent-evoninja
 

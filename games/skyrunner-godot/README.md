@@ -5,7 +5,13 @@ Bush flying, weight and balance, and the long arm of the law, on a fictional Car
 [JSBSim](https://github.com/JSBSim-Team/jsbsim)-format aircraft data. No plug-ins, no compiler: a stock Godot
 4.7 opens it, plays it and exports it to Linux, Windows and macOS. This is the game. (It started as a Python prototype in
 `../skyrunner/`, kept only as the archival reference that generated the frozen parity fixtures in
-`tests/fixtures/`; you never need it to build, play or test.) It has:
+`tests/fixtures/`; you never need it to build, play or test.)
+
+**Get it:** [INSTALL.md](INSTALL.md) walks through downloading a build for Windows, Linux or macOS
+(or running from source in Godot), the first launch, and troubleshooting. Beta testers: [BETA.md](BETA.md)
+says what to try and how to report (F12). Version **0.9.0-beta.1**.
+
+It has:
 - five aircraft with every item a point mass at its station arm
 - tight strips
 - the task force and its sensors, airdrops and boats, and the campaign
@@ -374,7 +380,8 @@ volumetric fog need Forward+ on a real GPU.)*
 
 ## Build and run
 
-Beta testers: see [BETA.md](BETA.md) for the downloadable builds and how to report problems (F12).
+Players: [INSTALL.md](INSTALL.md) is the step-by-step install guide. Beta testers: [BETA.md](BETA.md)
+for what to test and how to report problems (F12).
 
 ```bash
 cd games/skyrunner-godot
