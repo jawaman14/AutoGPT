@@ -375,7 +375,7 @@ volumetric fog need Forward+ on a real GPU.)*
 
 ```bash
 cd games/skyrunner-godot
-GODOT=$(./tools/get_godot.sh)        # pinned Godot 4.4.1 into .tools/ (or use your own 4.4 install)
+GODOT=$(./tools/get_godot.sh)        # pinned Godot 4.7.2 into .tools/ (or use your own 4.7 install)
 ./tools/build_native.sh              # builds bin/libskyrunner_native.so (godot-cpp + JSBSim 1.3.1, ~10 min the first time)
 $GODOT --path .                      # lobby: pick a mode, or join a friend's game
 $GODOT --path . -- --mode campaign   # or skip the lobby with flags (below)
@@ -383,7 +383,7 @@ $GODOT --path . -- --mode campaign   # or skip the lobby with flags (below)
 ```
 
 Build needs CMake 3.20+, a C++17 compiler and Python 3 (only as godot-cpp's binding generator at build time).
-`tools/build_native.sh` fetches godot-cpp 4.4 and JSBSim 1.3.1 sources.
+`tools/build_native.sh` fetches godot-cpp 4.4.1 and JSBSim 1.3.1 sources (the extension targets 4.4 and loads in 4.7 unchanged).
 
 Command-line flags (all optional; any flag skips the lobby):
 

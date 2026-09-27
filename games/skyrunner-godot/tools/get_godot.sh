@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Download the pinned Godot build (headless-capable editor binary) to ./.tools/
 set -euo pipefail
-VER=4.4.1-stable
+VER=4.7.2-stable
 cd "$(dirname "$0")/.."
 mkdir -p .tools
 BIN=.tools/Godot_v${VER}_linux.x86_64

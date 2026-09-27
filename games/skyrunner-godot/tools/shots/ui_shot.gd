@@ -144,7 +144,7 @@ func _init():
 			app.setup(LocalLink.new(sess, Roles.CONTROLLER), Roles.CONTROLLER, sess.world)
 			if what == "lawtree":
 				app._key("u")
-func _process(_d):
+func _process(_d) -> bool:  # (MainLoop: true would quit)
 	n += 1
 	if n == 3 and what in ["boss", "chief"]:
 		app.list.select(2)
@@ -157,3 +157,4 @@ func _process(_d):
 		root.get_viewport().get_texture().get_image().save_png(out)
 		print("saved ", out)
 		quit()
+	return false

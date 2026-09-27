@@ -129,7 +129,7 @@ func _areas(node: Node, action: String, out: Array) -> Array:
 	return out
 
 
-func _process(_d):
+func _process(_d) -> bool:  # (MainLoop: true would quit)
 	n += 1
 	if n == 2 and view in ["foot", "villa", "gun", "pack"]:
 		_on_foot()
@@ -221,6 +221,7 @@ func _process(_d):
 		root.get_viewport().get_texture().get_image().save_png(out)
 		print("saved ", out)
 		quit()
+	return false
 
 
 ## Get out and stand in front of the hangar (or the boss's desk). Runs once the tree is live.

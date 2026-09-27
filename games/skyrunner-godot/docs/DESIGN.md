@@ -217,7 +217,7 @@ controller. The AI controller should land at about 70% for new players.
 
 ## 10. What the Godot build added
 
-- **Engine.** Godot 4.4 with JSBSim 1.3.1 in a C++ GDExtension (`native/`), the simulation in GDScript
+- **Engine.** Godot 4.7 (from 4.4) with JSBSim 1.3.1 in a C++ GDExtension (`native/`), the simulation in GDScript
   (`scripts/sim/`), bit-exact with the Python reference where the fixtures say so ([PORTING.md](PORTING.md)).
 - **Realism layer.** Weather and moon, pattern of life, canary traps, rival tempers, spare-helicopter
   patrols, nerves ([BALANCE.md](BALANCE.md) entries 14-19).

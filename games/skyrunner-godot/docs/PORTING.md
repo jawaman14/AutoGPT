@@ -1,6 +1,6 @@
 # Porting Skyrunner from Python/Panda3D to Godot 4
 
-The Python game (`games/skyrunner/`) was ported module by module to Godot 4.4 (GDScript plus a small
+The Python game (`games/skyrunner/`) was ported module by module to Godot 4.4 (now running on 4.7; GDScript plus a small
 C++ GDExtension). Every simulation module was checked against the Python original by running both on
 the same seeds and comparing the output. This file explains how that was done, what matched exactly,
 what didn't and why, and the traps along the way.
