@@ -149,6 +149,10 @@ func _draw_runner() -> void:
 		draw_circle(w2m(t.x, t.y), 4.5, col)
 		if t.get("waiting", false):
 			draw_arc(w2m(t.x, t.y), 7.0, 0, TAU, 12, Color(1, 0.3, 0.3), 1.5)  # pulled over: police ahead
+		if get_local_mouse_position().distance_to(w2m(t.x, t.y)) < 10.0:
+			# hovered: what it carries, where to, how long
+			_text(t.x, t.y, "%s -> %s, %d min%s" % [str(t.get("title", "truck")).trim_prefix("Truck: "), str(t.get("to", t.get("stash", ""))),
+				int(ceil(float(t.get("eta", 0)) / 60.0)), "  (pulled over)" if t.get("waiting", false) else ""], col)
 	var ac = snap.get("aircraft")
 	if ac is Dictionary:
 		_arrow(ac.x, ac.y, ac.heading, Color(1, 1, 0), 16)

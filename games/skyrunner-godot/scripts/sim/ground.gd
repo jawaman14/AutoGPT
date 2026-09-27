@@ -131,7 +131,9 @@ var rng: PyRandom  ## commanders' choices (seed + 61)
 var frng: PyRandom  ## firefights (seed + 67)
 var squads: Array = []
 var fights: Array = []
-var spent := {"recruit": 0, "upkeep": 0, "arms": 0}  ## what the war has cost the organisation (the desk, the balance tool)
+var spent := {"recruit": 0, "upkeep": 0, "arms": 0}
+var fights_total := 0  ## firefights started (the balance tool)
+var lost_men := {"org": 0, "rival": 0, "police": 0}  ## killed or wounded in firefights  ## what the war has cost the organisation (the desk, the balance tool)
 var commanders := {}
 var control := {}  ## market -> faction -> squad-men presence (decaying)
 var events: Array = []  ## [side ("runner" | "law" | "both"), text]
@@ -613,6 +615,7 @@ func _open(a: Squad, b: Squad) -> void:
 		q.hidden = false
 	f.cas = {a.faction: 0, b.faction: 0}
 	fights.append(f)
+	fights_total += 1
 	hot_spots.append([sess.time, f.x, f.y])
 	var place := _place_name(f.x, f.y)
 	_say("both", "Shots fired %s: %s vs %s%s" % [place, a.id, b.id, " - an ambush!" if f.surprise != "" else ""])
@@ -649,6 +652,7 @@ func _rounds(step: float) -> void:
 			if lost > 0:
 				q.men -= lost
 				f.cas[q.faction] += lost
+				lost_men[q.faction] = int(lost_men.get(q.faction, 0)) + lost
 				q.morale = maxf(0.0, q.morale - 0.6 * float(lost) / q.men0)
 				_drop_weapons(q, lost, enemy)
 			if enemy.men > 1.8 * q.men:

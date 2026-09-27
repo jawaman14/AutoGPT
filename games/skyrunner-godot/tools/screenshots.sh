@@ -35,6 +35,7 @@ run res://tools/shots/pilot_shot.gd -- high 13 "$PWD/$OUT/street-rain.png" chase
 run res://tools/shots/pilot_shot.gd -- high 10 "$PWD/$OUT/pack.png" chase pack
 run res://tools/shots/pilot_shot.gd -- high 15 "$PWD/$OUT/buyers.png" chase buyers
 run res://tools/shots/pilot_shot.gd -- high 15 "$PWD/$OUT/logistics.png" chase logistics
+run res://tools/shots/pilot_shot.gd -- high 15 "$PWD/$OUT/trucks.png" chase trucks
 run res://tools/shots/pilot_shot.gd -- high 17 "$PWD/$OUT/story.png" chase story
 run res://tools/shots/pilot_shot.gd -- high 16 "$PWD/$OUT/tutorial.png" chase tutorial
 run res://tools/shots/ui_shot.gd -- desk_tutorial "$PWD/$OUT/tutorial-desk.png"

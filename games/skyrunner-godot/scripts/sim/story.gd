@@ -46,7 +46,7 @@ const CHAPTERS := [
 		+ "judges who owe them favours - and they want a piece of Costa Brava. Their help\n"
 		+ "is real. Sometimes. Read the offer before you take it [SHIFT+F].",
 		["family"],
-		[["family_deal", "Do business with the Morettis (an offer, a loan or a bulk sale)", 1], ["bank", "Have $40,000 in the bank", 40000]]],
+		[["family_deal", "Do business with the Morettis (an offer, a loan or a bulk sale)", 1], ["bank", "Have $30,000 in the bank", 30000]]],
 	[1983, "The Task Force",
 		"Washington sends a task force: federal prosecutors, a grand jury, and agents who\n"
 		+ "follow the money. A bust is no longer a fine - it's a case, with bail, lawyers,\n"
@@ -58,7 +58,7 @@ const CHAPTERS := [
 		+ "the street price and doesn't extradite. Captain Ibarra will see you on the ramp.\n"
 		+ "Fly it, walk it through the airport on mules, or ship it in a container [SHIFT+G].",
 		["island", "role_mule"],
-		[["island_runs", "Bring 2 loads home from Isla Soberana", 2]]],
+		[["island_runs", "Bring a load home from Isla Soberana", 1]]],
 	[1985, "The Company",
 		"A man with a government haircut and no government ID. His friends fight a war in\n"
 		+ "Central America that Congress won't pay for. Fly his crates south, bring his\n"

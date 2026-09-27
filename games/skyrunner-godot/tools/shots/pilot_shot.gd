@@ -37,7 +37,7 @@ func _init():
 	var opts := {"seed": 1, "location": "HAR"}
 	if view in ["gun", "pack"]:
 		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "ground_war": true})
-	elif view == "logistics":
+	elif view in ["logistics", "trucks"]:
 		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "payroll": true, "family": true, "trade": true, "logistics": true, "ground_war": true})
 	elif view == "tutorial":
 		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "trade": true, "payroll": true})
@@ -166,7 +166,7 @@ func _process(_d):
 		app.s.foot.pack_add("ammo", 90)
 		app.s.foot.pack_add("medkit")
 		app.toggle_pack()
-	if n == 3 and view == "logistics":
+	if n == 3 and view in ["logistics", "trucks"]:
 		var lg: Logistics = app.s.logistics
 		lg.add("barn", "marijuana", 820.0)
 		lg.add("quarry", "cocaine", 64.0)
@@ -182,7 +182,10 @@ func _process(_d):
 		lg.send_guns("family", {"rifle": 4})
 		app.s.time += 240.0
 		lg.aboard = 9000
-		app.toggle_logistics()
+		if view == "logistics":
+			app.toggle_logistics()
+		else:
+			app.hud.minimap.toggle()  # M: the big map - our trucks by what they carry
 	if n == 3 and view == "buyers":
 		app.s.trade.connected = true
 		app.s.trade.stock.cocaine = 140.0

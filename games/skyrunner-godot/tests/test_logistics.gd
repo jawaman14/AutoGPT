@@ -299,3 +299,24 @@ func test_the_company_collects_at_the_nearest_strip() -> void:
 	var t = s.stash_net.trucks[0]
 	check(Vector2(t.x1, t.y1).distance_to(mp) < 1.0, "the truck drives to the strip")
 	s.dispose()
+
+
+func test_a_trucked_gun_sale_still_moves_the_contra_pipeline() -> void:
+	var s := _sess({"agency": true})
+	var a = s.agency
+	a.war_chest = 50000.0
+	var trust0: float = a.trust
+	var chest0: float = a.war_chest
+	s.arsenals["org"].add("rifle", 6)
+	check_eq(s.trade.sell("agency", "guns", 4, "rifle"), "", "rifles out to the Company's plane")
+	check_near(a.trust, trust0, 0.001, "nothing happens until the plane has them")
+	for i in 1500:
+		for t in s.stash_net.trucks:
+			t.stop_at = -1.0
+		s.time += 5.0
+		s._update_stashes(5.0)
+		if s.trade.bulk_log.size() > 0:
+			break
+	check(a.trust > trust0, "the Company trusts us more (%.1f -> %.1f)" % [trust0, a.trust])
+	check(a.war_chest < chest0, "and its war chest paid for the guns")
+	s.dispose()

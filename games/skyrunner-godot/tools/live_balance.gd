@@ -12,7 +12,8 @@ extends SceneTree
 ##   - the task force's AI buys the customs tree as the money comes, orders a
 ##     crackdown or inspections after a catch, and files RICO when it can
 ##
-##   - the story config plays the chapters (Story): systems open as it goes; the
+##   - the story config plays the chapters (Story): systems open as it goes (the
+##     flown runs count as its deliveries, every other one hot); the
 ##     AI buys rifles once guns open and sells the Company four at a time
 ##
 ##   godot --headless --script res://tools/live_balance.gd -- [seeds] [hours] [config [first seed]]
@@ -118,6 +119,9 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 		if t >= next_run:
 			next_run += RUN_EVERY_S
 			s.money += RUN_PAY
+			if s.story != null:  # the story counts the pilot's flown jobs; every other one hot
+				s.bus.emit("job_delivered", t, "", ["runner"], {"job_id": -1, "pay": RUN_PAY, "dest": "", "hot": int(t / RUN_EVERY_S) % 2 == 0,
+					"good": "", "lb": 0.0, "agency": false, "origin": ""})
 		if t >= next_law:
 			next_law += LAW_EVERY_S
 			s.law_funds += LAW_PAY
@@ -210,6 +214,8 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 	if s.ground != null:
 		var g: GroundWar = s.ground
 		r["war"] = {"recruit": g.spent.recruit, "upkeep": g.spent.upkeep, "arms": g.spent.arms,
+			"fights": g.fights_total, "org_lost": g.lost_men.org, "rival_lost": g.lost_men.rival, "police_lost": g.lost_men.police,
+			"org_arrested": g.arrests_total,
 			"squads": g.of("org").size(), "rival_squads": g.of("rival").size(), "police_squads": g.of("police").size(),
 			"burned": s.stash_net.stashes.filter(func(st): return st.burned).size() if s.stash_net != null else 0}
 	if s.logistics != null:
@@ -319,7 +325,7 @@ func _summary(rows: Array) -> Dictionary:
 			sm["trade"][k] = _mean(rows, "trade", k)
 	if rows.any(func(r): return r.has("war")):
 		sm["war"] = {}
-		for k in ["recruit", "upkeep", "arms", "squads", "rival_squads", "police_squads", "burned"]:
+		for k in ["recruit", "upkeep", "arms", "fights", "org_lost", "rival_lost", "police_lost", "org_arrested", "squads", "rival_squads", "police_squads", "burned"]:
 			sm["war"][k] = _mean(rows, "war", k)
 	if rows.any(func(r): return r.has("logistics")):
 		sm["logistics"] = {"cash_out": _mean(rows, "logistics", "cash_out"), "lost_cash": _mean(rows, "logistics", "lost_cash"),

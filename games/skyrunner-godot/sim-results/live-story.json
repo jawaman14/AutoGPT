@@ -2,88 +2,88 @@
   "configs": {
     "story": {
       "agency": {
-        "burned_rate": 0.125,
-        "exposure": 58.125,
-        "flights": 6.0625,
-        "hangout_rate": 0.5,
-        "withheld": 2081.375
+        "burned_rate": 0.810810810810811,
+        "exposure": 92.6351351351351,
+        "flights": 5.62162162162162,
+        "hangout_rate": 0.891891891891892,
+        "withheld": 2023.54054054054
       },
       "family": {
-        "cons": 0.15,
+        "cons": 0.175,
         "loans": 0.0,
-        "rat_rate": 0.975,
-        "respect": 51.9702950793152,
-        "taxed_rate": 0.25,
+        "rat_rate": 1.0,
+        "respect": 55.3279164138133,
+        "taxed_rate": 0.45,
         "trial_rate": 1.0,
         "tribute_paid": {
-          "mean": 1800.0,
+          "mean": 4700.0,
           "p10": 0.0,
           "p50": 0.0,
-          "p90": 6000.0
+          "p90": 12000.0
         }
       },
       "island": {
-        "catch_rate": 0.124386252045827,
-        "closed_frac": 0.0441244553376906,
+        "catch_rate": 0.141932700603969,
+        "closed_frac": 0.0504385964912281,
         "intercepts": 0.0,
-        "relations": 38.2352941176471,
+        "relations": 38.1578947368421,
         "shipments": {
-          "mean": 11.05,
-          "p10": 0.0,
-          "p50": 11.0,
-          "p90": 21.0
+          "mean": 22.1,
+          "p10": 4.0,
+          "p50": 25.0,
+          "p90": 31.0
         },
-        "spent": 5089352,
-        "units_caught": 152,
-        "units_sent": 1222
+        "spent": 9971949,
+        "units_caught": 329,
+        "units_sent": 2318
       },
       "law_funds": {
-        "mean": 82195.1718777635,
-        "p10": 46239.9702429217,
-        "p50": 81376.1670586127,
-        "p90": 118402.227700905
+        "mean": 102140.613837019,
+        "p10": 65475.3497065127,
+        "p50": 103579.727537698,
+        "p90": 129537.775327765
       },
       "logistics": {
-        "cash_out": 16157.7558899908,
-        "lost_cash": 41085.775,
-        "lost_hijacked": 25582.025,
-        "lost_lb": 1742.92998586667,
-        "lost_raided": 8125.15,
-        "lost_seized": 55405.575
+        "cash_out": 14402.1161044603,
+        "lost_cash": 43207.2,
+        "lost_hijacked": 25454.525,
+        "lost_lb": 1647.36567146667,
+        "lost_raided": 11391.15,
+        "lost_seized": 53266.375
       },
       "market": {
-        "coke_hi": 2.3903839956426,
-        "coke_lo": 0.546338171985343,
-        "coke_lots": 17.7,
+        "coke_hi": 2.46007799510455,
+        "coke_lo": 0.563593318108207,
+        "coke_lots": 17.325,
         "disruption": 1.0,
-        "gun_lots": 21.875,
-        "guns": 1.3877728569182
+        "gun_lots": 21.775,
+        "guns": 1.41317187726765
       },
       "money": {
-        "mean": 102551.25,
-        "p10": 26951.0,
-        "p50": 88929.0,
-        "p90": 183863.0
+        "mean": 231058.875,
+        "p10": 31821.0,
+        "p50": 222012.0,
+        "p90": 378970.0
       },
       "money_min": {
-        "mean": 13031.45,
-        "p10": 7670.0,
-        "p50": 14454.0,
-        "p90": 15720.0
+        "mean": 13263.45,
+        "p10": 7811.0,
+        "p50": 14264.0,
+        "p90": 15654.0
       },
       "payroll": {
-        "crew": 25.425,
-        "flips": 3.9,
-        "lost": 54.975,
-        "loyalty": 0.912414083579464,
-        "paid": 131337.55,
+        "crew": 26.25,
+        "flips": 3.975,
+        "lost": 55.425,
+        "loyalty": 0.93535600871344,
+        "paid": 137000.675,
         "short_rate": 0.0
       },
       "story": {
         "chapter": {
-          "mean": 7.575,
-          "p10": 5.0,
-          "p50": 8.0,
+          "mean": 8.475,
+          "p10": 7.0,
+          "p50": 9.0,
           "p90": 9.0
         },
         "reached": [
@@ -99,7 +99,7 @@
           },
           {
             "chapter": 3,
-            "min_p50": 173.666666666667,
+            "min_p50": 171.5,
             "share": 1.0
           },
           {
@@ -109,56 +109,61 @@
           },
           {
             "chapter": 5,
-            "min_p50": 308.333333333333,
-            "share": 0.975
+            "min_p50": 283.333333333333,
+            "share": 0.95
           },
           {
             "chapter": 6,
-            "min_p50": 450.166666666667,
-            "share": 0.85
+            "min_p50": 310.166666666667,
+            "share": 0.95
           },
           {
             "chapter": 7,
-            "min_p50": 495.166666666667,
-            "share": 0.8
+            "min_p50": 325.333333333333,
+            "share": 0.925
           },
           {
             "chapter": 8,
-            "min_p50": 549.5,
-            "share": 0.65
+            "min_p50": 404.333333333333,
+            "share": 0.9
           },
           {
             "chapter": 9,
-            "min_p50": 615.166666666667,
-            "share": 0.3
+            "min_p50": 465.166666666667,
+            "share": 0.75
           }
         ]
       },
       "suspicion": {
-        "mean": 0.756,
+        "mean": 0.697,
         "p10": 0.0,
         "p50": 0.0,
-        "p90": 0.52
+        "p90": 0.0
       },
       "trade": {
-        "bulk": 1.45,
-        "connected_min": 113.45,
-        "dealers": 6.0,
-        "earned": 94045.5,
-        "sold_coke": 971.04235333333,
-        "sold_weed": 2323.74222,
-        "stock_coke": 256.8407072,
-        "stock_value": 18019.9551950173,
-        "stock_weed": 49.5621200000003
+        "bulk": 1.375,
+        "connected_min": 112.425,
+        "dealers": 6.15,
+        "earned": 95858.2,
+        "sold_coke": 973.669679199996,
+        "sold_weed": 2410.75068,
+        "stock_coke": 237.712210133334,
+        "stock_value": 16790.6704727784,
+        "stock_weed": 47.6235799999998
       },
       "war": {
         "arms": 0.0,
-        "burned": 4.0,
+        "burned": 4.725,
+        "fights": 27.9,
+        "org_arrested": 64.6,
+        "org_lost": 12.425,
+        "police_lost": 25.25,
         "police_squads": 8.0,
-        "recruit": 24287.5,
-        "rival_squads": 4.225,
-        "squads": 1.475,
-        "upkeep": 4742.675
+        "recruit": 25587.5,
+        "rival_lost": 8.75,
+        "rival_squads": 4.1,
+        "squads": 1.2,
+        "upkeep": 4730.325
       }
     }
   },
@@ -200,7 +205,7 @@
       "ship_roi": 0.4
     }
   ],
-  "seconds": 131.676,
+  "seconds": 131.382,
   "seeds": 40,
   "stand_ins": {
     "law_every_s": 600.0,
