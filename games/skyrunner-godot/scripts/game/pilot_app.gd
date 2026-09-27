@@ -28,6 +28,7 @@ Debug    F6 performance overlay: FPS, frame times, graphs (Debug Menu add-on, MI
 Radio    F7 Radio Costa 88: synth music out of 1985
 Learn    F10 skip a tutorial step   SHIFT+F10 tutorial on / off (the lobby's Tutorial box, or --tutorial)
 Screen   F9 filter: off / VHS / colour-blindness simulations (protan, deutan, tritan, mono)
+Beta     F12 feedback bundle: a zip of what happened (build, machine, flight, log, screenshot) to send back
 On foot  TAB get out (parked) / back in    WASD walk  SHIFT run  SPACE jump  mouse look
          Guns (with a ground war): 1-4 pistol / rifle / machine gun / RPG from the armoury  H holster  R reload  LMB fire
          E use (job board, fuel, hangar, the boss's desk)   F torch
@@ -161,6 +162,13 @@ func setup(sess: Session, graphics := "high", bot_ = null, server_ = null) -> Pi
 	foot_prompt.visible = false
 	ui.add_child(foot_prompt)
 	help = _overlay(HELP_TEXT, UIStyle.WHITE)
+	var ver := UIStyle.label(Beta.label() + "   F12 feedback", 12, UIStyle.DIM)
+	ver.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+	ver.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	ver.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	ver.position -= Vector2(8, 4)
+	ver.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(ver)
 	briefing = _overlay("", Color(1, 0.85, 0.5))
 	sess.say("F1 for controls. [J] to see the job board.")
 	return self
@@ -399,6 +407,9 @@ func _unhandled_input(ev: InputEvent) -> void:
 			var mode := screen_filter.cycle()
 			ControlsConfig.save_setting("filter", mode)
 			s.say("Screen: %s" % ScreenFilter.LABELS[mode])
+		elif k == KEY_F12:
+			var path := Beta.report(s, get_viewport())
+			s.say("Feedback bundle saved: %s" % ProjectSettings.globalize_path(path) if path != "" else "Couldn't write the feedback bundle.")
 		elif k == KEY_F7 and sound != null:
 			s.say("Radio Costa 88: %s" % ("on - hits from 1985" if sound.toggle_music() else "off"))
 

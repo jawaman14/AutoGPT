@@ -311,6 +311,11 @@ func _unhandled_key_input(ev: InputEvent) -> void:
 			_cmd("tutorial", {"do": ("off" if on else "on") if ev.shift_pressed else "skip"})
 			get_viewport().set_input_as_handled()
 			return
+		KEY_F12:
+			var path := Beta.report(null, get_viewport())
+			status = ("Feedback bundle saved: " + ProjectSettings.globalize_path(path)) if path != "" else "Couldn't write the feedback bundle."
+			get_viewport().set_input_as_handled()
+			return
 		KEY_ESCAPE:
 			get_tree().quit()
 			return

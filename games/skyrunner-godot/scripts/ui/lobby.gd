@@ -50,6 +50,7 @@ func _ready() -> void:
 	panel.add_child(v)
 	v.add_child(UIStyle.title("Skyrunner", 64))
 	v.add_child(UIStyle.label("Bush flying, weight & balance, and the long arm of the law.", 16, UIStyle.DIM))
+	v.add_child(UIStyle.label(Beta.label() + "  ·  F12 in game saves a feedback bundle", 12, UIStyle.DIM))
 	v.add_child(UIStyle.caption("Host a game"))
 	var g := GridContainer.new()
 	g.columns = 2
