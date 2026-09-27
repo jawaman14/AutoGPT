@@ -574,7 +574,7 @@ rest of the market, for the Python replays.
 Both are paid up front, flown to a stash strip, and go into the stash. A raid takes 30% of what's there.
 
 **The career** (live play, `career: true`). It starts with grass, the way the 1970s smugglers did: cheap, bulky,
-less heat. The Colombians only call once we've moved 1,200 lb of grass (or made $25,000 in the trade). Until then
+less heat. The Colombians only call once our dealers have sold 1,200 lb of grass, we've landed two tons of it in our stashes, or made $25,000 in the trade. Until then
 there's no cocaine work on the boards, no island trade, and no return legs for the Company.
 
 **Street sellers.** Dealers are a payroll role for both outfits (hire them from Manny).
@@ -658,8 +658,8 @@ The game had grown a dozen systems, all on from the first minute. The story (`st
 | 1981 | about 3 hours, every run |
 | 1983 | about 5.5 hours, 92% of runs |
 | 1985 | about 7 hours, 85% of runs |
-| 1986 | about 8 hours, 78% of runs |
-| The end | 65% of runs finish within 12 hours, at about 8 hours |
+| 1986 | about 8.5 hours, 80% of runs |
+| The end | 62% of runs finish within 12 hours, at about 8 hours |
 
 The stand-in's flown runs count as the pilot's deliveries (every other one hot), as a player's jobs do. The island's product lands as stock (section 15), so it's sold at the street's pace, not paid on arrival; the Kingpin's goal went from $200k to $80k with it (BALANCE entry 30), then to $65k once the stand-in's flights could be busted or crash (entry 31: about 2 busts and 2 crashes a story, $8k in fines and $5k in repairs).
 

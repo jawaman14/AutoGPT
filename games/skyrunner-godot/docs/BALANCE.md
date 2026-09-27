@@ -75,6 +75,8 @@ Drivers pull over when they see police on the road ahead; a passing patrol pulls
 
 32. **What the whole game is worth.** *Found:* Cash hid half the picture: with logistics, product waits in the stashes and street money on the corners, so the table now shows net worth (the safe, product at the town's street price, street money still out). Trade with logistics: $58.7k in the safe, $91.6k all told. The full game, every system at once as live play runs it (logistics, the street war, the court, the island landing as stock): $52.0k at a fixed income, $44.2k with air risk - about $40k behind the trade with logistics after three hours. *Changed:* Not tuned yet, only measured. Against the trade with logistics, the full game sells 40 lb of cocaine in three hours instead of 151, because the Colombians call at 146 minutes instead of 101 (the call waits on 1,200 lb of grass sold, and the war's checkpoints and hijacks slow product to the corners); it loses about $7k more to seized and hijacked trucks and pays about $5k more in wages. The war and all configurations look richer only because, without logistics, the island still pays its loads in cash. The story, which opens these systems one at a time, finishes in 65% of 12-hour runs (entry 31).
 
+33. **The whole game, taken apart.** *Found:* Entry 32's gap, one system at a time (the full game at a fixed income, 20 seeds x 3 hours, net worth p50 $54.9k): without the island $73.0k, without the street war $67.0k, without the Family $61.3k, without the chronicle $56.8k, without the court the same (nothing flies here, so nobody's arrested); without the Company $40.7k - it's the one that pays. The island's cost is the stand-in's: it spends about $7.7k a run on product that now has to go through the corners (entry 30), and the island's supply pushes the cocaine price down, so the stock is worth less; payroll is the same with or without it. A player sees what a container returns; the stand-in doesn't, and the island's rules are left alone. *Changed:* One rule changed. The Colombians waited on 1,200 lb of grass sold by our dealers, and with the war slowing product to the corners the call came at 146 minutes in the full game against 101 with logistics alone. Two tons of grass landed in our stashes now bring the call too (Trade.CONNECT_MOVED): the call at about 80 minutes; the full game's net worth p50 $54.9k at a fixed income and $49.2k with air risk (was $52.0k and $44.2k); the configurations without the war barely move. The story sets the connection itself in 1981, so its 62.5% (1986 in 80%) is seed noise against entry 31's 65%.
+
 ## 1. Can you get in and out? (feasibility)
 
 The pilot bot flew 240 takeoffs and landings: every aircraft × airfield × load (light = 30% fuel; half = 60% fuel + half payload; max = full fuel + payload to MTOW). 134 succeeded. L = landing, T = takeoff.
@@ -282,38 +284,38 @@ Ablations: equilibrium win rate with one mechanic switched off (baseline 50.2%).
 | configuration | money p10 / p50 / p90 | net worth p50 | task-force funds p50 | suspicion p50 |
 |---|---|---|---|---|
 | agency | $64,453 / $93,389 / $112,028 | $93,389 | $25,200 | 0 |
-| all | $31,462 / $62,483 / $108,452 | $84,420 | $10,200 | 10 |
+| all | $30,209 / $62,662 / $108,452 | $84,420 | $10,200 | 14 |
 | control | $70,000 / $70,000 / $70,000 | $70,000 | $25,200 | 0 |
 | family | $54,150 / $55,320 / $59,320 | $55,320 | $9,200 | 0 |
 | island | $36,932 / $67,757 / $108,567 | $67,757 | $11,800 | 0 |
-| logistics | $33,504 / $58,705 / $73,387 | $91,567 | $10,200 | 0 |
+| logistics | $32,021 / $56,260 / $72,432 | $90,916 | $10,200 | 0 |
 | payroll | $62,531 / $70,620 / $77,462 | $70,620 | $27,700 | 0 |
-| trade | $55,624 / $74,338 / $89,308 | $95,584 | $10,200 | 0 |
-| war | $24,164 / $50,029 / $105,945 | $76,701 | $6,910 | 0 |
-| air | $8,287 / $16,575 / $32,404 | $44,213 | $9,548 | 0 |
-| noair | $12,092 / $22,118 / $38,208 | $52,027 | $9,607 | 0 |
+| trade | $55,624 / $74,338 / $89,078 | $95,584 | $10,200 | 0 |
+| war | $23,291 / $50,029 / $105,945 | $75,865 | $6,675 | 0 |
+| air | $5,965 / $18,070 / $26,711 | $49,191 | $9,681 | 0 |
+| noair | $10,045 / $21,348 / $31,919 | $54,930 | $8,926 | 0 |
 
 Net worth is the safe plus product at the town's street price plus street money still in the stashes and on the road. Without logistics the island pays its loads in cash on landing, so the configurations with the island and no logistics (island, all, war) carry its payouts; noair and air are the full game, where it lands as stock (entry 30).
 
-The Family (all systems on): tribute paid p50 $6,000; asked in 80% of runs; a rat in 26%; the Commission trial in 9%; 0.14 cons a run; respect ends at 62.
+The Family (all systems on): tribute paid p50 $7,000; asked in 81% of runs; a rat in 25%; the Commission trial in 9%; 0.15 cons a run; respect ends at 63.
 
 The island: 6 shipments a run (p50); 6% of mules and containers caught; closed by a purge 0% of the time.
 
-The payroll (the organisation's AI hiring to its needs): 17.2 workers on it at the end, $18,911 in wages over the run, 5.8 lost (arrested or dead), 0.40 flipped by the prosecutor, loyalty 81%, a short payday in 0% of runs.
+The payroll (the organisation's AI hiring to its needs): 17.2 workers on it at the end, $18,886 in wages over the run, 5.9 lost (arrested or dead), 0.42 flipped by the prosecutor, loyalty 81%, a short payday in 0% of runs.
 
-The Company: 5.3 flights a run; $2,115 'in the mail'; hung out to dry in 5% of runs; exposed in 0%.
+The Company: 5.3 flights a run; $2,020 'in the mail'; hung out to dry in 5% of runs; exposed in 0%.
 
-The trade (career: grass first; the organisation's AI buying a load when the stash runs low, dealers on its corners, surplus to the best buyer): 1375 lb of grass and 330 lb of cocaine sold, $25,866 made; the Colombians called after 75 minutes; 6.1 dealers on the corners at the end, 7.1 bulk sales; 255 lb of cocaine and 920 lb of grass left in the stash (worth $20,224 at the street).
+The trade (career: grass first; the organisation's AI buying a load when the stash runs low, dealers on its corners, surplus to the best buyer): 1360 lb of grass and 332 lb of cocaine sold, $25,890 made; the Colombians called after 73 minutes; 6.1 dealers on the corners at the end, 7.2 bulk sales; 258 lb of cocaine and 936 lb of grass left in the stash (worth $20,498 at the street).
 
-Logistics (the trade configuration with stock and cash in the stash houses, trucked by the organisation's AI): money p50 $58,705 against $74,338 without; $10,987 still out in the stashes, on the road and in the bags at the end; $563 of cash and 84 lb of product lost to roadblocks, hijacks and raids a run.
+Logistics (the trade configuration with stock and cash in the stash houses, trucked by the organisation's AI): money p50 $56,260 against $74,338 without; $13,258 still out in the stashes, on the road and in the bags at the end; $720 of cash and 76 lb of product lost to roadblocks, hijacks and raids a run.
 
-The street war (all systems plus the war, the organisation's AI commanding): money p50 $50,029 against $62,483 without; $4,925 recruiting, $1,134 on rifles, $1,332 upkeep a run; 13.0 firefights a run, men lost 6.4 of ours, 6.3 of Los Cuervos', 15.1 police, 13.1 arrested (both outfits); 1.5 squads of ours at the end against 4.0 of Los Cuervos' and 7.6 police; 0.7 stash houses burned; suspicion p50 0, p90 0.
+The street war (all systems plus the war, the organisation's AI commanding): money p50 $50,029 against $62,662 without; $5,050 recruiting, $1,071 on rifles, $1,351 upkeep a run; 13.1 firefights a run, men lost 6.4 of ours, 6.1 of Los Cuervos', 15.4 police, 13.1 arrested (both outfits); 1.4 squads of ours at the end against 4.0 of Los Cuervos' and 7.5 police; 0.7 stash houses burned; suspicion p50 0, p90 0.
 
-Air risk (all systems with logistics, the street war and the court; 80 seeds x 3 hours): money p50 $16,575 with each flight rolling the tactical sweep's odds, against $22,118 for the same systems at a fixed income. A run flew 17.9 flights (paid $6,000 each when they counted), with 0.60 busts, 0.68 crashes, $0 in fines, $1,687 in repairs and 2 minutes held by the court; the pilot stayed on the ground 0.0 times with the police tipped off.
+Air risk (all systems with logistics, the street war and the court; 80 seeds x 3 hours): money p50 $18,070 with each flight rolling the tactical sweep's odds, against $21,348 for the same systems at a fixed income. A run flew 17.7 flights (paid $6,000 each when they counted), with 0.60 busts, 0.68 crashes, $0 in fines, $1,687 in repairs and 4 minutes held by the court; the pilot stayed on the ground 0.0 times with the police tipped off.
 
-The story (40 seeds x 12 hours, the same stand-ins, chapters opening the systems): reached ch2 1980 (100% at 66 min), ch3 1981 (100% at 172 min), ch4 1982 (100% at 225 min), ch5 1983 (92% at 330 min), ch6 1984 (85% at 390 min), ch7 1985 (85% at 405 min), ch8 1986 (78% at 495 min), the end (65% at 467 min). Money p50 $20,660 at the end, net worth (cash, product and street money) p50 $52,364; with air risk: 1.9 busts, 1.8 crashes, $7,539 in fines and $4,562 in repairs a run; $20,141 a run spent on the island's product.
+The story (40 seeds x 12 hours, the same stand-ins, chapters opening the systems): reached ch2 1980 (100% at 66 min), ch3 1981 (100% at 172 min), ch4 1982 (100% at 240 min), ch5 1983 (92% at 315 min), ch6 1984 (90% at 390 min), ch7 1985 (88% at 435 min), ch8 1986 (80% at 510 min), the end (62% at 495 min). Money p50 $17,290 at the end, net worth (cash, product and street money) p50 $52,364; with air risk: 1.9 busts, 1.8 crashes, $7,085 in fines and $4,562 in repairs a run; $19,687 a run spent on the island's product.
 
-The street (all systems on): cocaine in town swung between x0.63 and x1.67 of its usual price in a run (means); guns averaged x1.38; the worst broken network reached 29%; the Company flew 24.1 lots of cocaine north and bought 25.2 lots of guns.
+The street (all systems on): cocaine in town swung between x0.63 and x1.68 of its usual price in a run (means); guns averaged x1.38; the worst broken network reached 30%; the Company flew 24.1 lots of cocaine north and bought 25.3 lots of guns.
 Without the Company and the rest (control): cocaine x0.60-x1.39, guns x1.12.
 
 Customs odds and expected return per dollar for one load:
