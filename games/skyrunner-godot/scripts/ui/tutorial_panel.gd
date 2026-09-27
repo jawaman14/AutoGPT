@@ -34,6 +34,19 @@ func _ready() -> void:
 	visible = false
 
 
+## At the desks: over the map (left), low, clear of the tables on the right.
+func dock_left() -> void:
+	anchor_left = 0.0
+	anchor_right = 0.5
+	anchor_top = 1.0
+	anchor_bottom = 1.0
+	offset_left = 16
+	offset_right = -16
+	offset_top = -16
+	offset_bottom = -16
+	grow_vertical = Control.GROW_DIRECTION_BEGIN  # as tall as the lesson, growing up from the bottom
+
+
 func show_view(tv: Dictionary) -> void:
 	if tv.is_empty() or not bool(tv.get("on", false)) or (str(tv.id) == "" and str(tv.tip) == ""):
 		visible = false

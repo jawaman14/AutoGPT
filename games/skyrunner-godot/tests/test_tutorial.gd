@@ -97,3 +97,37 @@ func test_every_lesson_can_finish() -> void:
 	var src := FileAccess.get_file_as_string("res://scripts/sim/tutorial.gd")
 	for l in Tutorial.LESSONS:
 		check(src.count('complete("%s")' % l[0]) >= 1, "a way to finish '%s'" % l[0])
+
+
+func test_the_desks_learn_by_doing() -> void:
+	var s := _sess()
+	check_eq(s.tutorial.desk_view(Roles.CONTROLLER).id, "c_launch", "the controller starts with launching")
+	var r: Array = s.command(Roles.CONTROLLER, "launch", {"kind": "heli"})
+	if r[0]:
+		check_eq(s.tutorial.desk_view(Roles.CONTROLLER).id, "c_raid", "a launch finishes the lesson")
+	else:
+		s.tutorial.command_done(Roles.CONTROLLER, "launch")  # no heli free on this map: the hook alone
+		check_eq(s.tutorial.desk_view(Roles.CONTROLLER).id, "c_raid")
+	check_eq(s.tutorial.desk_view(Roles.PILOT).id, "", "the pilot has no desk lessons")
+	check_eq(_ids(s), "welcome", "and the pilot's own lessons are untouched")
+	s.dispose()
+
+
+func test_a_remote_desk_skips_through_the_link() -> void:
+	var s := _sess()
+	var link := LocalLink.new(s, Roles.BOSS)
+	var snap = link.snapshot()
+	check(snap is Dictionary and snap.tutorial.id == "b_orders", "the boss's desk shows its lesson")
+	link.send_command("tutorial", {"do": "skip"})
+	check_eq(s.tutorial.desk_view(Roles.BOSS).id, "", "skipped (the rest need systems not in this game)")
+	link.send_command("tutorial", {"do": "off"})
+	check(not s.tutorial.enabled, "SHIFT+F10 from a desk turns it off for the game")
+	s.dispose()
+
+
+func test_desk_progress_is_saved() -> void:
+	var s := _sess()
+	s.tutorial.command_done(Roles.LIEUTENANT, "squad_order")
+	var t := Tutorial.new(s.tutorial.to_dict())
+	check(t.desk_done.get(Roles.LIEUTENANT, {}).has("l_squads"), "round trip")
+	s.dispose()

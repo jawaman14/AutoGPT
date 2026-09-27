@@ -578,6 +578,8 @@ func command(role: String, name: String, args := {}) -> Array:
 	var err = call(handler, role, args)
 	if err:
 		return [false, err]
+	if tutorial != null:
+		tutorial.command_done(role, name)
 	return [true, "ok"]
 
 
@@ -2426,6 +2428,27 @@ func _cmd_escort_truck(role: String, a: Dictionary):
 	if err != "":
 		return err
 	say("%s rides with the truck%s." % [q.id, (" to " + logistics.truck_info(t).to) if logistics != null else ""])
+	return null
+
+
+## The tutorial from a desk (local or remote): {do: skip | on | off}.
+func _cmd_tutorial(role: String, a: Dictionary):
+	var what := str(a.get("do", "skip"))
+	if tutorial == null:
+		if what == "off":
+			return null
+		Tutorial.new().attach(self)
+		return null
+	match what:
+		"skip":
+			if role == Roles.PILOT:
+				tutorial.skip()
+			else:
+				tutorial.desk_skip(role)
+		"on":
+			tutorial.enabled = true
+		"off":
+			tutorial.enabled = false
 	return null
 
 

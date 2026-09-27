@@ -1,5 +1,5 @@
 extends SceneTree
-## Menu/station screenshot: godot --script res://tools/shots/ui_shot.gd -- <load|jobs|market|hangar|upgrades|boss|chief|desk|lawtree|copilot|hud|lobby|lieutenant|patrol|seats> <out.png>
+## Menu/station screenshot: godot --script res://tools/shots/ui_shot.gd -- <load|jobs|market|hangar|upgrades|boss|chief|desk|lawtree|copilot|hud|lobby|lieutenant|patrol|desk_tutorial|seats> <out.png>
 var n := 0
 var what := "load"
 var out := ""
@@ -94,7 +94,7 @@ func _init():
 		"lobby":
 			app = Lobby.new()
 			root.add_child(app)
-		"lieutenant", "patrol":
+		"lieutenant", "patrol", "desk_tutorial":
 			# twenty minutes into a war on the city coast
 			sess = Session.new({"seed": 5, "map_seed": MapCity.SEED, "location": "HAR", "features": Session.SANDBOX_FEATURES,
 				"ground_war": true, "chronicle": true, "agency": true, "family": true, "island": true, "court": true, "payroll": true, "trade": true})
@@ -106,7 +106,9 @@ func _init():
 			sess.family.ai = false  # an offer on the table, and a shipment out
 			sess.family.offer("docks")
 			sess.island.ship("mules", 4)
-			var role := Roles.LIEUTENANT if what == "lieutenant" else Roles.PATROL
+			var role := Roles.PATROL if what == "patrol" else Roles.LIEUTENANT
+			if what == "desk_tutorial":
+				Tutorial.new().attach(sess)  # the lieutenant's first lesson on the desk
 			app = StationApp.new()
 			root.add_child(app)
 			app.setup(LocalLink.new(sess, role), role, sess.world)

@@ -48,6 +48,60 @@ const LESSONS := [
 		"Company jobs turn up on the shady strips' boards: crates south, product north.\nThey pay well and the protection is real - until it isn't."],
 ]
 
+## The desks: role -> [[id, needs, title, text, the commands that finish it]].
+## A desk's lesson finishes on that role's own successful command (Session.command
+## tells us), so it works the same from a remote seat.
+const DESK_LESSONS := {
+	"boss": [
+		["b_orders", "", "Run the organisation",
+			"UP/DOWN picks an order, LEFT/RIGHT changes it, ENTER issues it: fronts to launder, opsec, lying low, upgrades. The money is the club's safe.", ["hq"]],
+		["b_logistics", "logistics", "Stock and cash have places",
+			"K: logistics. Street money piles up in the stashes - truck it to the club (All cash home). Product sells only where it sits: move it to the corners, or to a buyer.", ["move_cash", "move_goods", "move_armoury", "escort_truck"]],
+		["b_buyers", "trade", "Sell in bulk",
+			"M: Benny Ruiz and the buyers. The Morettis, the Company and (guns only) Los Cuervos take lots at a discount - and every sale moves the street and the wars.", ["sell_product"]],
+	],
+	"lieutenant": [
+		["l_squads", "ground_war", "Your squads",
+			"CLICK a squad (or UP/DOWN), RIGHT-CLICK the map to send it. A sets an ambush, M melts away, H holds: guerrilla rules, never a fair fight.", ["squad_order"]],
+		["l_recruit", "ground_war", "Raise a squad",
+			"F, V or K raises a foot, car or truck squad from the soldiers on the payroll - each costs money and upkeep.", ["recruit_squad"]],
+		["l_hire", "payroll", "The hiring hall",
+			"W: Manny Ortega's hall. Soldiers for the squads, drivers, lookouts for the stashes, dealers for the corners. Payday every 10 minutes.", ["hire_worker"]],
+		["l_family", "family", "The Family",
+			"C: a sit-down with Sal Moretti. Y takes the newest offer, N turns it down, P pays the tribute - read the offer first, some are traps.", ["family_accept", "family_decline", "family_probe", "pay_tribute", "family_stall"]],
+	],
+	"controller": [
+		["c_launch", "", "Launch",
+			"H helicopter, I interceptor, C cutter launches a unit (toward the mouse). CLICK a unit, then the map, to send it. Watch the radar picture: tracks, squawks, DF bearings.", ["launch", "dispatch"]],
+		["c_raid", "", "Raid a stash",
+			"X raids the known stash house nearest the mouse (traffic and intel make them known). A raid burns it and takes what's inside.", ["raid_stash"]],
+		["c_sweep", "trade", "The corners",
+			"M sweeps the market under the mouse: dealers arrested, supply cut. T follows the money: bulk sales lead back to the organisation.", ["street_sweep", "trace_money"]],
+		["c_rico", "family", "RICO",
+			"O files a racketeering case against the Morettis: build it to a Commission trial.", ["rico_case"]],
+		["c_airport", "island", "The airport and the port",
+			"L cracks down at the airport, P puts inspectors on the port: fewer mules and containers get through - for a while.", ["airport_crackdown", "port_inspections"]],
+		["c_court", "court", "Prosecute",
+			"With a case open: N no bail, W immunity for a witness, K forfeiture, D charges, Y a plea offer. A offers an arrested worker a deal.", ["court_no_bail", "court_immunity", "court_forfeiture", "court_charge", "court_offer_plea", "offer_worker_deal"]],
+	],
+	"chief": [
+		["h_orders", "", "Run the task force",
+			"UP/DOWN picks an order, LEFT/RIGHT changes it, ENTER issues it: budget, patrols, informants, upgrades.", ["hq"]],
+		["h_street", "trade", "The street",
+			"M sweeps the market under the mouse; T follows the money from the bulk sales.", ["street_sweep", "trace_money"]],
+	],
+	"patrol": [
+		["p_squads", "ground_war", "Narcotics squads",
+			"CLICK a squad (or UP/DOWN), RIGHT-CLICK the map to send it; A sets a checkpoint there. A tail finds the stash a stop never would.", ["squad_order"]],
+		["p_rico", "family", "RICO",
+			"O files a racketeering case against the Morettis.", ["rico_case"]],
+	],
+	"copilot": [
+		["o_crew", "", "The right seat",
+			"K kicks a bale over the drop, O calls the boat, V pumps the ferry tank. 1-3 switch tabs.", ["kick", "call_boat", "pump"]],
+	],
+}
+
 ## [id, text] - shown once, when their moment comes (see _tips)
 const TIPS := {
 	"wanted": "You're WANTED. Break contact: low, behind hills, into cloud or rain; lose them over the sea. Landing dirty at a watched strip ends it.",
@@ -71,6 +125,7 @@ var _notes := {}  ## what the seat's UI reported (menus opened, stepping out)
 var _t0 := -1.0
 var _sub := false
 var _xpdr = null  ## the transponder when the lesson began
+var desk_done := {}  ## role -> {lesson id: true}
 
 
 func _init(state = null) -> void:
@@ -80,6 +135,12 @@ func _init(state = null) -> void:
 			done[str(id)] = true
 		for id in state.get("tips", []):
 			tips_shown[str(id)] = true
+		var dd = state.get("desks", {})
+		if dd is Dictionary:
+			for r in dd:
+				desk_done[r] = {}
+				for id in dd[r]:
+					desk_done[r][str(id)] = true
 
 
 func attach(s) -> Tutorial:
@@ -93,7 +154,10 @@ func attach(s) -> Tutorial:
 
 
 func to_dict() -> Dictionary:
-	return {"on": enabled, "done": done.keys(), "tips": tips_shown.keys()}
+	var dd := {}
+	for r in desk_done:
+		dd[r] = desk_done[r].keys()
+	return {"on": enabled, "done": done.keys(), "tips": tips_shown.keys(), "desks": dd}
 
 
 # ------------------------------------------------------------------ the lessons
@@ -109,6 +173,8 @@ func _needs_ok(needs: String) -> bool:
 			return sess.logistics != null
 		"ground_war":
 			return sess.ground != null
+		"court":
+			return sess.court != null
 		"family":
 			return sess.family != null and sess.family.active()
 		"island":
@@ -253,3 +319,39 @@ func view() -> Dictionary:
 	var p := progress()
 	return {"on": enabled, "id": c[0] if c != null else "", "title": c[2] if c != null else "", "text": c[3] if c != null else "",
 		"step": p[0], "of": p[1], "tip": tip}
+
+
+# ------------------------------------------------------------------ the desks
+func desk_current(role: String) -> Variant:
+	if not enabled:
+		return null
+	var dd: Dictionary = desk_done.get(role, {})
+	for l in DESK_LESSONS.get(role, []):
+		if not dd.has(l[0]) and _needs_ok(l[1]):
+			return l
+	return null
+
+
+## Session.command calls this after a command succeeds.
+func command_done(role: String, name: String) -> void:
+	for l in DESK_LESSONS.get(role, []):
+		if name in l[4] and not desk_done.get(role, {}).has(l[0]):
+			if not desk_done.has(role):
+				desk_done[role] = {}
+			desk_done[role][l[0]] = true
+
+
+func desk_skip(role: String) -> void:
+	var c = desk_current(role)
+	if c != null:
+		if not desk_done.has(role):
+			desk_done[role] = {}
+		desk_done[role][c[0]] = true
+
+
+func desk_view(role: String) -> Dictionary:
+	var c = desk_current(role)
+	var avail: Array = DESK_LESSONS.get(role, []).filter(func(l): return _needs_ok(l[1]))
+	var n: int = avail.filter(func(l): return desk_done.get(role, {}).has(l[0])).size()
+	return {"on": enabled, "id": c[0] if c != null else "", "title": c[2] if c != null else "", "text": c[3] if c != null else "",
+		"step": mini(n + 1, avail.size()), "of": avail.size(), "tip": ""}

@@ -204,6 +204,9 @@ Beyond the prototype:
   - **Tips.** One-off tips cover the first time you're wanted, low on fuel, busted, in fog or a storm,
     short of wages, raided, a truck stopped, or the Colombians calling.
   - **Controls.** F10 skips a step, SHIFT+F10 turns it off or on. Progress rides in the save.
+  - **The desks too.** The boss, the lieutenant, the controller, the chief, the patrol desk and the
+    co-pilot get their own lessons, in their own keys (orders, logistics, squads, launches, raids, sweeps,
+    RICO, the prosecutor). They finish on that seat's own orders, so they work from a remote seat.
 - **The story: Costa Brava, 1979-1989** (the lobby's *Unlocks: Story*, the default). Eight chapters take you
   from a bush pilot flying square grouper to the organisation the coast answers to. Each chapter opens part
   of the game, so you meet each system on its own first:
@@ -343,8 +346,8 @@ Beyond the prototype:
 | ![controls](docs/img/controls.png) | ![street](docs/img/street-fire.png) | ![rain](docs/img/street-rain.png) |
 | **Your pack (I, on foot)** | **Sea fog (80%): the helicopters stay home** | **Logistics (SHIFT+H): stashes, cash, trucks** |
 | ![pack](docs/img/pack.png) | ![fog](docs/img/fog.png) | ![logistics](docs/img/logistics.png) |
-| **The story: 1981, Cocaine Cowboys** | **The tutorial: a lesson and a tip** | |
-| ![story](docs/img/story.png) | ![tutorial](docs/img/tutorial.png) | |
+| **The story: 1981, Cocaine Cowboys** | **The tutorial: a lesson and a tip** | **The lieutenant's desk, learning** |
+| ![story](docs/img/story.png) | ![tutorial](docs/img/tutorial.png) | ![desk tutorial](docs/img/tutorial-desk.png) |
 
 | Mid-afternoon on the runway (medium) | Dusk, climbing out near Eagle's Nest (high) | Night: edge lights on |
 |---|---|---|

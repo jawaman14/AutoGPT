@@ -713,7 +713,18 @@ In the 1980s cocaine trade, the product and the money were both physical, heavy 
 - The lobby ticks the box for the first game only (`tutorial_seen` in `user://settings.cfg`).
 - Progress (lessons done, tips shown, on or off) is saved with the game.
 
-**Scope.** It teaches the pilot's seat. The desks (boss, lieutenant, controller) keep their key hints and F1 help.
+**The desks** (`DESK_LESSONS`)
+- **Their own lessons.** Every seat has its own, written in that desk's real keys:
+  - the boss: orders, K logistics, M buyers;
+  - the lieutenant: squads, raising them, W the hall, C the Family;
+  - the controller: launches, X raids, M sweeps, T the money, O RICO, L/P the airport and port, the prosecutor's keys;
+  - the chief: orders, the street;
+  - the patrol: squads, RICO;
+  - the co-pilot: the crew keys.
+- **Finishing.** A desk lesson finishes when that role's own command succeeds (`Session.command` tells the tutorial), so it works from a remote seat as well as a local one.
+- **Display.** The snapshot carries the seat's view, and the desk shows it over the map.
+- **Keys.** F10 and SHIFT+F10 go through the `tutorial` command, which every role may send.
+- **Saving.** Progress per role is saved with the game.
 
 ## 24. What the street war costs
 

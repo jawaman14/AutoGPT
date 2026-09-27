@@ -23,6 +23,7 @@ const FLIGHT_ACTIONS := [["kick", "Kick the bales", "K"], ["auto_kick", "Auto-ki
 	["spotter", "Hire a spotter", "click map"]]
 
 var logistics_menu: LogisticsMenu = null  ## K: the logistics panel (Logistics)
+var tutorial_panel: TutorialPanel = null  ## the desk's tutorial lesson (F10 skip, SHIFT+F10 on/off)
 var link  ## NetClient or LocalLink
 var role := ""
 var world: World
@@ -304,6 +305,12 @@ func _unhandled_key_input(ev: InputEvent) -> void:
 		KEY_PLUS, KEY_EQUAL, KEY_KP_ADD: name = "+"
 		KEY_MINUS, KEY_KP_SUBTRACT: name = "-"
 		KEY_TAB: name = "tab"
+		KEY_F10:
+			# the tutorial: F10 skips this desk's lesson, SHIFT+F10 turns it on or off
+			var on: bool = bool(link.snapshot().get("tutorial", {}).get("on", false)) if link.snapshot() is Dictionary else false
+			_cmd("tutorial", {"do": ("off" if on else "on") if ev.shift_pressed else "skip"})
+			get_viewport().set_input_as_handled()
+			return
 		KEY_ESCAPE:
 			get_tree().quit()
 			return
@@ -882,6 +889,12 @@ func _process(delta: float) -> void:
 		title.text = "Connecting..." if link.error == null else "Disconnected: %s" % link.error
 		return
 	_check_acks()
+	if snap.has("tutorial") and tutorial_panel == null:
+		tutorial_panel = TutorialPanel.new()
+		add_child(tutorial_panel)
+		tutorial_panel.dock_left()
+	if tutorial_panel != null:
+		tutorial_panel.show_view(snap.get("tutorial", {}))
 	if snap.get("seq") != _last_seq or link is LocalLink:
 		_last_seq = snap.get("seq")
 		match role:
