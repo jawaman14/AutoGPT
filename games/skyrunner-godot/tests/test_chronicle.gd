@@ -107,7 +107,7 @@ func test_the_random_clock() -> void:
 	var sides := {}
 	for e in s.chronicle.entries:
 		sides[e[1]] = true
-	check(sides.has("org") and sides.has("rival") and sides.has("law"), "for all three outfits (and the Family: %s)" % sides.keys())
+	check(sides.has("org") and sides.has("rival") and sides.has("law"), "for all three outfits (and the Family: %s)" % [sides.keys()])
 	s.dispose()
 
 
