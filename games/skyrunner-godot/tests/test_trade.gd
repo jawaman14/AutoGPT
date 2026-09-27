@@ -77,6 +77,18 @@ func test_the_career_starts_with_grass() -> void:
 	s.dispose()
 
 
+func test_moving_weight_brings_the_call_even_when_the_corners_are_slow() -> void:
+	var s := _sess({"career": true})
+	s.trade.landed.marijuana = Trade.CONNECT_MOVED - 1.0
+	s.trade._check_connection()
+	check(not s.trade.connected, "not quite two tons yet")
+	s.trade.landed.marijuana = Trade.CONNECT_MOVED
+	s.trade._check_connection()
+	check(s.trade.connected, "a pilot who moves weight gets the call, sold or not")
+	check_near(s.trade.sold.marijuana, 0.0, 0.01, "nothing had to be sold")
+	s.dispose()
+
+
 func test_dealers_work_the_corners() -> void:
 	var s := _sess()
 	s.trade.stock.cocaine = 200.0

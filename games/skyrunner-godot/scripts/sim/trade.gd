@@ -22,7 +22,8 @@ extends RefCounted
 ##   the career     (career: true, live play) it starts with grass, the way the
 ##                  1970s smugglers did: cheap, bulky, less heat. The Colombians
 ##                  only call once we've proven ourselves (CONNECT_LB of grass
-##                  sold, or CONNECT_EARNED made in the trade); until then no
+##                  sold, CONNECT_MOVED landed in our stashes - a pilot who moves
+##                  weight - or CONNECT_EARNED made in the trade); until then no
 ##                  cocaine work, no island, no return legs
 ##   the law        a street sweep picks dealers up in a market; following the
 ##                  money traces the Company's pipeline - and our bulk sales
@@ -42,6 +43,7 @@ const DEALER_LB_MIN := {"cocaine": 0.6, "marijuana": 5.0}  ## what one dealer mo
 const FLOOD_PER_LB := {"cocaine": 0.0015, "marijuana": 0.0002}  ## street supply a pound adds
 const ARREST_MIN := 0.005  ## a dealer's chance of a pinch a minute (x police, x the drug)
 const CONNECT_LB := 1200.0
+const CONNECT_MOVED := 2400.0  ## lb of grass landed: the word gets around even while the corners are slow
 const CONNECT_EARNED := 25000
 const SWEEP_COST := 2500
 const TRACE_COST := 4000
@@ -62,6 +64,7 @@ var career := false
 var connected := true
 var appetite := {}  ## buyer -> good -> room left
 var sold := {"cocaine": 0.0, "marijuana": 0.0}  ## lb sold (street + bulk)
+var landed := {"cocaine": 0.0, "marijuana": 0.0}  ## lb of our own loads delivered
 var earned := 0  ## money the trade made
 var street_sales := {}  ## market -> $ a minute (the last minute, ours)
 var last := ""
@@ -269,6 +272,8 @@ func board_offer(origin: Airfield, jobs_rng: PyRandom):
 ## Our own load landed at a stash strip: into the stash.
 func delivered(job) -> void:
 	var lb := Py.sum_by(job.items, func(i): return i.weight_lb)
+	if landed.has(job.own_good):
+		landed[job.own_good] += lb
 	if sess.logistics != null:
 		var af := World.airfield(job.dest)
 		var site: String = sess.logistics.site_at(job.dest)  # the stash at the strip it was bought for
@@ -446,7 +451,7 @@ func _street_war(step: float) -> void:
 func _check_connection() -> void:
 	if connected or not career:
 		return
-	if sold.marijuana >= CONNECT_LB or earned >= CONNECT_EARNED:
+	if sold.marijuana >= CONNECT_LB or landed.marijuana >= CONNECT_MOVED or earned >= CONNECT_EARNED:
 		connected = true
 		last = "The Colombians came calling: a man from Medellin wants a pilot who delivers. Cocaine work is open."
 		sess.say("NEWS - " + last)
