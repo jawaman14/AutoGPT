@@ -384,8 +384,9 @@ $GODOT --path . -- --mode campaign   # or skip the lobby with flags (below)
 ./tools/test.sh                      # the test suite, headless (about 2 minutes)
 ```
 
-Nothing to build: open the folder in Godot 4.7 and press play. The first launch of a map grows its
-terrain (about 10 s in GDScript) and caches it in `user://terrain/`; later launches load it at once.
+Nothing to build: open the folder in Godot 4.7 and press play. The built-in maps' terrain ships
+baked in `data/terrain/` (`tools/bake_terrain.gd`); a generated island grows its terrain on first use
+(about 10 s in GDScript) and caches it in `user://terrain/`.
 
 Command-line flags (all optional; any flag skips the lobby):
 

@@ -19,8 +19,8 @@ Builds come from the CI run of the `claude/cargo-flight-game-2g413p` branch (Git
 A GPU with Vulkan (Linux/Windows) or Metal (macOS) is expected. On an old or missing GPU, start
 it with `--rendering-driver opengl3` and use `--graphics low`.
 
-**The first launch of a map takes a while** (up to a minute on a black screen) while the terrain
-is generated; it is cached, so later launches are quick.
+**Loading a map takes a few seconds** on a black screen. The built-in maps' terrain ships
+baked; a generated island (`--map N`) grows its terrain on first use (about 10 s) and caches it.
 
 ## What to try
 
