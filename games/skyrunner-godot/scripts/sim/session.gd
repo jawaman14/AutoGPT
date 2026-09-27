@@ -12,6 +12,7 @@ const FT := 0.3048
 const FUEL_PRICE_PER_LB := 1.1
 const LOADMASTER_FEE := 150
 const START_MONEY := 3000
+const OPEN_FLOAT := 10000  ## open mode's start: every system live from the first minute (BALANCE entry 34)
 const START_FIELD := "HAR"
 const OFF_FIELD_MAX_GS_KTS := 15.0
 const KICK_MAX_KTS := 130.0
@@ -2708,7 +2709,7 @@ static func load_or_new(path: String, opts := {}) -> Session:
 	if not opts.has("map_seed"):
 		o["map_seed"] = int(data.get("map_seed", 0))
 	World.use_map(int(o["map_seed"]))
-	o["money"] = int(data.get("money", START_MONEY))
+	o["money"] = int(data.get("money", opts.get("money", START_MONEY)))  # a new game may start with a float
 	var owned_list := (data.get("owned", ["c172p"]) as Array).filter(func(k): return Aircraft.ROSTER.has(k))
 	o["owned"] = owned_list if not owned_list.is_empty() else ["c172p"]
 	o["aircraft_key"] = data.aircraft if Aircraft.ROSTER.has(data.get("aircraft", "")) else "c172p"

@@ -105,6 +105,9 @@ const CHANGELOG := [
 	["The whole game, taken apart",
 		"Entry 32's gap, one system at a time (the full game at a fixed income, 20 seeds x 3 hours, net worth p50 $54.9k): without the island $73.0k, without the street war $67.0k, without the Family $61.3k, without the chronicle $56.8k, without the court the same (nothing flies here, so nobody's arrested); without the Company $40.7k - it's the one that pays. The island's cost is the stand-in's: it spends about $7.7k a run on product that now has to go through the corners (entry 30), and the island's supply pushes the cocaine price down, so the stock is worth less; payroll is the same with or without it. A player sees what a container returns; the stand-in doesn't, and the island's rules are left alone.",
 		"One rule changed. The Colombians waited on 1,200 lb of grass sold by our dealers, and with the war slowing product to the corners the call came at 146 minutes in the full game against 101 with logistics alone. Two tons of grass landed in our stashes now bring the call too (Trade.CONNECT_MOVED): the call at about 80 minutes; the full game's net worth p50 $54.9k at a fixed income and $49.2k with air risk (was $52.0k and $44.2k); the configurations without the war barely move. The story sets the connection itself in 1981, so its 62.5% (1986 in 80%) is seed noise against entry 31's 65%."],
+	["Open mode's start",
+		"Open mode starts with every system live from the first minute - the street war, payroll, the court, the island - on Session.START_MONEY ($3,000), and the simulator had never run it that way: every configuration started on $16k. The open configuration now runs the full game with air risk at the real start, and a sweep tries $3k-$40k (section 7). The first guess was wrong twice: the organisation fields a squad from the first minute in every run (up to two at once; entry 32's 0.2 was the count left at the end), so the AI's escorts (GroundWar already escorts every truck it has a squad for) had squads to use, and the payroll never came up short at any start.",
+		"The start matters less than expected: $3k ends three hours at $43.2k net worth, $40k at $54.5k - more money up front mostly buys a bigger war. At $3k the safe dips just below zero in the worst tenth of runs (money_min p10 -$161); from $10k it doesn't. So open mode gets a $10k float (Session.OPEN_FLOAT: Benny Ruiz fronts it, a new game only; a save keeps its money; the story still starts on $3k and opens the systems one at a time). No escort change."],
 ]
 
 
@@ -380,6 +383,16 @@ static func write_report(results_dir: String, out_path: String) -> String:
 				int(air["seeds"]), Py.f(air["hours"], 0), Py.money(int(ar["money"]["p50"])), Py.money(int(air["configs"]["noair"]["money"]["p50"])),
 				Py.f(a["flights"], 1), Py.money(int(a["pay"])), Py.f(a["busts"], 2), Py.f(a["crashes"], 2), Py.money(int(a["fines"])),
 				Py.money(int(a["repairs"])), Py.f(a["held_min"], 0), Py.f(a["lay_low"], 1)]]
+		var sweep = _load(results_dir, "live-open_sweep")
+		if sweep is Dictionary and not sweep.get("configs", {}).is_empty():
+			lines += ["", "Open mode's start (the full game with air risk, %d seeds x %s hours at each start):" % [int(sweep["seeds"]), Py.f(sweep["hours"], 0)], "",
+				"| start | payroll short | money min p10 | a squad | squads at once | trucks seized or hijacked | net worth p50 |", "|---|---|---|---|---|---|---|"]
+			for k in Py.sorted_by(sweep["configs"].keys(), func(x): return int(str(x).trim_prefix("open_").trim_suffix("k"))):
+				var c: Dictionary = sweep["configs"][k]
+				var sl: Dictionary = c.get("logistics", {})
+				lines.append("| %s | %s | $%s | %s | %s | $%s | $%s |" % [k.trim_prefix("open_").replace("k", ",000").insert(0, "$"), _pct(c["payroll"]["short_rate"]),
+					Py.money(int(c["money_min"]["p10"])), _pct(c["open"]["squad_rate"]), Py.f(c["open"]["squads_max"], 1),
+					Py.money(int(float(sl.get("lost_hijacked", 0)) + float(sl.get("lost_seized", 0)))), Py.money(int(c["net_worth"]["p50"]))])
 		var story = _load(results_dir, "live-story")
 		if story is Dictionary and story.get("configs", {}).has("story"):
 			var st: Dictionary = story["configs"]["story"]

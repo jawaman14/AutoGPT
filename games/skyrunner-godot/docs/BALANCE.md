@@ -77,6 +77,8 @@ Drivers pull over when they see police on the road ahead; a passing patrol pulls
 
 33. **The whole game, taken apart.** *Found:* Entry 32's gap, one system at a time (the full game at a fixed income, 20 seeds x 3 hours, net worth p50 $54.9k): without the island $73.0k, without the street war $67.0k, without the Family $61.3k, without the chronicle $56.8k, without the court the same (nothing flies here, so nobody's arrested); without the Company $40.7k - it's the one that pays. The island's cost is the stand-in's: it spends about $7.7k a run on product that now has to go through the corners (entry 30), and the island's supply pushes the cocaine price down, so the stock is worth less; payroll is the same with or without it. A player sees what a container returns; the stand-in doesn't, and the island's rules are left alone. *Changed:* One rule changed. The Colombians waited on 1,200 lb of grass sold by our dealers, and with the war slowing product to the corners the call came at 146 minutes in the full game against 101 with logistics alone. Two tons of grass landed in our stashes now bring the call too (Trade.CONNECT_MOVED): the call at about 80 minutes; the full game's net worth p50 $54.9k at a fixed income and $49.2k with air risk (was $52.0k and $44.2k); the configurations without the war barely move. The story sets the connection itself in 1981, so its 62.5% (1986 in 80%) is seed noise against entry 31's 65%.
 
+34. **Open mode's start.** *Found:* Open mode starts with every system live from the first minute - the street war, payroll, the court, the island - on Session.START_MONEY ($3,000), and the simulator had never run it that way: every configuration started on $16k. The open configuration now runs the full game with air risk at the real start, and a sweep tries $3k-$40k (section 7). The first guess was wrong twice: the organisation fields a squad from the first minute in every run (up to two at once; entry 32's 0.2 was the count left at the end), so the AI's escorts (GroundWar already escorts every truck it has a squad for) had squads to use, and the payroll never came up short at any start. *Changed:* The start matters less than expected: $3k ends three hours at $43.2k net worth, $40k at $54.5k - more money up front mostly buys a bigger war. At $3k the safe dips just below zero in the worst tenth of runs (money_min p10 -$161); from $10k it doesn't. So open mode gets a $10k float (Session.OPEN_FLOAT: Benny Ruiz fronts it, a new game only; a save keeps its money; the story still starts on $3k and opens the systems one at a time). No escort change.
+
 ## 1. Can you get in and out? (feasibility)
 
 The pilot bot flew 240 takeoffs and landings: every aircraft × airfield × load (light = 30% fuel; half = 60% fuel + half payload; max = full fuel + payload to MTOW). 134 succeeded. L = landing, T = takeoff.
@@ -312,6 +314,16 @@ Logistics (the trade configuration with stock and cash in the stash houses, truc
 The street war (all systems plus the war, the organisation's AI commanding): money p50 $50,029 against $62,662 without; $5,050 recruiting, $1,071 on rifles, $1,351 upkeep a run; 13.1 firefights a run, men lost 6.4 of ours, 6.1 of Los Cuervos', 15.4 police, 13.1 arrested (both outfits); 1.4 squads of ours at the end against 4.0 of Los Cuervos' and 7.5 police; 0.7 stash houses burned; suspicion p50 0, p90 0.
 
 Air risk (all systems with logistics, the street war and the court; 80 seeds x 3 hours): money p50 $18,070 with each flight rolling the tactical sweep's odds, against $21,348 for the same systems at a fixed income. A run flew 17.7 flights (paid $6,000 each when they counted), with 0.60 busts, 0.68 crashes, $0 in fines, $1,687 in repairs and 4 minutes held by the court; the pilot stayed on the ground 0.0 times with the police tipped off.
+
+Open mode's start (the full game with air risk, 20 seeds x 3 hours at each start):
+
+| start | payroll short | money min p10 | a squad | squads at once | trucks seized or hijacked | net worth p50 |
+|---|---|---|---|---|---|---|
+| $3,000 | 0% | $-161 | 100% | 2.0 | $10,169 | $43,238 |
+| $10,000 | 0% | $0 | 100% | 2.0 | $9,538 | $46,088 |
+| $16,000 | 0% | $0 | 100% | 2.0 | $8,000 | $50,447 |
+| $25,000 | 0% | $0 | 100% | 2.0 | $11,762 | $49,714 |
+| $40,000 | 0% | $0 | 100% | 2.2 | $16,276 | $54,514 |
 
 The story (40 seeds x 12 hours, the same stand-ins, chapters opening the systems): reached ch2 1980 (100% at 66 min), ch3 1981 (100% at 172 min), ch4 1982 (100% at 240 min), ch5 1983 (92% at 315 min), ch6 1984 (90% at 390 min), ch7 1985 (88% at 435 min), ch8 1986 (80% at 510 min), the end (62% at 495 min). Money p50 $17,290 at the end, net worth (cash, product and street money) p50 $52,364; with air risk: 1.9 busts, 1.8 crashes, $7,085 in fines and $4,562 in repairs a run; $19,687 a run spent on the island's product.
 

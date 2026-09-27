@@ -86,13 +86,18 @@ func start() -> void:
 		for k in Session.SYSTEMS:
 			opts.erase(k)
 		opts["career"] = true
+	elif mode != Roles.CAMPAIGN and features == null:
+		opts["money"] = Session.OPEN_FLOAT  # open mode: everything live at once, so a float (a new game only)
 	if args["map"] >= 0:  # --map 0 = classic island, --map N = generated island N
 		opts["map_seed"] = args["map"]
 	elif not FileAccess.file_exists(save):
 		opts["map_seed"] = MapCity.SEED  # a new game starts on the city coast; old saves keep their island
 	if features != null:
 		opts["features"] = features
+	var fresh := not FileAccess.file_exists(save)
 	var sess := Session.load_or_new(save, opts)
+	if fresh and opts.has("money"):
+		sess.say("Benny Ruiz fronts the start-up money: $%s. Everything's open from the first minute - spend it well." % Py.money(int(opts.money)))
 	if args["weather"] != "":  # --weather clear|cloud|storm[,moon 0..1]; the HQ season sets its own each night
 		var wp: PackedStringArray = str(args["weather"]).split(",")
 		sess.set_weather({"sky": wp[0], "moon": float(wp[1]) if wp.size() > 1 else 0.5})

@@ -152,3 +152,21 @@ func test_no_softlocks_when_a_faction_is_gone() -> void:
 	s.story.tick(s)
 	check_eq(s.story.chapter.title, "Kingpin", "the Company cut us loose: on to the end")
 	s.dispose()
+
+
+func test_open_mode_starts_with_a_float_and_a_save_keeps_its_money() -> void:
+	var path := OS.get_user_data_dir().path_join("test_open_float.json")
+	DirAccess.remove_absolute(path)
+	var s := Session.load_or_new(path, {"features": Session.SANDBOX_FEATURES, "money": Session.OPEN_FLOAT})
+	check_eq(s.money, Session.OPEN_FLOAT, "a new open game starts with the float")
+	s.money = 4321
+	s.save()
+	s.dispose()
+	var t := Session.load_or_new(path, {"features": Session.SANDBOX_FEATURES, "money": Session.OPEN_FLOAT})
+	check_eq(t.money, 4321, "a saved game keeps its own money")
+	t.dispose()
+	DirAccess.remove_absolute(path)
+	var u := Session.load_or_new(path, {"features": Session.SANDBOX_FEATURES})
+	check_eq(u.money, Session.START_MONEY, "without a float (the story) it's the old start")
+	u.dispose()
+	DirAccess.remove_absolute(path)

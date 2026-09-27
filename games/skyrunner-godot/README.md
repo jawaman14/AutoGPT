@@ -226,7 +226,7 @@ Beyond the prototype:
   The goals are measured by the systems themselves (pounds landed, dealers on corners, cash home, a deal
   with the Morettis, loads from the island). A faction that's gone before you deal with it doesn't strand
   a chapter. `--chapter N` skips ahead. *Unlocks: Open* (`--unlocks open`) has every faction and mechanic
-  from the first minute, cocaine included. The old flying campaign on the classic island is still there
+  from the first minute, cocaine included, and starts with a $10,000 float. The old flying campaign on the classic island is still there
   as *Flying lessons*.
 - **Logistics: product and cash are somewhere** (SHIFT+H in the aircraft, K at the boss's and
   lieutenant's desks).
