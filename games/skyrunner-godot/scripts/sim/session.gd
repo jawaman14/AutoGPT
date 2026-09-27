@@ -74,6 +74,7 @@ var seed := 1
 var money := START_MONEY
 var owned := {"c172p": true}
 var aircraft_key := "c172p"
+const ARRIVE_MARGIN_M := 30.0  ## how far off a strip a stopped aircraft still counts as arrived
 var phase := "parked"  ## parked | flying | crashed | busted
 var location = START_FIELD
 var messages: Array = []  ## [[t, text]]
@@ -1938,8 +1939,11 @@ func _rules(dt: float, s: FlightModel.FlightState) -> void:
 		if af_here == null and s.gs_kts > OFF_FIELD_MAX_GS_KTS:
 			_crash("Ran off the strip into rough ground")
 			return
-		if s.gs_kts < 1.0 and af_here != null and lg.airborne:
-			_arrive(af_here, s)
+		if s.gs_kts < 1.0 and lg.airborne:
+			# stopped a few metres off the end or the edge is still at the field
+			var af_stop: Airfield = af_here if af_here != null else world.airfield_at(s.x, s.y, ARRIVE_MARGIN_M)
+			if af_stop != null:
+				_arrive(af_stop, s)
 
 
 func _arrive(af: Airfield, s: FlightModel.FlightState) -> void:
