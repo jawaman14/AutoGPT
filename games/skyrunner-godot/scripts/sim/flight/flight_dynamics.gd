@@ -106,7 +106,7 @@ func load_model(data_root: String, name: String) -> bool:
 		contacts.append({"name": c.attr("name"), "bogey": c.attr("type", "BOGEY") == "BOGEY", "loc": _loc(c.find("location")),
 			"k": _num(c.find("spring_coeff"), "LBS/FT"), "c": _num(c.find("damping_coeff"), "LBS/FT/SEC"),
 			"mu_s": _f(c, "static_friction", 0.8), "mu_d": _f(c, "dynamic_friction", 0.5), "mu_r": _f(c, "rolling_friction", 0.02),
-			"steer": deg_to_rad(_f(c, "max_steer", 0.0)), "brake": _txt(c, "brake_group", "NONE").to_upper(), "wow": false, "comp": 0.0})
+			"steer": _steer(c), "brake": _txt(c, "brake_group", "NONE").to_upper(), "wow": false, "comp": 0.0})
 	_load_engines(tree, data_root, dir)
 	_load_aero(tree.find("aerodynamics"))
 	var fc := tree.find("flight_control")
@@ -123,6 +123,14 @@ func load_model(data_root: String, name: String) -> bool:
 		p[k] = 1.0
 	_update_mass()
 	return true
+
+
+## A wheel's steering limit, rad. JSBSim's max_steer 360 means "castering",
+## which some files give their main wheels; those are flown as fixed wheels
+## (a free-swivelling main gear would have no side grip at all).
+static func _steer(c: MassData.XNode) -> float:
+	var deg := _f(c, "max_steer", 0.0)
+	return 0.0 if absf(deg) >= 360.0 else deg_to_rad(deg)
 
 
 static func _txt(n: MassData.XNode, tag: String, default := "") -> String:

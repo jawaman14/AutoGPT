@@ -63,6 +63,8 @@ ask for one.
 - The flight model is new. The C172 is calibrated to its handbook; the other aircraft are
   plausible but less checked. Hands off at high power, some roll slowly left (propeller torque),
   as real ones do.
+- The DHC-6 Twin Otter balloons hard when its flaps come out at speed (its aerodynamic data
+  gives a very large flap lift, under JSBSim too): slow to about 80 kt before taking flap.
 - The balance was measured with the old flight model, and a re-run is under way. Expect money
   and police odds to shift between beta builds.
 - Text-to-speech (the read-aloud option) needs the OS speech service; on Linux that is
