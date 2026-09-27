@@ -15,6 +15,7 @@ extends Node
 ##   godot -- --map city                     # Costa Brava, the city coast (the default for new games)
 ##   godot -- --map 42                       # a generated island (0 = the classic one)
 ##   godot -- --shot out.png --frames 90     # render N frames, save a screenshot, quit
+##   godot --headless -- --smoke 600         # run N frames of a new game, print SMOKE OK, quit (CI)
 ##
 ## With no arguments the lobby opens, which sets the same options with menus.
 
@@ -22,7 +23,7 @@ const SAVE_DIR := "user://"
 
 var args := {"mode": "solo", "police": false, "host": false, "port": 47800, "bind": "*", "new": false, "seed": 1,
 	"players": 0, "layer": 0, "graphics": "high", "watch": false, "shot": "", "frames": 90, "hour": -1.0,
-	"map": -1, "weather": "", "connect": "", "role": "copilot", "name": "player", "seat3d": false, "lobby": true, "unlocks": "story", "chapter": 0, "tutorial": false}
+	"map": -1, "weather": "", "connect": "", "role": "copilot", "name": "player", "seat3d": false, "lobby": true, "unlocks": "story", "chapter": 0, "tutorial": false, "smoke": 0}
 
 
 func _ready() -> void:
@@ -135,6 +136,8 @@ func start() -> void:
 		app.scene.set_hour(args["hour"])
 	if args["shot"] != "":
 		_shoot(app)
+	elif args["smoke"] > 0:
+		_smoke(sess)
 
 
 ## Remote seat: a 3D view for the police pilot (and the co-pilot with --seat3d),
@@ -169,6 +172,15 @@ func _seat(link: NetClient, role: String) -> void:
 		var st := StationApp.new()
 		add_child(st)
 		st.setup(link, role)
+
+
+## Run a new game for a while and quit (the release smoke test in CI): the
+## output is checked for SCRIPT ERROR, and the game has to reach the end.
+func _smoke(sess: Session) -> void:
+	for f in args["smoke"]:
+		await get_tree().process_frame
+	print("SMOKE OK %s t=%.1fs phase=%s money=%s" % [Beta.version(), sess.time, sess.phase, sess.money])
+	get_tree().quit()
 
 
 ## Render a few frames and save a screenshot (docs, CI smoke tests).

@@ -1,0 +1,127 @@
+name: Skyrunner beta builds
+
+# Tests the Godot game, exports Linux / Windows / macOS builds and smoke-tests
+# the Linux and Windows ones. The builds are attached to the run as artifacts
+# (Actions -> this run -> Artifacts). Pure GDScript: no compiler needed.
+
+on:
+  push:
+    paths:
+      - "games/skyrunner-godot/**"
+      - ".github/workflows/skyrunner-beta.yml"
+  pull_request:
+    paths:
+      - "games/skyrunner-godot/**"
+      - ".github/workflows/skyrunner-beta.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: skyrunner-beta-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.7.2-stable
+  GAME: games/skyrunner-godot
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Godot
+        run: echo "GODOT=$(${GAME}/tools/get_godot.sh)" >> "$GITHUB_ENV"
+      - name: Test suite
+        working-directory: ${{ env.GAME }}
+        env:
+          TEST_TIMEOUT: "2700"
+        run: ./tools/test.sh
+
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Godot
+        run: echo "GODOT=$(${GAME}/tools/get_godot.sh)" >> "$GITHUB_ENV"
+      - name: Export templates
+        run: |
+          set -euo pipefail
+          D="$HOME/.local/share/godot/export_templates/${GODOT_VERSION/-/.}"
+          mkdir -p "$D"
+          curl -sSL -o /tmp/templates.tpz \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_export_templates.tpz"
+          unzip -oqj /tmp/templates.tpz templates/version.txt templates/linux_release.x86_64 \
+            templates/windows_release_x86_64.exe templates/windows_release_x86_64_console.exe \
+            templates/macos.zip -d "$D"
+          rm /tmp/templates.tpz
+      - name: Export
+        working-directory: ${{ env.GAME }}
+        run: |
+          set -euo pipefail
+          "$GODOT" --headless --import >/dev/null 2>&1 || true
+          mkdir -p export/linux export/windows export/macos
+          "$GODOT" --headless --export-release Linux export/linux/Skyrunner.x86_64
+          "$GODOT" --headless --export-release Windows export/windows/Skyrunner.exe
+          "$GODOT" --headless --export-release macOS export/macos/Skyrunner.zip
+          cp BETA.md export/linux/ && cp BETA.md export/windows/
+          ls -la export/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: skyrunner-linux
+          path: ${{ env.GAME }}/export/linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: skyrunner-windows
+          path: ${{ env.GAME }}/export/windows
+      - uses: actions/upload-artifact@v4
+        with:
+          name: skyrunner-macos
+          path: |
+            ${{ env.GAME }}/export/macos/Skyrunner.zip
+            ${{ env.GAME }}/BETA.md
+
+  smoke-linux:
+    needs: export
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: skyrunner-linux
+          path: build
+      - name: Mesa and a virtual display
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb mesa-utils libgl1-mesa-dri >/dev/null
+      - name: Headless run (the AI flies an open-mode game)
+        run: |
+          chmod +x build/Skyrunner.x86_64
+          build/Skyrunner.x86_64 --headless -- --unlocks open --watch --new --smoke 1800 2>&1 | tee run.log
+          grep -q "SMOKE OK" run.log
+          ! grep -q "SCRIPT ERROR" run.log
+      - name: Rendered frame (story mode, llvmpipe)
+        run: |
+          xvfb-run -a -s "-screen 0 1280x720x24" build/Skyrunner.x86_64 --rendering-driver opengl3 --audio-driver Dummy \
+            -- --new --graphics low --hour 16 --shot "$PWD/smoke.png" --frames 240 2>&1 | tee shot.log
+          test -s smoke.png
+          ! grep -q "SCRIPT ERROR" shot.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smoke-screenshot-linux
+          path: smoke.png
+
+  smoke-windows:
+    needs: export
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: skyrunner-windows
+          path: build
+      - name: Headless run (the AI flies an open-mode game)
+        shell: bash
+        run: |
+          build/Skyrunner.exe --headless -- --unlocks open --watch --new --smoke 1800 > run.log 2>&1 || true
+          cat run.log
+          grep -q "SMOKE OK" run.log
+          ! grep -q "SCRIPT ERROR" run.log

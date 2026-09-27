@@ -374,6 +374,8 @@ volumetric fog need Forward+ on a real GPU.)*
 
 ## Build and run
 
+Beta testers: see [BETA.md](BETA.md) for the downloadable builds and how to report problems (F12).
+
 ```bash
 cd games/skyrunner-godot
 GODOT=$(./tools/get_godot.sh)        # pinned Godot 4.7.2 into .tools/ (or use your own 4.7 install)
@@ -397,6 +399,7 @@ Command-line flags (all optional; any flag skips the lobby):
 | `--host` / `--port 47800` | open remote seats in solo |
 | `--connect HOST:PORT [--role R] [--name N] [--seat3d]` | join; `--role pick` (or none from the lobby) opens the live seat list; or sit straight down as `pilot` (3D), `copilot`, `spotter`, `boat`, `boss`, `lieutenant`, `controller`, `interceptor` (3D), `cutter`, `chief` or `patrol` |
 | `--hour 0-24` | time of day to start at (F2 advances it in game) |
+| `--shot out.png --frames N` / `--smoke N` | render N frames and save a screenshot / run N frames of a new game, print `SMOKE OK` and quit (CI smoke tests) |
 | `--map city\|N` | map: `city` = Costa Brava (the default for new games), 0 = the classic island, N = generated island N |
 | `--weather clear\|cloud\|storm[,moon]` | tonight's weather outside a season (moon 0 = new .. 1 = full) |
 | `--new`, `--seed N` | fresh save; job-board seed |

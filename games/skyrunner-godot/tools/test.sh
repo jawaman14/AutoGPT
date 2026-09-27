@@ -11,7 +11,7 @@ timeout 120 "$GODOT" --headless --import >/dev/null 2>&1
 out=$(mktemp)
 timeout "${TEST_TIMEOUT:-900}" "$GODOT" --headless --script res://tests/run_tests.gd -- "$@" >"$out" 2>&1
 code=$?
-grep -v -E "^\s*JSBSim Flight Dynamics|JSBSim-ML|JSBSim startup|^\s*$" "$out"
+grep -v -E "^\s*$" "$out"
 if grep -q "SCRIPT ERROR" "$out"; then
   echo "FAILED: script errors above"
   [[ $code -eq 0 ]] && code=100
