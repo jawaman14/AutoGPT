@@ -37,6 +37,10 @@ func _init():
 	var opts := {"seed": 1, "location": "HAR"}
 	if view in ["gun", "pack"]:
 		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "ground_war": true})
+	elif view == "logistics":
+		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "payroll": true, "family": true, "trade": true, "logistics": true})
+	elif view == "story":
+		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "career": true})
 	elif view == "buyers":
 		opts.merge({"map_seed": MapCity.SEED, "features": Session.SANDBOX_FEATURES, "payroll": true, "family": true, "agency": true, "trade": true, "ground_war": true})
 	elif view in ["crew", "crew_safe"]:
@@ -54,6 +58,8 @@ func _init():
 			opts["weather"]["fog"] = float(a[8])
 			opts["weather"]["wind_kt"] = 4
 	var s := Session.new(opts)
+	if view == "story":
+		Story.new(2).attach(s)  # 1981: the briefing card
 	app = PilotApp.new()
 	root.add_child(app)
 	app.setup(s, q)
@@ -154,6 +160,21 @@ func _process(_d):
 		app.s.foot.pack_add("ammo", 90)
 		app.s.foot.pack_add("medkit")
 		app.toggle_pack()
+	if n == 3 and view == "logistics":
+		var lg: Logistics = app.s.logistics
+		lg.add("barn", "marijuana", 820.0)
+		lg.add("quarry", "cocaine", 64.0)
+		lg.add("camp", "cocaine", 22.0)
+		lg.cash["barn"] = 6400.0
+		lg.cash["lockup"] = 11850.0
+		lg.cash["docks"] = 2300.0
+		app.s.family.respect = 60.0
+		lg.send("lockup", Logistics.HQ, "cash", 11850.0)
+		lg.send("barn", "family", "marijuana", 300.0)
+		lg.send("quarry", "camp", "cocaine", 30.0)
+		app.s.time += 240.0
+		lg.aboard = 9000
+		app.toggle_logistics()
 	if n == 3 and view == "buyers":
 		app.s.trade.connected = true
 		app.s.trade.stock.cocaine = 140.0

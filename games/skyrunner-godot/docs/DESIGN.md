@@ -617,3 +617,64 @@ AI sells whatever its dealers can't move in two hours to the best buyer.
 - **On screen.** Exponential fog (visibility about 3/density), about 2 km at 0.4 and 700 m at 0.8. It swallows the sky and is tinted pale grey by the sun or the town's glow.
 
 **Junctions.** The city shader draws a street grid every 110 m. The street furniture now puts a traffic light at every third crossing of that grid inside the urban land use, not only where the arterial roads meet, so downtown reads as a town of blocks rather than a handful of highways. That gives 26 sets of lights on Costa Brava.
+
+## 21. The story: Costa Brava, 1979-1989, and the open mode
+
+The game had grown a dozen systems, all on from the first minute. The story (`story.gd`) opens them one chapter at a time. A new player meets the trade before the war, the war before the Family, the Family before the court, and only then the island and the Company.
+
+| Chapter | Year | Opens | Goals |
+|---|---|---|---|
+| Square Grouper | 1979 | trade (grass only), payroll, the papers | 300 lb of grass landed, a dealer on a corner, $4,000 from the trade |
+| The Connection | 1980 | logistics | $3,000 of street money home; the Colombian connection calls |
+| Cocaine Cowboys | 1981 | the street war, gun runs and gun sales, soldiers | 60 lb of cocaine flown home, 8 weapons in the armoury |
+| Family Business | 1982 | the Moretti family | a deal with them (offer, loan or bulk sale); $60,000 in the bank |
+| The Task Force | 1983 | the federal court | 3 hot loads delivered, the case under 60% |
+| Isla Soberana | 1984 | the island, mules | 2 loads home from the island |
+| The Company | 1985 | the Agency | a job for the Company, 4 guns sold to it |
+| Kingpin | 1986 | (all open) | $250,000 in cash, stock and street money |
+
+**How it works**
+- `Session.enable_system(key)` builds a system mid-game. Each system has always had its own random stream, so one that arrives in 1983 behaves as it would have from the start.
+- `Session.unlocked(key)` answers the finer locks: guns (gun runs, gun buys and sales), and which roles the hiring hall offers (soldiers, mules).
+- **Goals.** Goals are read from the event bus (`job_delivered` now says which good, how many pounds, whose job and where from; `cash_home`; `bulk_sale`; `island_shipment`) or from state: dealers on corners, the connection, the armoury, money, net worth.
+- **Softlocks.** A faction that's gone first (the Commission trial convicts the Morettis; the Company is burned or hangs us out) satisfies its chapter, so the story can't strand you.
+- **Saves and entry points.** The story is saved in `story.json`, and loading rebuilds every system its chapters opened. `--chapter N` skips ahead.
+- **Open mode.** `--unlocks open`, or the lobby's Unlocks: Open, has everything from the first minute, cocaine included.
+
+**Pacing** (BALANCE §7, 40 AI runs of 12 hours, flown runs as a stand-in income):
+
+| Chapter | Reached by the AI at |
+|---|---|
+| 1980 | about 1 hour |
+| 1981 | about 3 hours |
+| 1983 | about 5 hours |
+| 1986 | about 8.5 hours, in every run |
+| The end | 72% of runs finish within 12 hours |
+
+A human who trucks the cash home without waiting for the AI's pickups goes faster.
+
+## 22. Logistics: stock and cash have places
+
+In the 1980s cocaine trade, the product and the money were both physical, heavy and exposed: a stash, a count house, cash in duffel bags, a courier. `logistics.gd` makes them so. It's an opt-in system (live play and the dedicated server ask for it; in the story it opens in 1980).
+
+**Where things are**
+- **Product** sits in a stash house: the one at the strip its load was bought for. `Trade.stock` becomes the total of all the stashes.
+- **Dealers** sell only what's in a stash in their own market. Their takings go into that stash's cash, not the safe.
+- **Street money** stays in the stash until moved. The organisation's `money` is the club's safe (Club Tropicana, the HQ), which pays wages, loads, lawyers and upgrades.
+
+**Moving it**
+- **Trucks** (`move_goods`, `move_cash`, and a bulk sale) are StashNet trucks. They take the road graph, face roadblocks and the street war's checkpoints, tails and hijacks, can have escorts, and draw a payroll driver or a day driver.
+  - A seized truck forfeits everything to the task force: half the cash goes to its funds. It adds suspicion: +4 for cash (a laundering lead), +6/+10 for product.
+  - A hijacked truck's cash goes to Los Cuervos.
+- **Bulk sales** are trucked to the buyer's meet and settled there at that moment's quote. The cash, and anything the buyer wouldn't take, rides back to the stash on a second truck, which is exposed too.
+- **Cash bags.** $4,500 of street bills weighs about a pound. `load_cash` / `unload_cash` work at a stash's strip, or at the club's strip (HAR, whose bags go to the safe). The bags ride in the load planner as hot cargo, and a bust takes them.
+- **Sellers.** An own load is paid for from the bags aboard: the growers and the connection want cash on the strip.
+
+**The AI boss**
+- Collects any stash holding $1,000+ after 20 minutes, and batches past $8,000.
+- Sends one cash truck at a time, and past $3,000 when the safe can't meet the payroll.
+- Moves product at most every 10 minutes, to markets where it has dealers and no stock.
+
+**Balance** (BALANCE §7, entry 28). The trade configuration with logistics ends at $55.8k in the safe plus $10.4k still out, against $71.8k without: about 8% less, lost to money in transit and trucks lost (about $900 and 120 lb a run).
+
+The street war isn't stepped in that simulator: it has no police aircraft or suspicion decay to balance the firefights, so stepped, suspicion pins at 100 with or without logistics. A known limit.

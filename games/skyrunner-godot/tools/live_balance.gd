@@ -15,7 +15,8 @@ extends SceneTree
 ##   - the story config plays the chapters (Story): systems open as it goes; the
 ##     AI buys rifles once guns open and sells the Company four at a time
 ##
-##   godot --headless --script res://tools/live_balance.gd -- [seeds] [hours] [config]
+##   godot --headless --script res://tools/live_balance.gd -- [seeds] [hours] [config [first seed]]
+##   (one config writes sim-results/live-<config>.json; the story's is run -- 40 12 story)
 ##
 ## Writes sim-results/live.json; `cli.gd -- report` puts it in docs/BALANCE.md.
 
@@ -37,7 +38,12 @@ func _initialize() -> void:
 		seeds = int(a[0])
 	if a.size() > 1:
 		hours = float(a[1])
+	# the street war isn't stepped here: no police aircraft or suspicion decay to
+	# balance its firefights (the tactical sweeps cover the war); the story's
+	# chapter 3 opens its locks (guns, soldiers) without it
+	GroundWar.ENABLED = false
 	var t0 := Time.get_ticks_msec()
+	# (a script error below would leave the tree running: the caller's timeout is the backstop)
 	var configs := {
 		"control": {},
 		"family": {"family": true},
@@ -51,21 +57,27 @@ func _initialize() -> void:
 	}
 	if a.size() > 2:  # one config only
 		configs = {a[2]: configs[a[2]]}
+	else:
+		configs.erase("story")  # a campaign, not three hours: its own run (-- 40 12 story)
+	var first := int(a[3]) if a.size() > 3 else 1  # the first seed (to rerun one)
 	var out := {"seeds": seeds, "hours": hours, "stand_ins": {"run_pay": RUN_PAY, "run_every_s": RUN_EVERY_S,
 		"law_pay": LAW_PAY, "law_every_s": LAW_EVERY_S, "mule_max": MULE_MAX, "ship_max": SHIP_MAX}, "configs": {}}
 	for name in configs:
 		var rows := []
 		for sd in seeds:
-			rows.append(_run(sd + 1, configs[name]))
+			var w0 := Time.get_ticks_msec()
+			rows.append(_run(sd + first, configs[name]))
+			printerr("  seed %d: %.1f s" % [sd + first, (Time.get_ticks_msec() - w0) / 1000.0])
 		out.configs[name] = _summary(rows)
 		print("%-8s money p50 $%s  law p50 $%s" % [name, Py.money(int(out.configs[name].money.p50)), Py.money(int(out.configs[name].law_funds.p50))])
 	out["odds"] = _odds_table()
 	out["seconds"] = (Time.get_ticks_msec() - t0) / 1000.0
 	DirAccess.make_dir_recursive_absolute("res://sim-results")
-	var f := FileAccess.open("res://sim-results/live.json", FileAccess.WRITE)
+	var fname := "live.json" if a.size() <= 2 else "live-%s.json" % a[2]  # one config: a file of its own
+	var f := FileAccess.open("res://sim-results/" + fname, FileAccess.WRITE)
 	f.store_string(JSON.stringify(out, "  "))
 	f.close()
-	print("live.json written (%.0f s)" % out.seconds)
+	print("%s written (%.0f s)" % [fname, out.seconds])
 	quit()
 
 
@@ -101,7 +113,7 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 			s.story.tick(s)
 			while chapter_min.size() < s.story.index + 1 + (1 if s.story.completed_all else 0):
 				chapter_min.append(t / 60.0)
-			if s.unlocked("guns") and s.arsenals.org.count() < 10 and s.money > 30000 and int(t) % 300 == 0:
+			if s.unlocked("guns") and s.arsenals.org.count() < 10 and s.money > 12000 and int(t) % 300 == 0:
 				s.command(Roles.BOSS, "buy_weapons", {"tier": "rifle", "n": 2})
 			if s.agency != null and s.agency.active() and int(s.arsenals.org.stock.get("rifle", 0)) >= 4 and int(t) % 600 == 0:
 				s.trade.sell("agency", "guns", 4, "rifle")
@@ -169,7 +181,8 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 				if j != null and s.money > j.cost + 5000:
 					s.money -= j.cost
 					s.trade.delivered(j)
-					s.bus.emit("job_delivered", t, "", ["runner"], s._delivered(j, 0, World.airfield(j.dest), true))
+					if s.story != null:  # the story counts loads (the other configs as before)
+						s.bus.emit("job_delivered", t, "", ["runner"], s._delivered(j, 0, World.airfield(j.dest), true))
 			if s.trade.connected and connected_at < 0.0:
 				connected_at = t
 		# the trucks: product to the corners, cash home, lots to the buyers (the AI's orders)
@@ -228,7 +241,8 @@ func _agency_flight(s: Session) -> void:
 		s.money -= mini(maxi(0, s.money), 1500 + int(maxi(0, s.money) * 0.25))  # the sting: a bust's fine
 		return
 	s.money += j.payout
-	s.bus.emit("job_delivered", s.time, "", ["runner"], s._delivered(j, j.payout, World.airfield(j.dest), true))
+	if s.story != null:
+		s.bus.emit("job_delivered", s.time, "", ["runner"], s._delivered(j, j.payout, World.airfield(j.dest), true))
 
 
 func _pct(xs: Array, q: float) -> float:
@@ -266,42 +280,42 @@ func _mean(rows: Array, sect: String, key: String) -> float:
 func _summary(rows: Array) -> Dictionary:
 	var sm := {"money": _stats(rows.map(func(r): return r.money)), "money_min": _stats(rows.map(func(r): return r.money_min)),
 		"law_funds": _stats(rows.map(func(r): return r.law_funds)), "suspicion": _stats(rows.map(func(r): return r.suspicion))}
-	if rows[0].has("family"):
+	if rows.any(func(r): return r.has("family")):
 		sm["family"] = {"cons": _mean(rows, "family", "cons"), "loans": _mean(rows, "family", "loans"),
 			"rat_rate": _rate(rows, "family", "rat"), "trial_rate": _rate(rows, "family", "gone"),
 			"taxed_rate": _rate(rows, "family", "taxed"), "respect": _mean(rows, "family", "respect"),
 			"tribute_paid": _stats(rows.map(func(r): return r.tribute_paid))}
-	if rows[0].has("island"):
+	if rows.any(func(r): return r.has("island")):
 		var sent := 0
 		var caught := 0
 		var spent := 0
 		for r in rows:
 			sent += int(r.sent_units)
-			caught += int(r.island.caught)
+			caught += int(r.island.caught) if r.has("island") else 0  # (the story opens it part-way)
 			spent += int(r.spent_island)
 		sm["island"] = {"shipments": _stats(rows.map(func(r): return r.shipped)), "units_sent": sent, "units_caught": caught,
 			"catch_rate": float(caught) / maxf(1.0, sent), "closed_frac": _mean(rows, "island", "closed_frac"),
 			"intercepts": _mean(rows, "island", "intercepts"), "relations": _mean(rows, "island", "relations"), "spent": spent}
-	if rows[0].has("payroll"):
+	if rows.any(func(r): return r.has("payroll")):
 		sm["payroll"] = {"crew": _mean(rows, "payroll", "crew"), "paid": _mean(rows, "payroll", "paid"), "lost": _mean(rows, "payroll", "lost"),
 			"flips": _mean(rows, "payroll", "flips"), "loyalty": _mean(rows, "payroll", "loyalty"), "short_rate": _rate(rows, "payroll", "short")}
 	sm["market"] = {"coke_lo": _mean(rows, "market", "coke_lo"), "coke_hi": _mean(rows, "market", "coke_hi"),
 		"guns": _mean(rows, "market", "guns"), "disruption": _mean(rows, "market", "disruption"),
 		"coke_lots": _mean(rows, "market", "coke_lots"), "gun_lots": _mean(rows, "market", "gun_lots")}
-	if rows[0].has("trade"):
+	if rows.any(func(r): return r.has("trade")):
 		sm["trade"] = {}
-		for k in rows[0]["trade"]:
+		for k in rows.filter(func(r): return r.has("trade"))[0]["trade"]:
 			sm["trade"][k] = _mean(rows, "trade", k)
-	if rows[0].has("logistics"):
+	if rows.any(func(r): return r.has("logistics")):
 		sm["logistics"] = {"cash_out": _mean(rows, "logistics", "cash_out"), "lost_cash": _mean(rows, "logistics", "lost_cash"),
 			"lost_lb": _mean(rows, "logistics", "lost_lb")}
-	if rows[0].has("story"):
+	if rows.any(func(r): return r.has("story")):
 		var reached := []
 		for n in Story.CHAPTERS.size() + 1:
-			var at := rows.filter(func(r): return r.story.minutes.size() > n).map(func(r): return r.story.minutes[n])
+			var at := rows.filter(func(r): return r.has("story") and r.story.minutes.size() > n).map(func(r): return r.story.minutes[n])
 			reached.append({"chapter": n + 1, "share": float(at.size()) / rows.size(), "min_p50": _pct(at, 0.5)})
 		sm["story"] = {"chapter": _stats(rows.map(func(r): return r.story.chapter)), "reached": reached}
-	if rows[0].has("agency"):
+	if rows.any(func(r): return r.has("agency")):
 		sm["agency"] = {"flights": _mean(rows, "agency", "flights"), "hangout_rate": _rate(rows, "agency", "hung_out"),
 			"burned_rate": _rate(rows, "agency", "burned"), "withheld": _mean(rows, "agency", "withheld"),
 			"exposure": _mean(rows, "agency", "exposure")}

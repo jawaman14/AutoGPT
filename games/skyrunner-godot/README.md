@@ -1,7 +1,7 @@
 # Skyrunner (Godot 4)
 
 Bush flying, weight and balance, and the long arm of the law, on a fictional Caribbean coast in
-1979-86. Godot 4 with **[JSBSim](https://github.com/JSBSim-Team/jsbsim)** flight dynamics through a C++
+1979-89. Godot 4 with **[JSBSim](https://github.com/JSBSim-Team/jsbsim)** flight dynamics through a C++
 GDExtension. This is the game: everything runs on Godot. (It started as a Python prototype in
 `../skyrunner/`, kept only as the archival reference that generated the frozen parity fixtures in
 `tests/fixtures/`; you never need it to build, play or test.) It has:
@@ -194,6 +194,38 @@ Beyond the prototype:
   - Every flight key and gamepad button can be rebound. The remapping and button names come from Input Helper.
   - Each analogue control is bound by moving it: yoke, throttle lever, rudder pedals, left and right toe brakes. They can be on several USB devices, which are matched by name, so replugging or reordering them doesn't matter.
   - Each has invert, deadzone and expo. Everything is saved to `user://controls.cfg`.
+- **The story: Costa Brava, 1979-1989** (the lobby's *Unlocks: Story*, the default). Eight chapters take you
+  from a bush pilot flying square grouper to the organisation the coast answers to. Each chapter opens part
+  of the game, so you meet each system on its own first:
+
+  | Year | Chapter | Opens |
+  |---|---|---|
+  | 1979 | Square Grouper | grass, the stash houses, the hiring hall, the papers |
+  | 1980 | The Connection | logistics; the Colombians call when you've moved enough |
+  | 1981 | Cocaine Cowboys | cocaine, Los Cuervos and the street war, gun runs, soldiers |
+  | 1982 | Family Business | the Moretti family |
+  | 1983 | The Task Force | the federal court: bail, lawyers, pleas, juries |
+  | 1984 | Isla Soberana | the island, mules and containers |
+  | 1985 | The Company | the Agency and its pipeline |
+  | 1986 | Kingpin | a quarter of a million, and walk away |
+
+  The goals are measured by the systems themselves (pounds landed, dealers on corners, cash home, a deal
+  with the Morettis, loads from the island). A faction that's gone before you deal with it doesn't strand
+  a chapter. `--chapter N` skips ahead. *Unlocks: Open* (`--unlocks open`) has every faction and mechanic
+  from the first minute, cocaine included. The old flying campaign on the classic island is still there
+  as *Flying lessons*.
+- **Logistics: product and cash are somewhere** (SHIFT+H in the aircraft, K at the boss's and
+  lieutenant's desks).
+  - Loads land in a stash house, and a dealer sells only what's in a stash in his own market.
+  - Street money piles up where it's made. Wages, loads, lawyers and upgrades come out of the club's safe,
+    so the cash has to be trucked home, or flown home as cash bags (about $4,500 a pound, and evidence if
+    you're busted).
+  - Bulk lots go by truck to the buyer's meet (the Morettis' club in town, the Company's hangar up north,
+    Los Cuervos' hacienda), and the money rides back.
+  - The growers and the connection want cash on the strip, so you fly money out and product in.
+  - Every truck can be stopped at a roadblock or a checkpoint (all of it forfeited), hijacked by Los
+    Cuervos, escorted through, or talked past by a good driver. A raid takes the stash's product and cash.
+  - The AI boss runs regular pickups and moves product to where the dealers are.
 - **The trade: dealers, buyers, and grass before cocaine.**
   - You start the way the 1970s smugglers did: cheap, bulky loads of grass from the farm strips into your stash.
   - Dealers (hire them from Manny) sell it corner by corner, competing with Los Cuervos' dealers. They get picked
@@ -293,8 +325,10 @@ Beyond the prototype:
 | ![crew](docs/img/crew.png) | ![crew-safe](docs/img/crew-safe.png) | ![vhs](docs/img/vhs.png) |
 | **Controls (F8): keys, buttons, yoke, pedals** | **Downtown: KayKit street furniture, a burning wreck** | **The same street in a storm: wet** |
 | ![controls](docs/img/controls.png) | ![street](docs/img/street-fire.png) | ![rain](docs/img/street-rain.png) |
-| **Your pack (I, on foot)** | **Sea fog (80%): the helicopters stay home** | |
-| ![pack](docs/img/pack.png) | ![fog](docs/img/fog.png) | |
+| **Your pack (I, on foot)** | **Sea fog (80%): the helicopters stay home** | **Logistics (SHIFT+H): stashes, cash, trucks** |
+| ![pack](docs/img/pack.png) | ![fog](docs/img/fog.png) | ![logistics](docs/img/logistics.png) |
+| **The story: 1981, Cocaine Cowboys** | | |
+| ![story](docs/img/story.png) | | |
 
 | Mid-afternoon on the runway (medium) | Dusk, climbing out near Eagle's Nest (high) | Night: edge lights on |
 |---|---|---|

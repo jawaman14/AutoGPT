@@ -87,6 +87,9 @@ const CHANGELOG := [
 	["The street: supply, demand, and cocaine for guns",
 		"Requested: prices and supply that move with events, competing factions and arrests, and the Company buying cocaine to buy guns as in the Contra era. A supply-and-demand layer went under the price walk (arrests and raids break networks, rival shipments flood, the island and the Family move the source), and the Company runs a cocaine-north, guns-south pipeline. The first live run found three double counts: the island's shortage and glut were priced twice (its own price and the source); our own deliveries flooded the street twice (the old glut and the new supply); and island loads paid a fixed value while their cost followed the wholesale, so every shock only hurt. The island median fell $69k -> $62k and the pipeline's trail pushed the Company's exposure from 33 to 62 in three hours (hung out in 20% of runs).",
 		"Shortages and gluts now reach the street only; supply ignores our own deliveries (the glut term has them); island loads are paid at today's street price when they land (mules and containers in town); an airport crackdown shortens the town's supply instead of the source; the restock slows with the square root of a short source; the pipeline leaves 0.75 exposure a lot. Now: island median $67.8k (was $69.3k), all systems $72.9k (was $76.2k - the pipeline's cheap cocaine), the Company $91k (was $94k), hung out in 2.5% of runs. Guns average x1.37 with the Company buying (x1.12 without). In a quiet market the island's return per load reads lower (mules 0.56 cold, was 0.67), because Los Cuervos' standing undercut is now in the price; in play the law's crackdowns tighten the street and give it back."],
+	["The story, and stock and cash that have to be moved",
+		"Requested: a storyline where the game opens up chapter by chapter, with a mode that has everything from the start; then logistics - stock and cash physically somewhere, moved to the buyers and the sellers. The story's eight chapters build each system when it opens (on its own stream); logistics puts product in the stash houses and street money where it's made, so the corners sell only what's local, bulk lots are trucked to the buyers' meets and the money trucked back, and the club's safe pays for everything. First runs: the story's AI stalled in 1980 for four hours - it trucked cash home only past $15k a stash, and street money builds at about $100 a minute; and with the street war stepped, the organisation went broke with suspicion pinned at 100, with or without logistics.",
+		"The balance tool doesn't step the street war (no police aircraft or suspicion decay to set against its firefights - the tactical sweeps cover it), and said so. The AI now collects any stash's cash ($1,000+) after 20 minutes and batches past $8k, one cash truck at a time; product moves at most every 10 minutes; a seized cash truck is a money-laundering lead (+4 suspicion), not a drug case. A faction that's gone (the Commission trial, the Company cutting us loose) can't strand a chapter. Now: logistics costs the stand-in AI about 8% of the trade config's net worth over three hours ($55.8k in the safe and $10.4k still out, against $71.8k; about $900 and 120 lb lost a run); the story's AI reaches 1981 at about three hours, 1986 in every run, and finishes in 72% of 12-hour runs (section 7)."],
 ]
 
 
@@ -332,6 +335,24 @@ static func write_report(results_dir: String, out_path: String) -> String:
 				Py.f(tr["sold_weed"], 0), Py.f(tr["sold_coke"], 0), Py.money(int(tr["earned"])), Py.f(tr["connected_min"], 0),
 				Py.f(tr["dealers"], 1), Py.f(tr["bulk"], 1), "%s lb of cocaine and %s lb of grass" % [Py.f(tr["stock_coke"], 0), Py.f(tr["stock_weed"], 0)],
 				Py.money(int(tr["stock_value"]))]]
+		var lg: Dictionary = live["configs"].get("logistics", {})
+		if lg.has("logistics"):
+			var ll: Dictionary = lg["logistics"]
+			var tr0: Dictionary = live["configs"].get("trade", {})
+			lines += ["", "Logistics (the trade configuration with stock and cash in the stash houses, trucked by the organisation's AI): money p50 $%s against $%s without; $%s still out in the stashes, on the road and in the bags at the end; $%s of cash and %s lb of product lost to roadblocks, hijacks and raids a run." % [
+				Py.money(int(lg["money"]["p50"])), Py.money(int(tr0.get("money", {}).get("p50", 0))), Py.money(int(ll["cash_out"])),
+				Py.money(int(ll["lost_cash"])), Py.f(ll["lost_lb"], 0)]]
+		var story = _load(results_dir, "live-story")
+		if story is Dictionary and story.get("configs", {}).has("story"):
+			var st: Dictionary = story["configs"]["story"]
+			var reached := []
+			for r in st["story"]["reached"]:
+				if float(r["share"]) > 0.0 and int(r["chapter"]) > 1:
+					var n := int(r["chapter"])
+					reached.append("%s (%s at %s min)" % ["the end" if n > Story.CHAPTERS.size() else "ch%d %d" % [n, Story.CHAPTERS[n - 1][0]],
+						_pct(r["share"]), Py.f(r["min_p50"], 0)])
+			lines += ["", "The story (%d seeds x %s hours, the same stand-ins, chapters opening the systems): reached %s. Money p50 $%s at the end." % [
+				int(story["seeds"]), Py.f(story["hours"], 0), ", ".join(reached), Py.money(int(st["money"]["p50"]))]]
 		if al.has("market"):
 			var mk: Dictionary = al["market"]
 			lines += ["", "The street (all systems on): cocaine in town swung between x%s and x%s of its usual price in a run (means); guns averaged x%s; the worst broken network reached %s; the Company flew %s lots of cocaine north and bought %s lots of guns." % [
@@ -345,6 +366,9 @@ static func write_report(results_dir: String, out_path: String) -> String:
 			lines.append("| %s | %s | %s | %s | %s |" % [r["case"], _pct(r["mule_p"]), Py.f(r["mule_roi"], 2), _pct(r["ship_p"]), Py.f(r["ship_roi"], 2)])
 		lines.append("")
 	lines += ["## Known limits", "",
+		"- The live-play simulator (section 7) doesn't step the street war: it has no police aircraft "
+		+ "or suspicion decay to set against the firefights, so stepped, suspicion pins at 100 either way. "
+		+ "The war's balance is the tactical sweeps' and playtesting's.",
 		"- The tactical numbers come from one bot that flies well but plays simply: it follows valleys "
 		+ "and ducks when it sees police, but it doesn't read the police radio or bluff. Humans will do "
 		+ "better on the runner side, so the real task force should be a little stronger than these "

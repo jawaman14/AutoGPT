@@ -23,7 +23,10 @@ extends RefCounted
 
 const CASH_PER_LB := 4500.0  ## street money, mostly fives to twenties
 const HQ := "hq"
-const AI_CASH_HOME := 6000.0  ## the organisation's AI sends a stash's cash home past this
+const AI_CASH_HOME := 8000.0  ## the organisation's AI batches a stash's cash home past this (fewer, fatter trucks)
+const AI_CASH_SHORT := 3000.0  ## ... or past this when the safe can't meet the payroll
+const AI_MOVE_EVERY_S := 600.0  ## and moves product at most this often
+const AI_PICKUP_S := 1200.0  ## the regular pickup: a stash's cash ($1,000+) that has sat this long goes home
 const MEETS := {
 	"family": {"name": "the Morettis' social club", "market": "town"},
 	"agency": {"name": "the Company's hangar", "market": "north"},
@@ -33,11 +36,13 @@ const MEETS := {
 var sess
 var stock := {}  ## stash id -> {good: lb}
 var cash := {}  ## stash id -> $ (the HQ's is Session.money)
+var cash_since := {}  ## stash id -> when its cash started piling up (the AI's pickups)
 var aboard := 0  ## $ in cash bags in the aircraft
 var convoys := {}  ## truck job_id -> {kind: move|buy|cash_back, from, to, buyer, good, lb, cash}
 var lost := {"product": 0.0, "cash": 0}  ## what trucks, raids and busts cost us
 var last := ""
 var _t := 0.0
+var _move_t := -1e9  ## the last product move (the AI waits AI_MOVE_EVERY_S between them)
 var _item_id := 0
 
 
@@ -174,6 +179,8 @@ func take_market(g: String, m: String, lb: float) -> Array:
 
 
 func add_cash(site: String, amount: float) -> void:
+	if site != HQ and site != "" and cash.get(site, 0.0) < 1.0:
+		cash_since[site] = sess.time
 	if site == HQ or site == "":
 		sess.money += int(amount)
 		if amount >= 1.0:
@@ -318,7 +325,8 @@ func arrived(t, outcome: String, why: String) -> void:
 		if c.lb > 0.0:
 			sess.econ.record_seizure(c.good, market_of(c.to))
 		var case_ = sess.police.case("runner")
-		case_.suspicion = minf(100.0, case_.suspicion + (10.0 if c.cash > 20000.0 else 6.0))
+		# cash is a money-laundering lead; product is a drug case
+		case_.suspicion = minf(100.0, case_.suspicion + (4.0 if c.lb <= 0.0 else (10.0 if c.lb >= 100.0 else 6.0)))
 		sess.law_say("Truck stopped: %s seized." % what)
 		sess.bus.emit("truck_seized", sess.time, "", ["runner", "law"], {"stash": t.stash})
 	sess.say(last)
@@ -452,11 +460,23 @@ func update(dt: float) -> void:
 	if sess.payroll == null or not sess.payroll.ai.get("org", false):
 		return
 	var busy := {}
+	var cash_moving := false
 	for c in convoys.values():
 		busy[c.from] = true
+		cash_moving = cash_moving or c.cash > 0.0
+	# one cash truck at a time, the fattest stash first; sooner if the payroll is short
+	var short: bool = sess.money < sess.payroll.wage_bill("org") * 2.0
+	var fattest = null
 	for s in cash:
-		if cash[s] >= AI_CASH_HOME and not busy.has(s) and not sess.stash_net.get_stash(s).burned:
-			send(s, HQ, "cash", cash[s])
+		var due: bool = cash[s] >= 1000.0 and sess.time - float(cash_since.get(s, sess.time)) >= AI_PICKUP_S
+		if not busy.has(s) and not sess.stash_net.get_stash(s).burned and (due or cash[s] >= (AI_CASH_SHORT if short else AI_CASH_HOME)):
+			if fattest == null or cash[s] > cash[fattest]:
+				fattest = s
+	if fattest != null and not cash_moving:
+		send(fattest, HQ, "cash", cash[fattest])
+		busy[fattest] = true
+	if sess.time - _move_t < AI_MOVE_EVERY_S:
+		return
 	# product where the dealers work
 	var tr: Trade = sess.trade
 	for m in Economy.MARKETS:
@@ -476,7 +496,8 @@ func update(dt: float) -> void:
 			var to = Py.first(sess.stash_net.live(), func(st): return st.zone == m)
 			if from != null and to != null:
 				send(from, to.id, g, minf(most, want))
-				busy[from] = true
+				_move_t = sess.time
+				return
 
 
 # ------------------------------------------------------------------ views

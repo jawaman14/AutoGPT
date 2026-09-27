@@ -136,3 +136,19 @@ func test_the_chapter_list() -> void:
 		check(k in opened, "chapter by chapter, every system opens: " + k)
 	for k in Story.LOCKS:
 		check(k in opened, "and every lock: " + k)
+
+
+func test_no_softlocks_when_a_faction_is_gone() -> void:
+	var s := _story(3)
+	check_eq(s.story.chapter.title, "Family Business")
+	s.family.gone = true
+	s.money = 70000
+	s.story.tick(s)
+	check_eq(s.story.chapter.title, "The Task Force", "the Morettis convicted first: the chapter still ends")
+	s.story.advance()
+	s.story.advance()
+	check_eq(s.story.chapter.title, "The Company")
+	s.agency.hung_out = true
+	s.story.tick(s)
+	check_eq(s.story.chapter.title, "Kingpin", "the Company cut us loose: on to the end")
+	s.dispose()

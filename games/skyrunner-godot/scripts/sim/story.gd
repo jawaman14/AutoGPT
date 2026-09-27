@@ -32,7 +32,7 @@ const CHAPTERS := [
 		+ "And it's a business now: product sits in a stash, the money piles up on the corners,\n"
 		+ "and the growers want cash on the strip. Truck it, fly it, count it [SHIFT+H].",
 		["logistics"],
-		[["weed_lb", "Move another 600 lb of marijuana", 600], ["cash_home", "Truck or fly $5,000 of street money home", 5000],
+		[["cash_home", "Truck or fly $3,000 of street money home", 3000],
 			["connected", "Get the call from the Colombian connection", 1]]],
 	[1981, "Cocaine Cowboys",
 		"Kilo bricks now, at the shady strips. And the money brings Los Cuervos: a crew\n"
@@ -52,7 +52,7 @@ const CHAPTERS := [
 		+ "follow the money. A bust is no longer a fine - it's a case, with bail, lawyers,\n"
 		+ "and men of ours who might decide to talk [SHIFT+L].",
 		["court"],
-		[["hot_loads", "Deliver 4 hot loads with the task force watching", 4], ["clean", "Keep their case under 60% at the end", 1]]],
+		[["hot_loads", "Deliver 3 hot loads with the task force watching", 3], ["clean", "Keep their case under 60% at the end", 1]]],
 	[1984, "Isla Soberana",
 		"Twenty-three kilometres south, the General's island sells product at a third of\n"
 		+ "the street price and doesn't extradite. Captain Ibarra will see you on the ramp.\n"
@@ -228,10 +228,18 @@ func tick(s) -> void:
 		_put("arsenal", float(s.arsenals["org"].count()))
 	if s.family != null and s.family.accepted + s.family.loans_taken > 0:
 		_put("family_deal", maxf(progress.get("family_deal", 0.0), 1.0))
+	# no softlocks: a faction that's gone (convicted, burned, cut us loose) can't be dealt with
+	if s.family != null and s.family.gone and progress.get("family_deal", 0.0) < 1.0:
+		_put("family_deal", 1.0)
+		s.say("The Commission trial took the Morettis before we could deal with them. The story moves on.")
+	if s.agency != null and (not s.agency.active() or s.agency.hung_out) and index == 6 and progress.get("agency_jobs", 0.0) < 99.0:
+		for k in ["agency_jobs", "guns_to_company"]:
+			_put(k, 99.0)
+		s.say("The Company has cut us loose. So much for friends in Washington - the story moves on.")
 	_put("bank", float(s.money))
 	_put("net_worth", float(s.money) + (s.trade.stock_value() if s.trade != null else 0.0)
 		+ (s.logistics.cash_out() if s.logistics != null else 0.0))
-	if progress.get("hot_loads", 0.0) >= 4.0:
+	if progress.get("hot_loads", 0.0) >= 3.0:
 		_put("clean", 1.0 if s.police.case("runner").suspicion < 60.0 else 0.0)
 	var ch := chapter
 	if not Py.all(ch.objectives, func(o): return progress.get(o.key, 0.0) >= o.target):
