@@ -38,10 +38,10 @@ const PORT := Vector2(4800.0, -34000.0)  ## Puerto Rojo, on the north shore faci
 const TERRITORY_Y := -25000.0  ## south of this line the task force has no writ
 const AIRSPACE_R := 11000.0  ## the MiGs' patch around the island
 const PRICE_PER_LB := 18.0  ## the island's price for a pound of product
-const STREET_PER_LB := 55.0  ## what a pound fetches on the mainland (before the market)
+const STREET_PER_LB := 55.0  ## what a pound fetches on the mainland (before the market: paid at today's street price)
 const MULE_KG := 1.0
 const MULE_COST := 1400  ## a kilo of the pure product at the island's price, plus the mule's fee and ticket
-const MULE_VALUE := 2600  ## what that kilo fetches cut and sold on the mainland (before the market)
+const MULE_VALUE := 2600  ## what that kilo fetches cut and sold on the mainland (before the market: today's street price)
 const MULE_FEE := 800
 const MULE_ETA_S := 900.0
 const SHIP_ETA_S := 1500.0
@@ -194,13 +194,13 @@ func ship(method: String, amount: int) -> String:
 			if mules.is_empty():
 				return "Not enough mules on the payroll, and no money for street mules."
 		var lb := n * MULE_KG * 2.2046
-		var cost := int(n * (MULE_COST - MULE_FEE) * price_mult) + n * MULE_FEE
+		var cost := int(n * (MULE_COST - MULE_FEE) * price_mult * sess.econ.wholesale("cocaine")) + n * MULE_FEE
 		if sess.money < cost:
 			if sess.payroll != null:
 				sess.payroll.release(mules)
 			return "Need $%s." % Py.money(cost)
 		sess.money -= cost
-		next_mules = sess.time + RESTOCK_S
+		next_mules = sess.time + RESTOCK_S * sess.econ.restock_mult("cocaine")
 		_serial += 1
 		shipments.append({"id": "M%d" % _serial, "method": "mules", "n": n, "lb": lb, "cost": cost,
 			"value": n * MULE_VALUE, "eta": sess.time + MULE_ETA_S, "p": mule_odds()[0], "mules": mules})
@@ -211,11 +211,11 @@ func ship(method: String, amount: int) -> String:
 		if sess.time < next_ship:
 			return "No container space on the freighter for %d min." % int(ceil((next_ship - sess.time) / 60.0))
 		var lb := clampi(amount, 100, 1200)
-		var cost := int(lb * PRICE_PER_LB * price_mult) + SHIP_FREIGHT
+		var cost := int(lb * PRICE_PER_LB * price_mult * sess.econ.wholesale("cocaine")) + SHIP_FREIGHT
 		if sess.money < cost:
 			return "Need $%s." % Py.money(cost)
 		sess.money -= cost
-		next_ship = sess.time + RESTOCK_S
+		next_ship = sess.time + RESTOCK_S * sess.econ.restock_mult("cocaine")
 		_serial += 1
 		shipments.append({"id": "S%d" % _serial, "method": "ship", "n": 1, "lb": float(lb), "cost": cost,
 			"value": int(lb * STREET_PER_LB), "eta": sess.time + SHIP_ETA_S, "p": ship_odds()[0]})
@@ -245,7 +245,7 @@ func _resolve(sh: Dictionary) -> void:
 				got += 1
 				if pr != null and i < ids.size():
 					pr.release([ids[i]])
-		var pay := int(sh.value * got / maxf(1.0, float(sh.n)))
+		var pay := int(sh.value * got / maxf(1.0, float(sh.n)) * sess.econ.mult("cocaine", "town"))  # cut and sold in town, at today's street price
 		sess.money += pay
 		if lost > 0:
 			caught += lost
@@ -275,9 +275,10 @@ func _resolve(sh: Dictionary) -> void:
 		else:
 			delivered += 1
 			port_heat = minf(100.0, port_heat + 8.0)  # somebody notices the shrimp line's volume
-			sess.money += int(sh.value)
+			var worth := int(sh.value * sess.econ.mult("cocaine", "town"))  # through the port of San Telmo, sold in town at today's street price
+			sess.money += worth
 			sess.econ.record_delivery("cocaine", "sea")
-			last = "The container cleared customs: +$%s" % Py.money(int(sh.value))
+			last = "The container cleared customs: +$%s" % Py.money(worth)
 	sess.say("THE ISLAND - " + last)
 	sess.bus.emit("island_shipment", sess.time, last, ["runner"], {"method": sh.method})
 
@@ -342,7 +343,7 @@ func board(af: Airfield) -> Array:
 		for i in n:
 			items.append(Jobs.item("'Sugar' sack", "cargo", rng.uniform(20, 32), jid, {"hot": true}))
 		var lb := Py.sum_by(items, func(i): return i.weight_lb)
-		var cost := int(lb * PRICE_PER_LB * price_mult)
+		var cost := int(lb * PRICE_PER_LB * price_mult * sess.econ.wholesale("cocaine"))
 		var j := Jobs.Job.new(jid, "Island product: %d sacks -> %s" % [n, dest.name], "contraband", af.code, dest.code, items,
 			int(lb * STREET_PER_LB), {"notes": "Costs $%s here, paid up front; worth the street price on the mainland." % Py.money(cost)})
 		j.cost = cost
@@ -419,7 +420,7 @@ func _rival_trade() -> void:
 	var g = sess.ground
 	if g == null or not open() or status == "hurricane" or g.commanders.rival.cash < 15000.0:
 		return
-	var cost := 500 * PRICE_PER_LB * price_mult + SHIP_FREIGHT
+	var cost: float = 500 * PRICE_PER_LB * price_mult * sess.econ.wholesale("cocaine") + SHIP_FREIGHT
 	g.commanders.rival.cash -= cost
 	var p := 0.08 * (1.0 + port_heat / 100.0) * (2.0 if law_has("container_xray") else 1.0) * (2.0 if inspections_until > sess.time else 1.0)
 	rival_shipped += 1
@@ -432,10 +433,11 @@ func _rival_trade() -> void:
 		sess.law_say("Port of San Telmo: a Los Cuervos container from Isla Soberana, 500 lb under the fish")
 		sess.say("NEWS - Customs open a container from the island: Los Cuervos lose a load.")
 	else:
-		g.commanders.rival.cash += 500 * STREET_PER_LB
+		g.commanders.rival.cash += 500 * STREET_PER_LB * sess.econ.mult("cocaine", "sea")  # sold at what the street pays
 		port_heat = minf(100.0, port_heat + 5.0)
 		sess.econ.record_delivery("cocaine", "sea")
 		sess.econ.record_delivery("cocaine", "sea")  # a glut on the street: prices fall for everyone
+		sess.bus.emit("rival_shipment", sess.time, "", ["law"], {"market": "sea"})
 
 
 ## The island's MiGs, when a plane with no passage flies into its airspace.
@@ -500,6 +502,6 @@ func view(side: String) -> Dictionary:
 			"crackdown_s": maxi(0, int(crackdown_until - sess.time)), "inspections_s": maxi(0, int(inspections_until - sess.time)),
 			"mule_p": snappedf(m[0], 0.01), "ship_p": snappedf(sh[0], 0.01)}
 	return {"relations": int(relations), "status": status, "passage_s": maxi(0, int(passage_until - sess.time)),
-		"passage_cost": passage_cost(), "price": snappedf(PRICE_PER_LB * price_mult, 0.1), "mule_p": snappedf(m[0], 0.01),
+		"passage_cost": passage_cost(), "price": snappedf(PRICE_PER_LB * price_mult * sess.econ.wholesale("cocaine"), 0.1), "mule_p": snappedf(m[0], 0.01),
 		"mule_why": m[1], "ship_p": snappedf(sh[0], 0.01), "ship_why": sh[1], "last": last,
 		"shipments": shipments.map(func(x): return {"id": x.id, "method": x.method, "lb": int(x.lb), "eta_s": int(float(x.eta) - sess.time)})}

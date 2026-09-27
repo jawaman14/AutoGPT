@@ -30,6 +30,13 @@ func _init():
 					sess.econ.fuel_walk = 1.18
 					var c: Array = Economy.centre("town")
 					sess.econ.update(Economy.TICK_S, 1.0, [[c[0], c[1]], [c[0] + 500, c[1]]], [], {"west": 0.8, "north": 0.2, "sea": 0.5})
+					# the street: a raid in the west, the Company's cocaine in the north and its gun buying, a Cuervos container
+					var mk: Market = sess.econ.market
+					mk.disrupt("west", 0.45, "a stash house raided")
+					mk.flow("cocaine", "north", 0.45, "the Company's planes landed cocaine")
+					mk.flow("guns", "town", -0.3, "the Company is buying guns")
+					mk.flow("cocaine", "sea", 0.2, "a Los Cuervos container came in")
+					mk.source_shock("cocaine", -0.2)
 				app._toggle_menu("j")
 				if what == "market":
 					app.menus["j"].key("right")

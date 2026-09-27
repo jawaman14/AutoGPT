@@ -18,6 +18,11 @@ extends RefCounted
 ##   weather       storms mean short supply: hot goods and food cost more
 ##   news          events: a crackdown on the mainland, a bumper harvest, a gun
 ##                 war, a fuel strike, tourist season
+##   the street    supply and demand (Market): arrests, raids and informants
+##                 break the distribution network, rival shipments and losses,
+##                 the island's and the Family's fortunes upstream, the street's
+##                 own news - the hot goods' price follows (demand / supply)^0.55
+##                 and the island's wholesale follows the source
 ##
 ## Contraband is paid at the street price on delivery (the price can move
 ## while you fly); legal work at the price agreed on the board. Off (every
@@ -73,6 +78,7 @@ var events: Array = []  ## {good, mult, until, text}
 var news: Array = []  ## [time, text]
 var storm := false
 var law_kit := 0  ## the task force's upgrades bought (a little more risk everywhere)
+var market: Market = null  ## supply and demand on the street (Session attaches it)
 var _t := 0.0
 var _now := 0.0
 
@@ -144,6 +150,8 @@ func mult(good: String, m: String) -> float:
 		p *= 1.0 + 0.25 * g.police * heat[m]
 		p *= 1.0 + scarcity[good]
 		p *= 1.0 - glut[good][m]
+		if market != null:
+			p *= market.factor(good, m)
 	p *= 1.0 + g.fuel * (fuel_mult() - 1.0)
 	if storm:
 		p *= 1.0 + g.storm
@@ -153,6 +161,21 @@ func mult(good: String, m: String) -> float:
 	return clampf(p, 0.4, 2.5)
 
 
+## The upstream price of `good` (the island's, the fences'): 1 = normal.
+func wholesale(good: String) -> float:
+	return market.wholesale(good) if REALISM and market != null else 1.0
+
+
+## How long the upstream needs between loads of `good` (1 = normal).
+func restock_mult(good: String) -> float:
+	return market.restock_mult(good) if REALISM and market != null else 1.0
+
+
+func attach_market(m: Market) -> void:
+	market = m
+	m.news = news  # its headlines are the market's news too
+
+
 func job_mult(job: Jobs.Job) -> float:
 	return mult(good_of(job), job_market(job))
 
@@ -160,17 +183,19 @@ func job_mult(job: Jobs.Job) -> float:
 # ------------------------------------------------------------------ what moves them
 func record_delivery(good: String, m: String) -> void:
 	if GOODS.has(good) and GOODS[good].hot:
-		glut[good][m] = minf(0.4, glut[good][m] + 0.06)
+		glut[good][m] = minf(0.4, glut[good][m] + 0.06)  # (the glut is our deliveries' flood; the street's supply is everyone else's)
 
 
 func record_seizure(good: String, m: String) -> void:
 	if GOODS.has(good):
 		scarcity[good] = minf(0.6, scarcity[good] + 0.12)
 		busts[m] = minf(2.0, busts[m] + 0.5)
+		if market != null:
+			market.flow(good, m, -0.05, "a seizure")
 
 
 ## Advance: `police` and `rivals` are [[x, y], ...]; `turf` the rival share per zone (or {}).
-func update(dt: float, now: float, police: Array, rivals: Array, turf: Dictionary) -> void:
+func update(dt: float, now: float, police: Array, rivals: Array, turf: Dictionary, ground = null) -> void:
 	_now = now
 	_t += dt
 	if _t < TICK_S:
@@ -193,6 +218,8 @@ func update(dt: float, now: float, police: Array, rivals: Array, turf: Dictionar
 		var near_r := rivals.filter(func(p): return PyMath.hypot(p[0] - c[0], p[1] - c[1]) < RANGE_M).size()
 		heat[m] = clampf(0.15 * near_p + 0.3 * busts[m] + 0.02 * law_kit, 0.0, 1.5)
 		rival[m] = clampf(float(turf.get(m, 0.15 if m == "town" else 0.3)) + 0.1 * near_r, 0.0, 1.0)
+	if market != null:
+		market.update(step, now, ground)
 	events = events.filter(func(e): return e.until > now)
 	if events.size() < 2 and rng.random() < step / 900.0:  # about one headline every 15 minutes
 		var e: Array = EVENTS[rng.randint(0, EVENTS.size() - 1)]
@@ -211,4 +238,5 @@ func board() -> Dictionary:
 			prices[m] = snappedf(mult(g, m), 0.01)
 		rows.append({"good": g, "name": GOODS[g].name, "hot": GOODS[g].hot, "prices": prices})
 	return {"goods": rows, "fuel": snappedf(fuel_mult(), 0.01), "heat": heat.duplicate(), "rival": rival.duplicate(),
-		"events": events.map(func(e): return e.text), "news": news.slice(-5).map(func(n): return n[1])}
+		"events": events.map(func(e): return e.text), "news": news.slice(-5).map(func(n): return n[1]),
+		"street": market.view() if market != null else {}}

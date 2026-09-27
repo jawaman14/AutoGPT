@@ -77,6 +77,10 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 	var last_caught := 0
 	var closed_s := 0.0
 	var tribute0 := 0
+	var coke := [INF, -INF]
+	var guns_sum := 0.0
+	var dis_max := 0.0
+	var ticks := 0
 	while t < hours * 3600.0:
 		t += STEP
 		s.time = t
@@ -132,7 +136,18 @@ func _run(sd: int, extra: Dictionary) -> Dictionary:
 				if not s.upgrades.runner.has(id) and s.money > int(n.cost) * 4 and Upgrades.blocker("runner", id, s.upgrades.runner, s.money) == "":
 					s.money -= int(n.cost)
 					s.upgrades.runner[id] = true
+		# the markets: supply and demand move with everything above
+		s.econ.update(STEP, t, [], [], {}, s.ground)
+		if int(t) % 60 == 0:
+			var c := s.econ.mult("cocaine", "town")
+			coke = [minf(coke[0], c), maxf(coke[1], c)]
+			guns_sum += s.econ.mult("guns", "town")
+			ticks += 1
+			for m in Economy.MARKETS:
+				dis_max = maxf(dis_max, s.econ.market.disruption[m])
 		r.money_min = mini(r.money_min, s.money)
+	r["market"] = {"coke_lo": coke[0], "coke_hi": coke[1], "guns": guns_sum / maxf(1.0, ticks), "disruption": dis_max,
+		"coke_lots": s.agency.coke_lots if s.agency != null else 0, "gun_lots": s.agency.gun_lots if s.agency != null else 0}
 	r["money"] = s.money
 	r["law_funds"] = s.law_funds
 	r["suspicion"] = s.police.case("runner").suspicion
@@ -219,6 +234,9 @@ func _summary(rows: Array) -> Dictionary:
 	if rows[0].has("payroll"):
 		sm["payroll"] = {"crew": _mean(rows, "payroll", "crew"), "paid": _mean(rows, "payroll", "paid"), "lost": _mean(rows, "payroll", "lost"),
 			"flips": _mean(rows, "payroll", "flips"), "loyalty": _mean(rows, "payroll", "loyalty"), "short_rate": _rate(rows, "payroll", "short")}
+	sm["market"] = {"coke_lo": _mean(rows, "market", "coke_lo"), "coke_hi": _mean(rows, "market", "coke_hi"),
+		"guns": _mean(rows, "market", "guns"), "disruption": _mean(rows, "market", "disruption"),
+		"coke_lots": _mean(rows, "market", "coke_lots"), "gun_lots": _mean(rows, "market", "gun_lots")}
 	if rows[0].has("agency"):
 		sm["agency"] = {"flights": _mean(rows, "agency", "flights"), "hangout_rate": _rate(rows, "agency", "hung_out"),
 			"burned_rate": _rate(rows, "agency", "burned"), "withheld": _mean(rows, "agency", "withheld"),
@@ -240,9 +258,18 @@ func _odds_table() -> Array:
 			["sniffer_dogs", "passenger_profiling", "container_xray", "crackdown"]],
 	]
 	var mule_cost := float(Island.MULE_COST)
-	var mule_value := float(Island.MULE_VALUE)
+	# loads are sold at today's street price: take the usual one (three quiet hours of the market)
+	var street := {"town": 0.0, "sea": 0.0}
+	var n := 0
+	for i in 1080:
+		s.econ.update(10.0, i * 10.0, [], [], {}, null)
+		if i % 6 == 0:
+			street.town += s.econ.mult("cocaine", "town")
+			street.sea += s.econ.mult("cocaine", "sea")
+			n += 1
+	var mule_value: float = Island.MULE_VALUE * street.town / n
 	var ship_cost := 500 * Island.PRICE_PER_LB + Island.SHIP_FREIGHT
-	var ship_value := 500 * Island.STREET_PER_LB
+	var ship_value: float = 500 * Island.STREET_PER_LB * street.town / n
 	for c in cases:
 		s.upgrades.runner.clear()
 		s.upgrades.law.clear()

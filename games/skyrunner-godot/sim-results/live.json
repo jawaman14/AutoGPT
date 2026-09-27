@@ -2,23 +2,31 @@
   "configs": {
     "agency": {
       "agency": {
-        "burned_rate": 0.0,
-        "exposure": 32.625,
-        "flights": 5.4,
-        "hangout_rate": 0.0,
-        "withheld": 1881.4625
+        "burned_rate": 0.025,
+        "exposure": 52.03125,
+        "flights": 5.3125,
+        "hangout_rate": 0.025,
+        "withheld": 1831.5375
       },
       "law_funds": {
-        "mean": 25200.0,
+        "mean": 25575.0,
         "p10": 25200.0,
         "p50": 25200.0,
         "p90": 25200.0
       },
+      "market": {
+        "coke_hi": 1.45721500565309,
+        "coke_lo": 0.606394490975516,
+        "coke_lots": 23.8125,
+        "disruption": 0.0,
+        "gun_lots": 23.5,
+        "guns": 1.35576953603484
+      },
       "money": {
-        "mean": 94618.775,
-        "p10": 75219.0,
-        "p50": 94100.0,
-        "p90": 112286.0
+        "mean": 92411.4625,
+        "p10": 64453.0,
+        "p50": 91070.0,
+        "p90": 112195.0
       },
       "money_min": {
         "mean": 16000.0,
@@ -27,7 +35,7 @@
         "p90": 16000.0
       },
       "suspicion": {
-        "mean": 0.0,
+        "mean": 1.375,
         "p10": 0.0,
         "p50": 0.0,
         "p90": 0.0
@@ -35,72 +43,80 @@
     },
     "all": {
       "agency": {
-        "burned_rate": 0.0,
-        "exposure": 32.625,
-        "flights": 5.4,
-        "hangout_rate": 0.0,
-        "withheld": 2192.4
+        "burned_rate": 0.025,
+        "exposure": 50.796875,
+        "flights": 5.3,
+        "hangout_rate": 0.025,
+        "withheld": 2169.025
       },
       "family": {
-        "cons": 0.1125,
+        "cons": 0.1375,
         "loans": 0.0,
-        "rat_rate": 0.25,
-        "respect": 58.672477159291,
-        "taxed_rate": 0.9,
-        "trial_rate": 0.1375,
+        "rat_rate": 0.3,
+        "respect": 57.4567791334613,
+        "taxed_rate": 0.8375,
+        "trial_rate": 0.1125,
         "tribute_paid": {
-          "mean": 7025.0,
+          "mean": 7037.5,
           "p10": 0.0,
-          "p50": 6000.0,
+          "p50": 7000.0,
           "p90": 14000.0
         }
       },
       "island": {
-        "catch_rate": 0.0621228257011005,
+        "catch_rate": 0.0575609756097561,
         "closed_frac": 0.0,
         "intercepts": 0.0,
-        "relations": 55.5,
+        "relations": 56.25,
         "shipments": {
-          "mean": 11.775,
-          "p10": 10.0,
-          "p50": 12.0,
-          "p90": 13.0
+          "mean": 8.4875,
+          "p10": 7.0,
+          "p50": 9.0,
+          "p90": 10.0
         },
-        "spent": 8310743,
-        "units_caught": 175,
-        "units_sent": 2817
+        "spent": 6639628,
+        "units_caught": 118,
+        "units_sent": 2050
       },
       "law_funds": {
-        "mean": 11952.5,
+        "mean": 12108.625,
         "p10": 8200.0,
         "p50": 10100.0,
-        "p90": 22700.0
+        "p90": 23000.0
+      },
+      "market": {
+        "coke_hi": 1.71244000226221,
+        "coke_lo": 0.644025424726194,
+        "coke_lots": 23.7375,
+        "disruption": 0.215509124508551,
+        "gun_lots": 24.8875,
+        "guns": 1.37471432910423
       },
       "money": {
-        "mean": 74378.225,
-        "p10": 41190.0,
-        "p50": 76162.0,
-        "p90": 101971.0
+        "mean": 74821.825,
+        "p10": 29987.0,
+        "p50": 72936.0,
+        "p90": 105845.0
       },
       "money_min": {
-        "mean": 11160.6,
+        "mean": 11151.55,
         "p10": 9768.0,
-        "p50": 11524.0,
+        "p50": 11492.0,
         "p90": 11780.0
       },
       "payroll": {
-        "crew": 11.35,
-        "flips": 0.3875,
-        "lost": 3.8,
-        "loyalty": 0.835440103646353,
-        "paid": 15193.2125,
+        "crew": 11.4,
+        "flips": 0.2375,
+        "lost": 3.4875,
+        "loyalty": 0.84627062937063,
+        "paid": 15103.125,
         "short_rate": 0.0
       },
       "suspicion": {
-        "mean": 12.32075,
+        "mean": 14.81175,
         "p10": 0.0,
-        "p50": 6.17999999999999,
-        "p90": 26.5
+        "p50": 10.56,
+        "p90": 38.92
       }
     },
     "control": {
@@ -109,6 +125,14 @@
         "p10": 25200.0,
         "p50": 25200.0,
         "p90": 25200.0
+      },
+      "market": {
+        "coke_hi": 1.38979089948441,
+        "coke_lo": 0.599175326920453,
+        "coke_lots": 0.0,
+        "disruption": 0.0,
+        "gun_lots": 0.0,
+        "guns": 1.11621714710374
       },
       "money": {
         "mean": 70000.0,
@@ -150,6 +174,14 @@
         "p50": 9200.0,
         "p90": 9200.0
       },
+      "market": {
+        "coke_hi": 1.38979089948441,
+        "coke_lo": 0.599175326920453,
+        "coke_lots": 0.0,
+        "disruption": 0.0,
+        "gun_lots": 0.0,
+        "guns": 1.11621714710374
+      },
       "money": {
         "mean": 56059.25,
         "p10": 54150.0,
@@ -171,31 +203,39 @@
     },
     "island": {
       "island": {
-        "catch_rate": 0.0691874497184232,
+        "catch_rate": 0.0648838228846997,
         "closed_frac": 0.0,
         "intercepts": 0.0,
-        "relations": 56.0,
+        "relations": 55.75,
         "shipments": {
-          "mean": 10.075,
-          "p10": 9.0,
-          "p50": 10.0,
+          "mean": 9.2,
+          "p10": 7.0,
+          "p50": 9.0,
           "p90": 11.0
         },
-        "spent": 6903760,
-        "units_caught": 172,
-        "units_sent": 2486
+        "spent": 6504425,
+        "units_caught": 148,
+        "units_sent": 2281
       },
       "law_funds": {
-        "mean": 11900.0,
-        "p10": 10200.0,
+        "mean": 11895.0,
+        "p10": 9000.0,
         "p50": 11800.0,
         "p90": 14200.0
       },
+      "market": {
+        "coke_hi": 1.49177244804197,
+        "coke_lo": 0.626277650189675,
+        "coke_lots": 0.0,
+        "disruption": 0.0,
+        "gun_lots": 0.0,
+        "guns": 1.11621714710374
+      },
       "money": {
-        "mean": 68109.25,
-        "p10": 47480.0,
-        "p50": 69300.0,
-        "p90": 84990.0
+        "mean": 69314.95,
+        "p10": 36932.0,
+        "p50": 67757.0,
+        "p90": 108567.0
       },
       "money_min": {
         "mean": 12000.0,
@@ -204,7 +244,7 @@
         "p90": 12000.0
       },
       "suspicion": {
-        "mean": 0.3,
+        "mean": 0.9,
         "p10": 0.0,
         "p50": 0.0,
         "p90": 0.0
@@ -216,6 +256,14 @@
         "p10": 25200.0,
         "p50": 27700.0,
         "p90": 32700.0
+      },
+      "market": {
+        "coke_hi": 1.44233779779078,
+        "coke_lo": 0.607662770406318,
+        "coke_lots": 0.0,
+        "disruption": 0.115419066337989,
+        "gun_lots": 0.0,
+        "guns": 1.11621714710374
       },
       "money": {
         "mean": 70216.05,
@@ -250,40 +298,40 @@
     {
       "case": "cold",
       "mule_p": 0.1,
-      "mule_roi": 0.67,
+      "mule_roi": 0.56,
       "ship_p": 0.08,
-      "ship_roi": 0.69
+      "ship_roi": 0.58
     },
     {
       "case": "law: dogs + profiling",
       "mule_p": 0.224,
-      "mule_roi": 0.44,
+      "mule_roi": 0.35,
       "ship_p": 0.092,
-      "ship_roi": 0.66
+      "ship_roi": 0.56
     },
     {
       "case": "law: everything + crackdown",
       "mule_p": 0.403,
-      "mule_roi": 0.11,
+      "mule_roi": 0.04,
       "ship_p": 0.368,
-      "ship_roi": 0.16
+      "ship_roi": 0.08
     },
     {
       "case": "ours: all perks",
       "mule_p": 0.028,
-      "mule_roi": 0.81,
+      "mule_roi": 0.69,
       "ship_p": 0.04,
-      "ship_roi": 0.76
+      "ship_roi": 0.65
     },
     {
       "case": "both: everything",
       "mule_p": 0.113,
-      "mule_roi": 0.65,
+      "mule_roi": 0.54,
       "ship_p": 0.184,
-      "ship_roi": 0.5
+      "ship_roi": 0.4
     }
   ],
-  "seconds": 17.93,
+  "seconds": 46.844,
   "seeds": 80,
   "stand_ins": {
     "law_every_s": 600.0,

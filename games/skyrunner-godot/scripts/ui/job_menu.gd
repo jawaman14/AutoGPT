@@ -64,6 +64,7 @@ func _market() -> void:
 	var b := s.econ.board()
 	subtitle.text = "prices against the usual  -  avgas $%.2f/lb (%s)" % [Session.FUEL_PRICE_PER_LB * b.fuel, _pct(b.fuel)[0]]
 	market.clear_rows()
+	var street: Dictionary = b.get("street", {})
 	for hot in [true, false]:
 		market.section("CONTRABAND - paid at the street price when you deliver" if hot else "LEGAL WORK - paid as agreed")
 		for r in b.goods.filter(func(g): return g.hot == hot):
@@ -74,11 +75,31 @@ func _market() -> void:
 				cells.append(pc[0])
 				cc[i + 1] = pc[1]
 			market.add_row(cells, {"cell_colors": cc})
+		if hot:
+			if not street.is_empty():
+				market.section("ON THE STREET - supply / demand against the usual (short supply: dearer)")
+				for g in Market.HOT:
+					var row: Dictionary = street.goods[g]
+					var ws: float = row.wholesale
+					var cells := ["%s  (wholesale %s)" % [Economy.GOODS[g].name, _pct(ws)[0]]]
+					var cc := {}
+					for i in Economy.MARKETS.size():
+						var r: Dictionary = row.markets[Economy.MARKETS[i]]
+						cells.append("%d/%d" % [roundi(r.supply * 100), roundi(r.demand * 100)])
+						cc[i + 1] = UIStyle.RED if r.supply < 0.8 else (UIStyle.GREEN if r.supply > 1.2 else UIStyle.DIM)
+					market.add_row(cells, {"cell_colors": cc})
 	var heat := []
 	for m in Economy.MARKETS:
 		heat.append("%s: police %s, rivals %d%%" % [m, ("quiet" if b.heat[m] < 0.1 else ("around" if b.heat[m] < 0.4 else ("thick" if b.heat[m] < 0.9 else "everywhere"))),
 			int(b.rival[m] * 100)])
 	footer.text = "   ".join(heat) + ("\nNews: " + " / ".join(b.events) if not b.events.is_empty() else "")
+	if not street.is_empty():
+		var hurt := []
+		for m in Economy.MARKETS:
+			if street.disruption[m] >= 0.1:
+				hurt.append("%s %d%% (%s)" % [m, roundi(street.disruption[m] * 100), street.why[m]])
+		if not hurt.is_empty():
+			footer.text += "\nNetworks broken: " + ", ".join(hurt)
 	if s.arsenals.has("org"):
 		var a: Arsenal = s.arsenals["org"]
 		footer.text += "\nArmoury (%s): %s, %d rounds - worth $%s to the fence" % [

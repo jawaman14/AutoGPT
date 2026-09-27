@@ -256,6 +256,7 @@ func lose(id: String, how: String) -> void:
 		jail.append({"id": id, "outfit": w.outfit, "trial_at": sess.time + JAIL_S, "lawyer": false, "deal": false})
 		say(w.outfit, "%s (%s) was arrested." % [w.name, ROLES[w.role][2]])
 		sess.law_say("In custody: %s, a %s for %s" % [w.name, ROLES[w.role][2], "the organisation" if w.outfit == "org" else "Los Cuervos"])
+		sess.bus.emit("worker_arrested", sess.time, w.name, ["law"], {"outfit": w.outfit, "role": w.role})
 	else:
 		w.status = "dead"
 		workers.erase(w)

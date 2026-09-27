@@ -499,3 +499,56 @@ The AI prosecutor and the Family were already NPCs in these systems (sections 14
 
 **The hiring hall** (`dialogue/crew.dialogue`, Shift+W / W): Manny Ortega shows four candidates
 with their skill, wage and the hint, and handles bonuses and lawyers for the jailed.
+
+
+## 18. The street: supply and demand, and the Company's pipeline
+
+Prices were a random walk with premiums (rivals, police, seizures, gluts, news). Under it there is now a street
+(`scripts/sim/market.gd`): for each hot good (cocaine, marijuana, guns) and each market, **supply** and **demand**
+(1 = normal); for each market a **disruption** of its distribution network; for each good an upstream
+**source**. The street price follows (demand / supply)^0.55, clamped to x0.55-x1.9. Supply relaxes toward
+source x (1 - 0.6 x disruption) in about 15 minutes. Demand recovers in about 40, networks heal in about
+25, the source in about 60.
+
+**What moves it** (the session's event bus):
+
+| Event | Effect |
+|---|---|
+| The pilot busted, a cooperation deal, an informant | the organisation's markets (its stash-house zones) lose their corners |
+| A worker arrested | a smaller hit to that outfit's markets |
+| A long sentence | the whole street goes quiet for a while (demand down) |
+| A stash house raided | that zone's network broken, its product off the street |
+| A truck or a go-fast seized | supply falls there |
+| A hijacked load | sold in Los Cuervos' strongest market |
+| A gunfight | corners close while it lasts; every man arrested or down is a dealer off the street |
+| A Los Cuervos container through customs | floods the docks |
+| Their plane busted | dries up their market |
+| The Commission trial | the Family's fall takes the town's network and its gun fence (guns short island-wide) |
+| A hurricane or a purge on the island | chokes the source: the island's wholesale price rises and its connection restocks slower |
+| A glut on the island | reaches the docks |
+| An airport crackdown | fewer mules get through: the town runs short |
+| The street's own news (own table) | spring break, a bad batch, a crusade, a new disco |
+
+The island's loads are now paid at today's street price when they land: mules in town, containers through the
+port in town. A dry street pays more; your own flood pays less. Los Cuervos' island loads earn at the street
+price too, so the market feeds the rival's war chest.
+
+**The Company's pipeline: cocaine north, guns south.** As the Kerry Committee described the Contra supply
+networks (section 14). Every 15 minutes, while the Agency is in business:
+1. Its contacts buy cocaine upstream (the island's wholesale rises a little).
+2. Its protected planes land it on one market's street: a flood, cheap cocaine there, which hurts the
+   organisation's cocaine trade.
+3. The proceeds buy guns off the street and out of the fences' hands, and buyers bid for what's left: guns get
+   dear in town and the west, which is good for our gun running and the fence.
+4. The war chest puts more southern-front flights on the boards, and "return legs": protected cocaine flights
+   north for us to fly.
+5. Every cycle leaves a trail (exposure). The task force sees the pattern: cocaine prices crash where the
+   unregistered flights land, and a buyer takes every gun. A hangout pauses it for an hour; the hearings end it.
+
+In the live simulator (BALANCE section 7), cocaine in town swings between about x0.64 and x1.7 of its usual price in
+a 3-hour run with everything on (x0.6-x1.4 without). Guns average x1.37 with the Company buying (x1.12
+without). It flies about 24 lots north and buys about 25 lots of guns per run.
+
+Its own RNG streams (the street: seed + 113; the pipeline: seed + 127). Off with `Economy.REALISM`, like the
+rest of the market, for the Python replays.
+

@@ -81,6 +81,9 @@ const CHANGELOG := [
 	["Hired hands, paid or else",
 		"Requested: NPCs using the systems, and cartels that have to hire and pay their workers. Soldiers, drivers, mules, lookouts, accountants and contract pilots now come off a payroll (both outfits), paid every 10 minutes; the unpaid turn (skim, walk or call the task force), the arrested get cases and may flip. The worry was a wage bill that starves the organisation. The live simulator (a 'payroll' configuration, the AI hiring to its needs) says it roughly pays for itself: $12k of wages over 3 hours against contract pilots' runs and the accountant's cooling of the case; with every live system on, it costs about $9k net.",
 		"No retune: loyalty ends high (0.84-0.88) because the AI pays on time, which is the point - the risks bite a player who hires cheap, pays late or leaves the jailed without lawyers. Worth playtesting whether the street hires (drivers, mules) should cost more."],
+	["The street: supply, demand, and cocaine for guns",
+		"Requested: prices and supply that move with events, competing factions and arrests, and the Company buying cocaine to buy guns as in the Contra era. A supply-and-demand layer went under the price walk (arrests and raids break networks, rival shipments flood, the island and the Family move the source), and the Company runs a cocaine-north, guns-south pipeline. The first live run found three double counts: the island's shortage and glut were priced twice (its own price and the source); our own deliveries flooded the street twice (the old glut and the new supply); and island loads paid a fixed value while their cost followed the wholesale, so every shock only hurt. The island median fell $69k -> $62k and the pipeline's trail pushed the Company's exposure from 33 to 62 in three hours (hung out in 20% of runs).",
+		"Shortages and gluts now reach the street only; supply ignores our own deliveries (the glut term has them); island loads are paid at today's street price when they land (mules and containers in town); an airport crackdown shortens the town's supply instead of the source; the restock slows with the square root of a short source; the pipeline leaves 0.75 exposure a lot. Now: island median $67.8k (was $69.3k), all systems $72.9k (was $76.2k - the pipeline's cheap cocaine), the Company $91k (was $94k), hung out in 2.5% of runs. Guns average x1.37 with the Company buying (x1.12 without). In a quiet market the island's return per load reads lower (mules 0.56 cold, was 0.67), because Los Cuervos' standing undercut is now in the price; in play the law's crackdowns tighten the street and give it back."],
 ]
 
 
@@ -320,6 +323,13 @@ static func write_report(results_dir: String, out_path: String) -> String:
 			var ag: Dictionary = al["agency"]
 			lines += ["", "The Company: %s flights a run; $%s 'in the mail'; hung out to dry in %s of runs; exposed in %s." % [
 				Py.f(ag["flights"], 1), Py.money(int(ag["withheld"])), _pct(ag["hangout_rate"]), _pct(ag["burned_rate"])]]
+		if al.has("market"):
+			var mk: Dictionary = al["market"]
+			lines += ["", "The street (all systems on): cocaine in town swung between x%s and x%s of its usual price in a run (means); guns averaged x%s; the worst broken network reached %s; the Company flew %s lots of cocaine north and bought %s lots of guns." % [
+				Py.f(mk["coke_lo"], 2), Py.f(mk["coke_hi"], 2), Py.f(mk["guns"], 2), _pct(mk["disruption"]), Py.f(mk["coke_lots"], 1), Py.f(mk["gun_lots"], 1)]]
+			if live["configs"].has("control") and live["configs"]["control"].has("market"):
+				var ck: Dictionary = live["configs"]["control"]["market"]
+				lines += ["Without the Company and the rest (control): cocaine x%s-x%s, guns x%s." % [Py.f(ck["coke_lo"], 2), Py.f(ck["coke_hi"], 2), Py.f(ck["guns"], 2)]]
 		lines += ["", "Customs odds and expected return per dollar for one load:", "",
 			"| case | mule caught | mule ROI | container found | container ROI |", "|---|---|---|---|---|"]
 		for r in live["odds"]:

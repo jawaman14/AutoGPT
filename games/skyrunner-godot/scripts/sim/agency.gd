@@ -44,6 +44,21 @@ extends RefCounted
 ##   - a favour: the Company's cash washed through the Family's casinos, with
 ##     you as the go-between (a fee, and both of them like you better)
 ##
+## And the pipeline - cocaine for guns, as the Kerry Committee described the
+## networks (its own stream too, `prng`; needs the street market):
+##   - every PIPE_S the Company's contacts buy cocaine upstream (the island's
+##     source tightens, its wholesale rises) and its protected planes land it
+##     on one market's street (a flood: the price there falls - bad for our
+##     cocaine)
+##   - the proceeds buy guns: off the street and out of the fences' hands, and
+##     buyers bid for what's left - guns get dear in town and the west (good for
+##     our gun running and the fence)
+##   - its war chest puts more southern-front flights on the boards, and some
+##     "return legs": protected cocaine flights north for us to fly
+##   - every cycle leaves a trail (exposure); the task force sees the pattern
+##     (cheap cocaine where the planes land). A hangout pauses it; the hearings
+##     end it
+##
 ## Off for the Python replays (Agency.ENABLED = false); built for sessions that
 ## ask (live play: agency: true).
 
@@ -75,6 +90,16 @@ var hung_out := false  ## it cut us loose to save itself
 var withheld := 0
 var last_read := ""
 var _game_t := 0.0
+## the pipeline (cocaine north, guns south)
+const PIPE_S := 900.0
+const PIPE_EXPOSURE := 0.75
+var prng: PyRandom = null  ## its own stream (null: no pipeline)
+var war_chest := 0.0  ## what the cocaine brought in, waiting to buy guns
+var coke_lots := 0  ## lots flown north
+var gun_lots := 0  ## lots of guns bought
+var pipe_last := ""
+var _pipe_t := 0.0
+var _pipe_pause := -1.0
 
 
 func _init(sess_, rng_: PyRandom, drng_: PyRandom = null) -> void:
@@ -95,6 +120,8 @@ func job_from(origin: Airfield, airfields: Array):
 	if dests.is_empty():
 		return null
 	var dest: Airfield = dests[rng.randint(0, dests.size() - 1)]
+	if prng != null and war_chest >= 20000.0 and prng.random() < 0.35:
+		return _return_leg(origin, airfields)
 	var jid := Jobs.new_id()
 	var n := rng.randint(3, 6)
 	var items := []
@@ -112,6 +139,25 @@ func job_from(origin: Airfield, airfields: Array):
 			stings[jid] = true
 		if drng.random() < (0.75 if sting else 0.12):
 			job.notes += " " + STING_HINT
+	return job
+
+
+## The pipeline's northbound leg: cocaine, protected, into the town's market.
+func _return_leg(origin: Airfield, airfields: Array):
+	var dests := airfields.filter(func(a): return a.kind in ["intl", "regional", "shady"] and a.code != origin.code and Economy.market_of(a.code) != "sea")
+	if dests.is_empty():
+		return null
+	var dest: Airfield = dests[prng.randint(0, dests.size() - 1)]
+	var jid := Jobs.new_id()
+	var n := prng.randint(2, 4)
+	var items := []
+	for k in n:
+		items.append(Jobs.item("Sealed case", "cargo", prng.uniform(20, 30), jid, {"hot": true}))
+	var pay := int((3500 + n * 900) * pay_mult)
+	var job := Jobs.Job.new(jid, "Return leg: %d cases -> %s" % [n, dest.name], "contraband", origin.code, dest.code, items, pay,
+		{"notes": "The Company's northbound cargo. Don't open the cases; the money buys rifles for the front."})
+	job.agency = true
+	war_chest = maxf(0.0, war_chest - 5000.0)
 	return job
 
 
@@ -215,6 +261,8 @@ func update(dt: float) -> void:
 	_t = 0.0
 	if drng != null:
 		_double_game(step)
+	if prng != null:
+		_pipeline(step)
 	trust = maxf(0.0, trust - 0.5 * step / 60.0)
 	_gift_t += step
 	# trust brings favours: guns for the soldiers, a burned informant
@@ -274,8 +322,48 @@ func _double_game(step: float) -> void:
 		sess.say("The Company needs its cash cleaned; the Morettis' casinos oblige, and we take a fee (+$3,000).")
 
 
+## Cocaine north, guns south: the Company moves the markets.
+func _pipeline(step: float) -> void:
+	var mk = sess.econ.market if sess.econ != null else null
+	if mk == null:
+		return
+	_pipe_t += step
+	if _pipe_t < PIPE_S or sess.time < _pipe_pause:
+		return
+	_pipe_t = 0.0
+	if hung_out and _pipe_pause < 0.0:
+		_pipe_pause = sess.time + 3600.0  # covering itself for an hour, then back to business
+		return
+	var lots := prng.randint(1, 3)
+	# 1. buy upstream: the island's connections sell to the Company first
+	mk.source_shock("cocaine", -0.02 * lots)
+	# 2. fly it north: a protected flood on one market's street
+	var m: String = ["town", "north", "sea"][prng.randint(0, 2)]
+	mk.flow("cocaine", m, 0.12 * lots, "the Company's planes landed cocaine")
+	coke_lots += lots
+	var street: float = sess.econ.mult("cocaine", m)
+	war_chest += 18000.0 * lots * street
+	# 3. the proceeds buy guns: off the street, and buyers bid for the rest
+	var buy := mini(lots + (1 if war_chest > 60000.0 else 0), 4)
+	if war_chest >= 15000.0:
+		war_chest -= 15000.0 * buy
+		gun_lots += buy
+		for gm in ["town", "west"]:
+			mk.flow("guns", gm, -0.06 * buy, "the Company is buying guns")
+		mk.source_shock("guns", -0.02 * buy)
+		mk.demand_shock("guns", "*", 1.0 + 0.05 * buy, 30)
+	exposure = minf(100.0, exposure + PIPE_EXPOSURE * lots)
+	offer_chance = minf(0.65, 0.35 + war_chest / 200000.0)
+	pipe_last = "%d lot(s) of cocaine flown into the %s, %d lot(s) of guns bought" % [lots, Market._name(m), buy]
+	if prng.random() < 0.35:
+		sess.econ.market._headline("pipeline", "Cheap cocaine in the %s, and guns hard to find: nobody seems to stop the planes" % Market._name(m))
+	if prng.random() < 0.3:
+		sess.law_say("A pattern: cocaine prices crash in the %s after unregistered cargo flights; gun dealers say a buyer takes everything" % Market._name(m))
+	_check_exposed()
+
+
 func view(side: String) -> Dictionary:
 	if side == "law":
-		return {"exposure": int(exposure), "quashed": quashed, "burned": burned}
+		return {"exposure": int(exposure), "quashed": quashed, "burned": burned, "pipeline_lots": coke_lots}
 	return {"trust": int(trust), "protected": maxi(0, int(protected_until - sess.time)) if protecting() else 0, "burned": burned,
-		"flights": flights, "hung_out": hung_out, "last": last_read}
+		"flights": flights, "hung_out": hung_out, "last": last_read, "pipeline": pipe_last, "war_chest": int(war_chest)}

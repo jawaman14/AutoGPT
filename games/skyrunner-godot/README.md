@@ -192,6 +192,23 @@ Beyond the prototype:
   - Every flight key and gamepad button can be rebound. The remapping and button names come from Input Helper.
   - Each analogue control is bound by moving it: yoke, throttle lever, rudder pedals, left and right toe brakes. They can be on several USB devices, which are matched by name, so replugging or reordering them doesn't matter.
   - Each has invert, deadzone and expo. Everything is saved to `user://controls.cfg`.
+- **A street that moves.**
+  - Under the prices, each drug has supply and demand in each market, a distribution network that can break,
+    and an upstream source.
+  - **Arrests** dry the corners: your bust, your workers', Los Cuervos' men, a gunfight's prisoners.
+  - So do **raids** and **seizures**, and informants roll up whole networks.
+  - Competing factions move it:
+    - rival containers flood the docks;
+    - their losses dry up their markets;
+    - the Family's fall takes the gun fence.
+  - Island hurricanes and purges raise the wholesale price.
+  - Island loads pay today's street price.
+  - The market page shows supply/demand per market and which networks are broken, and why.
+- **The Company's pipeline.** Cocaine north, guns south, as in the Contra era:
+  - it floods one market with cheap cocaine;
+  - it spends the proceeds on guns, so gun prices rise;
+  - it offers protected "return legs";
+  - it leaves a trail the task force can follow.
 - **Fire, smoke and weather you can see.**
   - Crashed police aircraft and your own wreck burn, and burned-out stash houses smoke; the smoke leans downwind.
   - RPGs going off in the ground war's fights, and your own, blow up with flash, sparks, smoke and debris that tumbles on the physics engine (Jolt).

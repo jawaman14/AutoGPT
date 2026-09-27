@@ -186,6 +186,8 @@ func _init(opts := {}) -> void:
 	radio.world = world
 	urng = _rng(seed + 31)
 	econ = Economy.new(_rng(seed + 51))
+	econ.attach_market(Market.new(_rng(seed + 113)))  # supply and demand on the street (own stream)
+	econ.market.hook(self)  # arrests, raids, seizures, the factions' fortunes move it
 	arng = _rng(seed + 71)
 	if Arsenal.REALISM:
 		for side in ["org", "law", "rival"]:
@@ -203,6 +205,7 @@ func _init(opts := {}) -> void:
 		foot = FootCombat.new(self, _rng(seed + 73))
 	if Agency.ENABLED and opts.get("agency", false):
 		agency = Agency.new(self, _rng(seed + 89), _rng(seed + 101))
+		agency.prng = _rng(seed + 127)  # the pipeline: cocaine north, guns south
 	if Island.ENABLED and opts.get("island", false) and not world.map.foreign.is_empty():
 		island = Island.new(self, _rng(seed + 103))
 	if Payroll.ENABLED and opts.get("payroll", false):
@@ -1964,7 +1967,7 @@ func _update_economy(dt: float) -> void:
 		cops += ground.positions("police")
 		rivals += ground.positions("rival")
 		turf = ground.turf(turf)
-	econ.update(dt, time, cops, rivals, turf)
+	econ.update(dt, time, cops, rivals, turf, ground)
 	while _news_seen < econ.news.size():
 		say("Market news: " + econ.news[_news_seen][1])
 		_news_seen += 1
